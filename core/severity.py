@@ -30,6 +30,9 @@ _ORDER: dict[Severity, int] = {
     Severity.CRITICAL: 4,
 }
 
+#: Severity value strings, most severe first (for triage ordering / reports).
+SEVERITIES: tuple[str, ...] = ("critical", "high", "medium", "low", "info")
+
 
 def from_cvss(score: float | None) -> Severity:
     """Map a CVSS base score (0.0–10.0) to a severity band (CVSS v3 ranges)."""

@@ -59,6 +59,8 @@ ignore = ["S101", "UP042", "ASYNC109"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "B"]
+# HTML template strings are more readable unwrapped than line-broken.
+"modules/reporting/html_report.py" = ["E501"]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI dependency-injection idiom: calling these in argument defaults is correct.

@@ -203,6 +203,41 @@ def test_notification_channel_crud():
     assert client.get("/notifications", headers=_auth(token)).json() == []
 
 
+def test_report_download():
+    client, fake, _ = build()
+    tok = _signup(client, email="report@x.com")
+    token, tenant_id = tok["access_token"], tok["tenant_id"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "rep.com"}).json()[
+        "program_id"
+    ]
+    _run(
+        FindingRepo(fake.collection("findings")).upsert(
+            Finding(
+                tenant_id=tenant_id,
+                program_id=pid,
+                fingerprint=finding_fingerprint(pid, "exposed-env", "https://rep.com/.env"),
+                check_id="exposed-env",
+                module="nuclei",
+                location="https://rep.com/.env",
+                name="Exposed .env",
+                severity="critical",
+            )
+        )
+    )
+    # HackerOne markdown
+    h1 = client.get(f"/programs/{pid}/reports?format=hackerone", headers=_auth(token))
+    assert h1.status_code == 200 and "text/markdown" in h1.headers["content-type"]
+    assert "## [CRITICAL] Exposed .env" in h1.text
+    assert "attachment" in h1.headers["content-disposition"]
+    # HTML
+    html = client.get(f"/programs/{pid}/reports?format=html", headers=_auth(token))
+    assert html.status_code == 200 and "Vantari Attack-Surface Report" in html.text
+    # unknown format → 400
+    assert (
+        client.get(f"/programs/{pid}/reports?format=xlsx", headers=_auth(token)).status_code == 400
+    )
+
+
 def test_websocket_finding_snapshot():
     client, fake, _ = build()
     tok = _signup(client, email="ws@x.com")
