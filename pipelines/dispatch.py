@@ -20,6 +20,7 @@ from pipelines.crawl import run_crawl
 from pipelines.cve_watch import run_cve_watch
 from pipelines.github_osint import run_github_leak_scan
 from pipelines.ingest import run_ingest
+from pipelines.notify import run_notify
 from pipelines.orchestrate import build_program_scope
 from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
@@ -86,4 +87,6 @@ async def run_pipeline(
         return await run_github_leak_scan(
             mongo=mongo, tenant=tenant, program_id=program_id, domain=apex, hmac_key=hmac_key
         )
+    if pipeline == "notify":
+        return await run_notify(mongo=mongo, tenant=tenant, program_id=program_id)
     raise ValueError(f"unknown pipeline: {pipeline}")

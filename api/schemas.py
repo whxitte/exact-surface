@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field
 
-from core.models import IpScopeEntry, Role, VerificationMethod
+from core.models import ChannelType, IpScopeEntry, Role, VerificationMethod
+from core.severity import Severity
 
 
 # -- auth --------------------------------------------------------------------
@@ -59,3 +60,10 @@ class VerifyCheckResponse(BaseModel):
 class AuthorizationCreate(BaseModel):
     ip_scope: list[IpScopeEntry] = Field(default_factory=list)
     tos_version: str = "v1"
+
+
+class NotificationChannelCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    type: ChannelType
+    min_severity: Severity = Severity.MEDIUM
+    config: dict = Field(default_factory=dict)

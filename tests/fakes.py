@@ -81,6 +81,13 @@ class FakeCollection:
                 n += 1
         return _UpdateResult(modified=n)
 
+    async def delete_one(self, flt: dict) -> _UpdateResult:
+        for key, doc in list(self.docs.items()):
+            if _matches(doc, flt):
+                del self.docs[key]
+                return _UpdateResult(modified=1)
+        return _UpdateResult()
+
     async def find_one(self, flt: dict) -> dict | None:
         d = next((d for d in self.docs.values() if _matches(d, flt)), None)
         return dict(d) if d else None

@@ -92,6 +92,26 @@ class ApiKey(TenantScopedModel):
     last_used_at: datetime | None = None
 
 
+class ChannelType(str, Enum):
+    DISCORD = "discord"
+    SLACK = "slack"
+    TELEGRAM = "telegram"
+    EMAIL = "email"
+    WEBHOOK = "webhook"
+
+
+class NotificationChannel(TenantScopedModel):
+    """A per-tenant alert destination with a severity threshold (§module 34-38)."""
+
+    channel_id: str
+    name: str
+    type: ChannelType
+    enabled: bool = True
+    min_severity: Severity = Severity.MEDIUM
+    # Channel-specific: {webhook_url} | {bot_token, chat_id} | {host, port, user, ...}
+    config: dict = Field(default_factory=dict)
+
+
 class VerificationMethod(str, Enum):
     DNS_TXT = "dns_txt"
     HTTP_FILE = "http_file"

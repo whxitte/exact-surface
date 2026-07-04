@@ -179,6 +179,30 @@ def test_api_key_issuance_and_use():
     assert me.status_code == 200 and me.json()["auth"] == "apikey"
 
 
+def test_notification_channel_crud():
+    client, _, _ = build()
+    token = _signup(client, email="notif@x.com")["access_token"]
+    # create a Discord channel
+    created = client.post(
+        "/notifications",
+        headers=_auth(token),
+        json={
+            "name": "ops",
+            "type": "discord",
+            "min_severity": "high",
+            "config": {"webhook_url": "https://discord/hook"},
+        },
+    )
+    assert created.status_code == 201
+    cid = created.json()["channel_id"]
+    # list shows it
+    listed = client.get("/notifications", headers=_auth(token)).json()
+    assert len(listed) == 1 and listed[0]["type"] == "discord"
+    # delete it
+    assert client.delete(f"/notifications/{cid}", headers=_auth(token)).status_code == 204
+    assert client.get("/notifications", headers=_auth(token)).json() == []
+
+
 def test_websocket_finding_snapshot():
     client, fake, _ = build()
     tok = _signup(client, email="ws@x.com")

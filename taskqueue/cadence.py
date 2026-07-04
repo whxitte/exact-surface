@@ -15,6 +15,7 @@ HOUR = 60 * MINUTE
 
 #: pipeline -> interval seconds. Fast signals first.
 DEFAULT_CADENCE_SECONDS: dict[str, int] = {
+    "notify": 1 * MINUTE,  # deliver new findings to channels within a tick
     "cve_watch": 15 * MINUTE,  # new CVE/KEV → matched-asset alert fast
     "probe": 2 * HOUR,  # re-probe alive endpoints (also emits deltas)
     "ingest": 6 * HOUR,  # re-enumerate subdomains

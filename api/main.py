@@ -17,6 +17,7 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from api.rate_limit import limiter
 from api.routes import auth as auth_routes
+from api.routes import notifications as notification_routes
 from api.routes import programs as program_routes
 from api.routes import stats as stats_routes
 from api.ws import stream as ws_stream
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_routes.router)
     app.include_router(program_routes.router)
     app.include_router(stats_routes.router)
+    app.include_router(notification_routes.router)
     app.include_router(ws_stream.router)
 
     @app.get("/healthz")
