@@ -206,6 +206,20 @@ class ExposedSecret(StatefulModel):
     encrypted_snippet: str | None = None
 
 
+class Leak(StatefulModel):
+    """A secret leaked in public source (GitHub etc.) — masked, never plaintext (§9c)."""
+
+    kind: str
+    masked: str
+    value_hash: str
+    source: str = "github"
+    repo: str | None = None
+    file_path: str | None = None
+    url: str | None = None
+    severity: Severity = Severity.HIGH
+    state: FindingState = FindingState.NEW
+
+
 class CveMatch(StatefulModel):
     """A CVE matched to a fingerprinted asset, with match confidence (§module 21)."""
 
