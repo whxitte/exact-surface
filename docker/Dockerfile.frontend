@@ -1,0 +1,20 @@
+# Vantari frontend image — Next.js 14 (App Router). Multi-arch (works on arm64).
+# Build context is the repo root (so it matches the api/pipeline images).
+
+FROM node:20-alpine AS build
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+FROM node:20-alpine AS runtime
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/next.config.mjs ./
+EXPOSE 3000
+# API_PROXY_TARGET (set in compose to http://api:8000) routes /api/* to the backend.
+CMD ["npm", "run", "start"]

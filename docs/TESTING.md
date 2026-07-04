@@ -11,9 +11,14 @@ are ARM64 — the images build natively (the feroxbuster download is arch-aware)
 
 ## Part 1 — Two ways to run the app
 
-### Option A — Quick path (UI + API + dashboard, no live scans)
-Fastest way to click through the whole product with seeded demo data. Runs the
-API on your Mac against Mongo + Redis in Docker.
+> **For true end-to-end testing use Option B** — one command brings up the WHOLE
+> stack (frontend, API, workers that run the real recon tools, the continuous
+> scheduler, Mongo, Redis). Option A is only a fast UI/API smoke test with seeded
+> data and **does not run any real scans** (no workers, no tool image).
+
+### Option A — Quick smoke test (UI + API only, NO real scans)
+Fastest way to click through the product with seeded demo data. Runs only the
+datastores in Docker; API + frontend run natively on your Mac. No scanning happens.
 
 ```bash
 cd ~/Projects/vantari
@@ -42,21 +47,29 @@ You'll immediately see the seeded program, a critical `.env` finding, a masked
 secret, and can download HackerOne/Executive/HTML/PDF reports and add notification
 channels. No real scanning happens on this path.
 
-### Option B — Full stack (real recon tools + workers + scheduler)
-Runs everything in Docker, including the heavy `pipeline` image with all recon
-tools (subfinder, httpx, nuclei, naabu, katana, feroxbuster, nmap, …).
+### Option B — Full end-to-end (EVERYTHING live) ✅
+One command builds and starts all 7 services: **frontend, api, worker(s),
+scheduler, pipeline, mongo, redis**. Workers run the real recon tools; the
+scheduler drives continuous scanning.
 
 ```bash
 cd ~/Projects/vantari
 cp .env.example .env
 docker compose -f docker/docker-compose.yml up --build   # first build is slow
 ```
-- Frontend → http://localhost:3000, API → http://localhost:8000
-- The **scheduler** starts enqueuing jobs; **workers** execute real scans.
-- Seed demo data into the running stack:
+- Frontend → http://localhost:3000  ·  API → http://localhost:8000 (docs at /docs)
+- The **scheduler** enqueues jobs on cadence; **workers** execute real scans.
+- Seed demo data into the running stack (new terminal):
   `docker compose -f docker/docker-compose.yml exec api python -m scripts.seed_dev`
+- Watch the workers scan:
+  `docker compose -f docker/docker-compose.yml logs -f worker scheduler`
 
-> The first build compiles the Go tools and downloads templates — expect 5–15 min.
+> The first build compiles the Go recon tools and pre-fetches nuclei templates —
+> expect **5–15 min** and a few GB. Subsequent starts are fast.
+>
+> To actually scan a target, add + verify + authorize a program in the UI (see
+> Part 2). For a local lab VM set `VANTARI_LAB_ALLOW_PRIVATE=true` in `.env`
+> before `up`.
 
 ---
 

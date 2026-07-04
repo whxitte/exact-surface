@@ -76,6 +76,20 @@ services:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
 
+  frontend:
+    image: vantari/frontend:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    environment:
+      # Inside the compose network the API is reachable by service name.
+      - API_PROXY_TARGET=http://api:8000
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    depends_on:
+      api: { condition: service_started }
+
 volumes:
   mongo_data:
   redis_data:
