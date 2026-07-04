@@ -29,19 +29,30 @@ FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
 
 # nmap + masscan + libpcap runtime + feroxbuster (prebuilt).
-# Arch-aware feroxbuster download so the image builds on both amd64 and arm64
-# (Apple Silicon / M-series Macs).
+# System packages: nmap, masscan, libpcap, curl.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nmap masscan libpcap0.8 ca-certificates curl \
-    && ARCH="$(dpkg --print-architecture)" \
+    && rm -rf /var/lib/apt/lists/*
+
+# feroxbuster (content discovery). Arch-aware AND non-fatal: if the arch's asset
+# is unavailable (e.g. no arm64 build), the image still builds — ffuf (installed
+# via Go above) covers content-discovery fuzzing. `curl -f` fails on 404 rather
+# than piping an HTML error page into tar.
+RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
          amd64) FB=x86_64-linux-feroxbuster.tar.gz ;; \
          arm64) FB=aarch64-linux-feroxbuster.tar.gz ;; \
-         *) FB=x86_64-linux-feroxbuster.tar.gz ;; \
+         *) FB="" ;; \
        esac \
-    && curl -sSL "https://github.com/epi052/feroxbuster/releases/latest/download/$FB" \
-        | tar -xz -C /usr/local/bin feroxbuster \
-    && rm -rf /var/lib/apt/lists/*
+    && if [ -n "$FB" ] && curl -fsSL \
+         "https://github.com/epi052/feroxbuster/releases/latest/download/$FB" \
+         -o /tmp/ferox.tar.gz; then \
+         tar -xzf /tmp/ferox.tar.gz -C /usr/local/bin feroxbuster \
+         && rm -f /tmp/ferox.tar.gz \
+         && echo "feroxbuster installed for $ARCH"; \
+       else \
+         echo "WARN: feroxbuster unavailable for $ARCH; content discovery will use ffuf only"; \
+       fi
 
 COPY --from=gotools /tools/ /tools/
 

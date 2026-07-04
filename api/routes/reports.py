@@ -29,6 +29,13 @@ async def download_report(
         )
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
+    except (ModuleNotFoundError, OSError) as exc:
+        # PDF rendering needs WeasyPrint + native libs; degrade cleanly.
+        raise HTTPException(
+            status.HTTP_501_NOT_IMPLEMENTED,
+            "PDF rendering is unavailable (WeasyPrint not installed); "
+            "use format=html, hackerone, or executive instead.",
+        ) from exc
 
     return Response(
         content=report.body,
