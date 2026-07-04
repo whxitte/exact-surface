@@ -84,13 +84,18 @@ async def run_pipeline_task(ctx: dict, tenant_id: str, program_id: str, pipeline
     )
 
 
-class WorkerSettings:
-    """arq WorkerSettings. Redis wiring is provided by arq from settings at deploy."""
+def _redis_settings():
+    """arq RedisSettings from the configured redis_uri (evaluated at worker start)."""
+    from arq.connections import RedisSettings
 
+    return RedisSettings.from_dsn(get_settings().redis_uri)
+
+
+class WorkerSettings:
+    """arq reads these as CLASS attributes — they must be plain values, not properties."""
+
+    functions = [run_program_task, run_pipeline_task]
     on_startup = startup
     on_shutdown = shutdown
-    functions = [run_program_task, run_pipeline_task]
-
-    @property
-    def max_jobs(self) -> int:
-        return get_settings().worker_concurrency
+    max_jobs = get_settings().worker_concurrency
+    redis_settings = _redis_settings()

@@ -70,9 +70,11 @@ RUN nuclei -update-templates -silent || true
 COPY core/ core/
 COPY db/ db/
 COPY modules/ modules/
+COPY pipelines/ pipelines/
 COPY taskqueue/ taskqueue/
 COPY daemon/ daemon/
 COPY api/ api/
+COPY scripts/ scripts/
 
 # Non-root: scanning does not need root (naabu falls back to connect-scan).
 RUN useradd -m -u 10001 vantari && chown -R vantari:vantari /app

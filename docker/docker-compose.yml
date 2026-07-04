@@ -2,6 +2,12 @@
 # whole platform on any OS. MongoDB is self-hosted here (free) — no Atlas required.
 name: vantari
 
+# Inside the compose network Mongo/Redis are reached by SERVICE NAME (not localhost).
+# These override the localhost defaults from ../.env for the backend services.
+x-backend-env: &backend-env
+  VANTARI_MONGO_URI: mongodb://mongo:27017
+  VANTARI_REDIS_URI: redis://redis:6379/0
+
 services:
   mongo:
     image: mongo:7
@@ -38,6 +44,7 @@ services:
       dockerfile: docker/Dockerfile.pipeline
     command: ["python", "-m", "daemon.main", "--dry-run"]
     env_file: ../.env
+    environment: *backend-env
     depends_on:
       mongo: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -46,6 +53,7 @@ services:
     image: vantari/pipeline:latest
     command: ["python", "-m", "daemon.main"]
     env_file: ../.env
+    environment: *backend-env
     restart: unless-stopped
     depends_on:
       pipeline: { condition: service_started }
@@ -56,6 +64,7 @@ services:
     image: vantari/pipeline:latest
     command: ["arq", "taskqueue.worker.WorkerSettings"]
     env_file: ../.env
+    environment: *backend-env
     restart: unless-stopped
     deploy:
       replicas: 2
@@ -69,6 +78,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.api
     env_file: ../.env
+    environment: *backend-env
     restart: unless-stopped
     ports:
       - "8000:8000"

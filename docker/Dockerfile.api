@@ -12,9 +12,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY core/ core/
 COPY db/ db/
 COPY modules/ modules/
+COPY pipelines/ pipelines/
 COPY taskqueue/ taskqueue/
 COPY daemon/ daemon/
 COPY api/ api/
+COPY scripts/ scripts/
 
 RUN useradd -m -u 10002 vantari && chown -R vantari:vantari /app
 USER vantari
