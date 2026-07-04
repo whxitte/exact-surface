@@ -1,0 +1,81 @@
+# Full local dev stack. `docker compose -f docker/docker-compose.yml up` gives the
+# whole platform on any OS. MongoDB is self-hosted here (free) — no Atlas required.
+name: vantari
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Heavy image with all recon tooling; built once, reused by scheduler + workers.
+  pipeline:
+    image: vantari/pipeline:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.pipeline
+    command: ["python", "-m", "daemon.main", "--dry-run"]
+    env_file: ../.env
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  scheduler:
+    image: vantari/pipeline:latest
+    command: ["python", "-m", "daemon.main"]
+    env_file: ../.env
+    restart: unless-stopped
+    depends_on:
+      pipeline: { condition: service_started }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    image: vantari/pipeline:latest
+    command: ["arq", "taskqueue.worker.WorkerSettings"]
+    env_file: ../.env
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+    depends_on:
+      pipeline: { condition: service_started }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    env_file: ../.env
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+volumes:
+  mongo_data:
+  redis_data:

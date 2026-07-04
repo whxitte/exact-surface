@@ -1,0 +1,62 @@
+# Vantari pipeline image: all recon tooling + Python runtime + app code.
+# Reused (with different commands) by the daemon, scheduler, and workers.
+# masscan is installed but DISABLED at the application layer in v1 (ADR-0004).
+
+# ---- stage 1: build Go-based tooling --------------------------------------
+FROM golang:1.22-bookworm AS gotools
+ENV GOBIN=/tools GOFLAGS=-buildvcs=false
+RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev && rm -rf /var/lib/apt/lists/*
+# ProjectDiscovery suite (JSON-native, rate-limit-aware) + companions.
+RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
+    go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest && \
+    go install github.com/projectdiscovery/httpx/cmd/httpx@latest && \
+    go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest && \
+    go install github.com/projectdiscovery/katana/cmd/katana@latest && \
+    go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
+    go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest && \
+    go install github.com/projectdiscovery/asnmap/cmd/asnmap@latest && \
+    go install github.com/projectdiscovery/cloudlist/cmd/cloudlist@latest && \
+    go install github.com/projectdiscovery/uncover/cmd/uncover@latest && \
+    go install github.com/projectdiscovery/notify/cmd/notify@latest && \
+    go install github.com/projectdiscovery/alterx/cmd/alterx@latest && \
+    go install github.com/ffuf/ffuf/v2@latest && \
+    go install github.com/lc/gau/v2/cmd/gau@latest && \
+    go install github.com/tomnomnom/waybackurls@latest && \
+    go install github.com/gitleaks/gitleaks/v8@latest
+
+# ---- stage 2: runtime ------------------------------------------------------
+FROM python:3.11-slim-bookworm AS runtime
+ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
+
+# nmap + masscan + libpcap runtime + feroxbuster (prebuilt).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nmap masscan libpcap0.8 ca-certificates curl \
+    && curl -sSL https://github.com/epi052/feroxbuster/releases/latest/download/x86_64-linux-feroxbuster.tar.gz \
+        | tar -xz -C /usr/local/bin feroxbuster \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=gotools /tools/ /tools/
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Pre-fetch nuclei templates at build time (pinned/updated by nuclei_watch later).
+RUN nuclei -update-templates -silent || true
+
+COPY core/ core/
+COPY db/ db/
+COPY modules/ modules/
+COPY taskqueue/ taskqueue/
+COPY daemon/ daemon/
+COPY api/ api/
+
+# Non-root: scanning does not need root (naabu falls back to connect-scan).
+RUN useradd -m -u 10001 vantari && chown -R vantari:vantari /app
+USER vantari
+
+# Health check validates binaries + config + scope feeds (no network).
+HEALTHCHECK --interval=60s --timeout=20s --retries=3 \
+    CMD python -m daemon.main --dry-run || exit 1
+
+CMD ["python", "-m", "daemon.main"]
