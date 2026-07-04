@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(default=4)
     tool_default_timeout: float = Field(default=300.0)
 
+    # -- scheduler -------------------------------------------------------
+    scheduler_tick_seconds: int = Field(default=60)
+    scheduler_max_jobs_per_tenant: int = Field(
+        default=25, description="Fairness cap: max jobs enqueued per tenant per tick"
+    )
+
     @field_validator("env")
     @classmethod
     def _known_env(cls, v: str) -> str:

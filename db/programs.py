@@ -22,6 +22,10 @@ class ProgramRepo:
     async def list(self, tenant_id: str, limit: int = 1000) -> list[dict]:
         return await self._c.find({"tenant_id": tenant_id}).limit(limit).to_list(limit)
 
+    async def list_all(self, limit: int = 100_000) -> list[dict]:
+        """Every program across all tenants — for the system scheduler only."""
+        return await self._c.find({}).limit(limit).to_list(limit)
+
     async def save(self, program: Program) -> dict:
         doc = _to_bson(program.model_dump(mode="python"))
         await self._c.update_one(

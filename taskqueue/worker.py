@@ -51,7 +51,7 @@ async def shutdown(ctx: dict) -> None:  # arq lifecycle hook
 async def run_program_task(
     ctx: dict, tenant_id: str, program_id: str, actor_id: str | None = None
 ) -> dict:
-    """arq task: run the full pipeline for a program (auth-gated, scope-enforced)."""
+    """arq task: run the FULL pipeline for a program (used by the API scan trigger)."""
     from core.scope import default_engine
     from core.tenant import TenantContext
     from pipelines.orchestrate import run_program
@@ -66,12 +66,30 @@ async def run_program_task(
     )
 
 
+async def run_pipeline_task(ctx: dict, tenant_id: str, program_id: str, pipeline: str) -> dict:
+    """arq task: run ONE named pipeline for a program (enqueued by the scheduler)."""
+    from core.scope import default_engine
+    from core.tenant import TenantContext
+    from pipelines.dispatch import run_pipeline
+
+    settings = ctx["settings"]
+    return await run_pipeline(
+        mongo=ctx["mongo"],
+        engine=default_engine(),
+        tenant=TenantContext(tenant_id=tenant_id),
+        program_id=program_id,
+        pipeline=pipeline,
+        timeout=settings.tool_default_timeout,
+        hmac_key=settings.secret_hash_key_bytes(),
+    )
+
+
 class WorkerSettings:
     """arq WorkerSettings. Redis wiring is provided by arq from settings at deploy."""
 
     on_startup = startup
     on_shutdown = shutdown
-    functions = [run_program_task]
+    functions = [run_program_task, run_pipeline_task]
 
     @property
     def max_jobs(self) -> int:

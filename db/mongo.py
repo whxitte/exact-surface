@@ -64,6 +64,9 @@ INDEXES: dict[str, list[tuple[str, list[tuple[str, int]], dict[str, Any]]]] = {
         ("by_scan", [("tenant_id", ASC), ("scan_id", ASC)], {"unique": True}),
         ("by_program", [("tenant_id", ASC), ("program_id", ASC)], {}),
     ],
+    "schedule": [
+        ("uniq_sched", [("tenant_id", ASC), ("fingerprint", ASC)], {"unique": True}),
+    ],
     "audit": [("by_ts", [("tenant_id", ASC), ("created_at", DESC)], {})],
 }
 

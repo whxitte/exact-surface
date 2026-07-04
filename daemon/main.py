@@ -56,18 +56,31 @@ async def _dry_run() -> int:
 
 
 async def _supervise() -> int:
-    """Full run: start scheduler + workers. Wired up in Phase B."""
+    """Full run: pre-flight, then drive the continuous scheduler loop.
+
+    Workers run as separate processes (``arq taskqueue.worker.WorkerSettings``);
+    this process is the scheduler that enqueues due jobs onto the shared queue.
+    """
     settings = get_settings()
     configure_logging(json_logs=settings.is_prod)
     settings.assert_prod_safe()
-    logger.info("vantari daemon starting (Phase B scheduler/worker supervision pending)")
-    from daemon.health import run_health_checks as _rc
+    logger.info("vantari daemon starting (scheduler)")
 
-    report = await _rc(check_services=True)
+    report = await run_health_checks(check_services=True)
     if not report.critical_ok({"config", "scope_feeds", "mongo", "redis"}):
+        _print_health(report)
         logger.error("pre-flight failed; refusing to start")
         return 1
-    logger.info("pre-flight passed; supervisor loop is a Phase B deliverable")
+
+    from db.mongo import get_mongo
+    from taskqueue.arq_client import create_pool, make_enqueuer
+    from taskqueue.scheduler import Scheduler
+
+    mongo = get_mongo()
+    await mongo.connect()
+    pool = await create_pool()
+    scheduler = Scheduler(mongo, make_enqueuer(pool))
+    await scheduler.run_forever()
     return 0
 
 
