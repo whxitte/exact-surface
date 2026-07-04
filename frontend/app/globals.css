@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark-first design tokens (zinc canvas, emerald accent — the Vantari brand). */
+:root {
+  --background: 240 10% 4%;
+  --foreground: 0 0% 98%;
+  --card: 240 6% 8%;
+  --card-foreground: 0 0% 98%;
+  --primary: 158 64% 42%;
+  --primary-foreground: 0 0% 100%;
+  --muted: 240 5% 14%;
+  --muted-foreground: 240 5% 60%;
+  --border: 240 5% 16%;
+  --input: 240 5% 16%;
+  --ring: 158 64% 42%;
+  --radius: 0.6rem;
+}
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-feature-settings: "rlig" 1, "calt" 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle grid backdrop for the app shell. */
+.grid-backdrop {
+  background-image:
+    linear-gradient(hsl(var(--border) / 0.35) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(var(--border) / 0.35) 1px, transparent 1px);
+  background-size: 44px 44px;
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted));
+  border-radius: 6px;
+}
