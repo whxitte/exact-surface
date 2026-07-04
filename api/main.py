@@ -31,8 +31,11 @@ from daemon.metrics import REGISTRY
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    configure_logging(json_logs=settings.is_prod)
+    configure_logging(level=settings.log_level, json_logs=settings.is_prod)
     settings.assert_prod_safe()
+    from core.observability import init_sentry
+
+    init_sentry(settings)
     logger.info("api starting (env={})", settings.env)
     # Best-effort DB connect + index bootstrap; readiness will report failures.
     try:
@@ -75,6 +78,19 @@ def create_app() -> FastAPI:
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
     app.add_middleware(SlowAPIMiddleware)
+
+    # Prometheus request metrics.
+    @app.middleware("http")
+    async def _metrics(request, call_next):
+        response = await call_next(request)
+        if settings.metrics_enabled:
+            REGISTRY.inc(
+                "vantari_http_requests_total",
+                help="Total HTTP requests",
+                method=request.method,
+                status=str(response.status_code),
+            )
+        return response
 
     # Feature routers.
     app.include_router(auth_routes.router)

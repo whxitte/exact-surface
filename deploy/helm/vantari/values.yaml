@@ -1,0 +1,39 @@
+# Vantari Helm values. Override per environment.
+
+image:
+  api: vantari/api:latest
+  pipeline: vantari/pipeline:latest
+  pullPolicy: IfNotPresent
+
+# External datastores (self-hosted or managed). Provided via the vantari-secrets Secret.
+existingSecret: vantari-secrets
+
+env: prod
+
+api:
+  replicas: 2
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits: { cpu: "500m", memory: "512Mi" }
+  service:
+    port: 8000
+
+# Stateless scan workers — scale to concurrent-scan load (§3.8).
+worker:
+  replicas: 3
+  resources:
+    requests: { cpu: "500m", memory: "1Gi" }
+    limits: { cpu: "2", memory: "4Gi" }
+
+# The scheduler is a singleton (enqueues due jobs).
+scheduler:
+  replicas: 1
+  resources:
+    requests: { cpu: "50m", memory: "128Mi" }
+    limits: { cpu: "200m", memory: "256Mi" }
+
+ingress:
+  enabled: true
+  className: nginx
+  host: api.vantari.io
+  tls: true

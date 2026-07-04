@@ -80,6 +80,11 @@ class Settings(BaseSettings):
         default=25, description="Fairness cap: max jobs enqueued per tenant per tick"
     )
 
+    # -- observability ---------------------------------------------------
+    sentry_dsn: SecretStr | None = Field(default=None)
+    metrics_enabled: bool = Field(default=True)
+    log_level: str = Field(default="INFO")
+
     @field_validator("env")
     @classmethod
     def _known_env(cls, v: str) -> str:

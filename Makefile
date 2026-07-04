@@ -37,6 +37,15 @@ dry-run: ## Health checks + module registry, no network I/O
 api: ## Run the API locally
 	$(PY) -m uvicorn api.main:app --reload --port 8000
 
+seed: ## Seed a demo tenant + sample findings (needs Mongo)
+	$(PY) -m scripts.seed_dev
+
+backup: ## Back up MongoDB (mongodump)
+	$(PY) -m scripts.backup
+
+update-feeds: ## Refresh CDN/cloud scope feeds
+	$(PY) -m scripts.update_scope_feeds
+
 docker-build: ## Build all images
 	docker compose -f docker/docker-compose.yml build
 

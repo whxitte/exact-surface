@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-worker
+  labels: {{- include "vantari.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/component: worker, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/component: worker, app.kubernetes.io/instance: {{ .Release.Name }} }
+    spec:
+      containers:
+        - name: worker
+          image: {{ .Values.image.pipeline }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["arq", "taskqueue.worker.WorkerSettings"]
+          envFrom:
+            - secretRef: { name: {{ .Values.existingSecret }} }
+          env:
+            - name: VANTARI_ENV
+              value: {{ .Values.env | quote }}
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+---
+# Singleton scheduler — enqueues due jobs onto the shared queue.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-scheduler
+  labels: {{- include "vantari.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.scheduler.replicas }}
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: { app.kubernetes.io/component: scheduler, app.kubernetes.io/instance: {{ .Release.Name }} }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/component: scheduler, app.kubernetes.io/instance: {{ .Release.Name }} }
+    spec:
+      containers:
+        - name: scheduler
+          image: {{ .Values.image.pipeline }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["python", "-m", "daemon.main"]
+          envFrom:
+            - secretRef: { name: {{ .Values.existingSecret }} }
+          env:
+            - name: VANTARI_ENV
+              value: {{ .Values.env | quote }}
+          resources: {{- toYaml .Values.scheduler.resources | nindent 12 }}
