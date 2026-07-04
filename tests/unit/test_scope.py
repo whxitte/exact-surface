@@ -42,10 +42,10 @@ SCOPE = ProgramScope(
         ("100.64.0.1", IpClass.CGNAT),
         ("224.0.0.1", IpClass.MULTICAST),
         ("0.0.0.0", IpClass.UNSPECIFIED),
-        ("104.16.5.5", IpClass.CDN),        # cloudflare
-        ("151.101.1.1", IpClass.CDN),       # fastly
-        ("8.8.8.8", IpClass.PUBLIC),        # routable, ownership unknown
-        ("not-an-ip", IpClass.RESERVED),    # fail closed
+        ("104.16.5.5", IpClass.CDN),  # cloudflare
+        ("151.101.1.1", IpClass.CDN),  # fastly
+        ("8.8.8.8", IpClass.PUBLIC),  # routable, ownership unknown
+        ("not-an-ip", IpClass.RESERVED),  # fail closed
     ],
 )
 def test_classify_ip(ip, expected):

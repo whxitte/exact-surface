@@ -22,8 +22,13 @@ def test_stateful_defaults():
 
 def test_finding_defaults_new_and_info():
     f = Finding(
-        tenant_id="t1", program_id="p1", fingerprint="fp",
-        check_id="c", module="nuclei", location="https://h/x", name="n",
+        tenant_id="t1",
+        program_id="p1",
+        fingerprint="fp",
+        check_id="c",
+        module="nuclei",
+        location="https://h/x",
+        name="n",
     )
     assert f.state == FindingState.NEW and f.severity == Severity.INFO
 
@@ -44,8 +49,14 @@ def test_authorization_is_current():
 # -- severity ----------------------------------------------------------------
 @pytest.mark.parametrize(
     "score,band",
-    [(None, Severity.INFO), (0.0, Severity.INFO), (3.9, Severity.LOW),
-     (5.0, Severity.MEDIUM), (7.0, Severity.HIGH), (9.8, Severity.CRITICAL)],
+    [
+        (None, Severity.INFO),
+        (0.0, Severity.INFO),
+        (3.9, Severity.LOW),
+        (5.0, Severity.MEDIUM),
+        (7.0, Severity.HIGH),
+        (9.8, Severity.CRITICAL),
+    ],
 )
 def test_from_cvss_bands(score, band):
     assert from_cvss(score) == band

@@ -15,8 +15,11 @@ from tests.fakes import FakeMongo
 
 def _asset(ips, fp="fp-a"):
     return Asset(
-        tenant_id="t1", program_id="p1", fingerprint=fp,
-        hostname="app.customer.com", resolved_ips=ips,
+        tenant_id="t1",
+        program_id="p1",
+        fingerprint=fp,
+        hostname="app.customer.com",
+        resolved_ips=ips,
     )
 
 
@@ -53,7 +56,7 @@ async def test_volatile_field_updates_but_first_seen_is_immutable():
 
     assert second["resolved_ips"] == ["45.55.9.9"]
     assert second["first_seen"] == first["first_seen"]  # immutable
-    assert second["last_seen"] >= first["last_seen"]    # volatile, bumped
+    assert second["last_seen"] >= first["last_seen"]  # volatile, bumped
 
 
 async def test_upsert_many_counts_new_only():
@@ -67,10 +70,12 @@ async def test_upsert_many_counts_new_only():
 async def test_tenant_isolation_in_reads():
     coll = FakeMongo().collection("assets")
     repo = AssetRepo(coll)
-    await repo.upsert(Asset(tenant_id="t1", program_id="p1", fingerprint="x",
-                            hostname="a.customer.com"))
-    await repo.upsert(Asset(tenant_id="t2", program_id="p1", fingerprint="x",
-                            hostname="a.customer.com"))
+    await repo.upsert(
+        Asset(tenant_id="t1", program_id="p1", fingerprint="x", hostname="a.customer.com")
+    )
+    await repo.upsert(
+        Asset(tenant_id="t2", program_id="p1", fingerprint="x", hostname="a.customer.com")
+    )
     assert await repo.count("t1") == 1
     assert await repo.count("t2") == 1
     assert (await repo.get("t1", "x"))["tenant_id"] == "t1"
@@ -78,9 +83,15 @@ async def test_tenant_isolation_in_reads():
 
 async def test_finding_upsert_roundtrip():
     repo = FindingRepo(FakeMongo().collection("findings"))
-    f = Finding(tenant_id="t1", program_id="p1", fingerprint="ff",
-                check_id="exposed-env", module="nuclei",
-                location="https://app.customer.com/.env", name="Exposed .env")
+    f = Finding(
+        tenant_id="t1",
+        program_id="p1",
+        fingerprint="ff",
+        check_id="exposed-env",
+        module="nuclei",
+        location="https://app.customer.com/.env",
+        name="Exposed .env",
+    )
     r = await repo.upsert(f)
     assert r.inserted
     doc = await repo.get("t1", "ff")

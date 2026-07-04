@@ -88,7 +88,11 @@ async def run_scan(
 
     logger.info(
         "scan {}: {} safe + {} aggressive urls, {} findings, {} new",
-        program_id, len(safe_urls), len(aggressive_urls), len(models), len(new_findings),
+        program_id,
+        len(safe_urls),
+        len(aggressive_urls),
+        len(models),
+        len(new_findings),
     )
     return {
         "scanned_safe": len(safe_urls),

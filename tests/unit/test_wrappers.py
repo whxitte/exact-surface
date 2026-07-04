@@ -14,6 +14,7 @@ def make_runner(rows, capture=None):
         if capture is not None:
             capture.append({"binary": binary, "args": list(args), "stdin": stdin})
         return rows
+
     return runner
 
 
@@ -37,8 +38,13 @@ async def test_dnsx_groups_ips_per_host():
 
 async def test_httpx_normalises_records():
     rows = [
-        {"url": "https://a.customer.com", "input": "a.customer.com", "status_code": 200,
-         "title": "Home", "tech": ["nginx", "php"]},
+        {
+            "url": "https://a.customer.com",
+            "input": "a.customer.com",
+            "status_code": 200,
+            "title": "Home",
+            "tech": ["nginx", "php"],
+        },
         {"no_url": True},  # dropped
     ]
     out = await probe(["a.customer.com"], 10, runner=make_runner(rows))
@@ -53,6 +59,7 @@ async def test_crtsh_filters_to_domain_and_strips_wildcards():
             ' {"name_value": "mail.customer.com"},'
             ' {"name_value": "evil.attacker.com"}]'
         )
+
     out = await crtsh_enum("customer.com", fetch=fetch)
     assert out == ["app.customer.com", "customer.com", "mail.customer.com"]
 
@@ -60,18 +67,22 @@ async def test_crtsh_filters_to_domain_and_strips_wildcards():
 async def test_crtsh_degrades_on_error():
     async def fetch(_url):
         raise RuntimeError("crt.sh down")
+
     assert await crtsh_enum("customer.com", fetch=fetch) == []
 
 
 async def test_nuclei_enforces_safe_excludes_and_parses():
-    rows = [{
-        "template-id": "exposed-env",
-        "info": {"name": "Exposed .env", "severity": "high", "description": "d"},
-        "matched-at": "https://a.customer.com/.env",
-    }]
+    rows = [
+        {
+            "template-id": "exposed-env",
+            "info": {"name": "Exposed .env", "severity": "high", "description": "d"},
+            "matched-at": "https://a.customer.com/.env",
+        }
+    ]
     cap = []
-    out = await scan(["https://a.customer.com"], 10, aggressive=False,
-                     runner=make_runner(rows, cap))
+    out = await scan(
+        ["https://a.customer.com"], 10, aggressive=False, runner=make_runner(rows, cap)
+    )
     # safe excludes always present
     args = cap[0]["args"]
     assert "-etags" in args
@@ -86,5 +97,5 @@ async def test_nuclei_aggressive_drops_tag_restriction_but_keeps_excludes():
     cap = []
     await scan(["https://a"], 10, aggressive=True, runner=make_runner([], cap))
     args = cap[0]["args"]
-    assert "-tags" not in args          # aggressive widens template set
-    assert "-etags" in args             # but still excludes harmful tags
+    assert "-tags" not in args  # aggressive widens template set
+    assert "-etags" in args  # but still excludes harmful tags

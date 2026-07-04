@@ -40,14 +40,14 @@ _DATA_FILE = Path(__file__).parent / "data" / "cloud_ranges.json"
 class IpClass(str, Enum):
     """Classification of a resolved IP address."""
 
-    DEDICATED = "dedicated"          # confirmed owned/authorised (decided in evaluate)
-    CDN = "cdn"                       # shared CDN edge (Cloudflare/Akamai/Fastly/CloudFront/...)
-    CLOUD_SHARED = "cloud_shared"     # generic shared cloud range
-    PUBLIC = "public"                 # routable, ownership unconfirmed
+    DEDICATED = "dedicated"  # confirmed owned/authorised (decided in evaluate)
+    CDN = "cdn"  # shared CDN edge (Cloudflare/Akamai/Fastly/CloudFront/...)
+    CLOUD_SHARED = "cloud_shared"  # generic shared cloud range
+    PUBLIC = "public"  # routable, ownership unconfirmed
     PRIVATE = "private"
     LOOPBACK = "loopback"
-    LINK_LOCAL = "link_local"         # 169.254.0.0/16 — includes metadata 169.254.169.254
-    CGNAT = "cgnat"                   # 100.64.0.0/10
+    LINK_LOCAL = "link_local"  # 169.254.0.0/16 — includes metadata 169.254.169.254
+    CGNAT = "cgnat"  # 100.64.0.0/10
     MULTICAST = "multicast"
     RESERVED = "reserved"
     UNSPECIFIED = "unspecified"
@@ -75,12 +75,12 @@ HTTP_ONLY_CLASSES: frozenset[IpClass] = frozenset(
 class Action(str, Enum):
     """A capability a module may want to exercise against a target."""
 
-    PASSIVE_RECON = "passive_recon"        # no direct contact (crt.sh, wayback, uncover)
-    HTTP_PROBE = "http_probe"              # httpx alive-check / header analysis
-    TLS_INSPECT = "tls_inspect"            # tlsx cert inspection
-    PORT_SCAN = "port_scan"                # naabu / nmap
+    PASSIVE_RECON = "passive_recon"  # no direct contact (crt.sh, wayback, uncover)
+    HTTP_PROBE = "http_probe"  # httpx alive-check / header analysis
+    TLS_INSPECT = "tls_inspect"  # tlsx cert inspection
+    PORT_SCAN = "port_scan"  # naabu / nmap
     CONTENT_DISCOVERY = "content_discovery"  # feroxbuster / ffuf
-    ACTIVE_SCAN = "active_scan"            # nuclei active templates beyond safe-passive
+    ACTIVE_SCAN = "active_scan"  # nuclei active templates beyond safe-passive
 
 
 #: The full action set granted to confirmed-dedicated, in-scope hosts.
@@ -260,9 +260,7 @@ class ScopeEngine:
                 )
 
             # 5. Is this IP confirmed dedicated to the customer?
-            is_dedicated = any(
-                addr.version == n.version and addr in n for n in dedicated_nets
-            )
+            is_dedicated = any(addr.version == n.version and addr in n for n in dedicated_nets)
             if is_dedicated:
                 classes.append(IpClass.DEDICATED)
             else:

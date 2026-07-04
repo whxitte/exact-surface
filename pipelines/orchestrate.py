@@ -30,9 +30,7 @@ def build_program_scope(program: dict, authorization: dict | None) -> ProgramSco
     dedicated: tuple[str, ...] = ()
     if authorization:
         dedicated = tuple(
-            e["cidr"]
-            for e in authorization.get("ip_scope", [])
-            if e.get("ip_class") == "dedicated"
+            e["cidr"] for e in authorization.get("ip_scope", []) if e.get("ip_class") == "dedicated"
         )
     return ProgramScope(
         verified_apexes=(program["apex_domain"],),
@@ -62,8 +60,12 @@ async def run_full_pipeline(
     scan_id = uuid.uuid4().hex
     audit = ScanRunRepo.from_mongo(mongo)
     run = ScanRun(
-        tenant_id=tenant.tenant_id, scan_id=scan_id, program_id=program_id,
-        pipeline="full", status=ScanStatus.RUNNING, started_at=datetime.now(UTC),
+        tenant_id=tenant.tenant_id,
+        scan_id=scan_id,
+        program_id=program_id,
+        pipeline="full",
+        status=ScanStatus.RUNNING,
+        started_at=datetime.now(UTC),
     )
     await audit.save(run)
 
@@ -71,18 +73,34 @@ async def run_full_pipeline(
         try:
             ingest_kw = {k: injected[k] for k in ("subfinder", "crtsh", "resolve") if k in injected}
             ingest = await run_ingest(
-                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
-                program_id=program_id, apex=apex, timeout=timeout, **ingest_kw,
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                apex=apex,
+                timeout=timeout,
+                **ingest_kw,
             )
             probe_kw = {"probe": injected["probe"]} if "probe" in injected else {}
             probe = await run_probe(
-                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
-                program_id=program_id, timeout=timeout, **probe_kw,
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                timeout=timeout,
+                **probe_kw,
             )
             scan_kw = {"scan": injected["scan"]} if "scan" in injected else {}
             scan = await run_scan(
-                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
-                program_id=program_id, timeout=timeout, **scan_kw,
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                timeout=timeout,
+                **scan_kw,
             )
         except Exception as exc:
             run.status = ScanStatus.FAILED
@@ -125,6 +143,11 @@ async def run_program(
 
     scope = build_program_scope(program, auth)
     return await run_full_pipeline(
-        mongo=mongo, engine=engine, scope=scope, tenant=tenant,
-        program_id=program_id, apex=program["apex_domain"], timeout=timeout,
+        mongo=mongo,
+        engine=engine,
+        scope=scope,
+        tenant=tenant,
+        program_id=program_id,
+        apex=program["apex_domain"],
+        timeout=timeout,
     )

@@ -112,3 +112,15 @@ async def run_tool_jsonl(
     """
     run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
     return list(iter_jsonl(run.stdout))
+
+
+async def run_tool_lines(
+    binary: str,
+    args: Sequence[str],
+    *,
+    timeout: float,
+    stdin: str | None = None,
+) -> list[str]:
+    """Run a line-emitting tool (gau, waybackurls) and return stripped non-empty lines."""
+    run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
+    return [ln.strip() for ln in run.stdout.splitlines() if ln.strip()]

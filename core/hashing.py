@@ -85,9 +85,7 @@ def port_fingerprint(program_id: str, ip: str, port: int, protocol: str = "tcp")
     return canonical_hash("port", program_id, ip, int(port), protocol.lower())
 
 
-def finding_fingerprint(
-    program_id: str, check_id: str, location: str, locator: str = ""
-) -> str:
+def finding_fingerprint(program_id: str, check_id: str, location: str, locator: str = "") -> str:
     """Identity of a finding.
 
     Deliberately excludes the response body — bodies drift between scans while the
@@ -106,8 +104,6 @@ def secret_fingerprint(
     return canonical_hash("secret", program_id, value_hash, source_locator)
 
 
-def cve_match_fingerprint(
-    program_id: str, cve_id: str, asset_fp: str, cpe: str
-) -> str:
+def cve_match_fingerprint(program_id: str, cve_id: str, asset_fp: str, cpe: str) -> str:
     """Identity of a CVE-to-asset match."""
     return canonical_hash("cve_match", program_id, cve_id.upper(), asset_fp, cpe)

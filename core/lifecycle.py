@@ -42,9 +42,7 @@ _ALLOWED: dict[FindingState, frozenset[FindingState]] = {
             FindingState.RESOLVED,
         }
     ),
-    FindingState.CONFIRMED: frozenset(
-        {FindingState.RESOLVED, FindingState.ACCEPTED_RISK}
-    ),
+    FindingState.CONFIRMED: frozenset({FindingState.RESOLVED, FindingState.ACCEPTED_RISK}),
     FindingState.FALSE_POSITIVE: frozenset({FindingState.REGRESSED, FindingState.TRIAGED}),
     FindingState.ACCEPTED_RISK: frozenset({FindingState.TRIAGED, FindingState.RESOLVED}),
     FindingState.RESOLVED: frozenset({FindingState.REGRESSED}),

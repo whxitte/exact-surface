@@ -17,9 +17,5 @@ async def enumerate_subdomains(
     ``runner`` is injected so tests can supply canned JSONL rows without the binary.
     """
     rows = await runner("subfinder", ["-d", domain, "-silent", "-oJ"], timeout=timeout)
-    hosts = {
-        (r.get("host") or "").lower().rstrip(".")
-        for r in rows
-        if r.get("host")
-    }
+    hosts = {(r.get("host") or "").lower().rstrip(".") for r in rows if r.get("host")}
     return sorted(h for h in hosts if h)

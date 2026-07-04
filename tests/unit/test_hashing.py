@@ -49,9 +49,7 @@ def test_asset_fp_normalizes_case_and_trailing_dot():
 
 
 def test_asset_fp_scoped_to_program():
-    assert asset_fingerprint("p1", "a.customer.com") != asset_fingerprint(
-        "p2", "a.customer.com"
-    )
+    assert asset_fingerprint("p1", "a.customer.com") != asset_fingerprint("p2", "a.customer.com")
 
 
 def test_finding_fp_differs_by_location_and_locator():

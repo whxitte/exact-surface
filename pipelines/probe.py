@@ -16,7 +16,9 @@ from core.models import Endpoint
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
+from db.deltas import DeltaRepo
 from db.endpoints import EndpointRepo
+from modules.intelligence.delta_monitor import compute_endpoint_deltas
 from modules.probing.httpx import probe as httpx_probe
 
 
@@ -49,22 +51,37 @@ async def run_probe(
             status_code=r.get("status_code"),
             title=r.get("title"),
             tech=r.get("tech") or [],
-            content_hash=canonical_hash(
-                r.get("title"), r.get("status_code"), sorted(r.get("tech") or [])
-            ),
+            # Content identity = title + tech only. Status is tracked separately so a
+            # status change and a content change are independent delta signals.
+            content_hash=canonical_hash(r.get("title"), sorted(r.get("tech") or [])),
         )
         for r in results
     ]
-    res = await EndpointRepo.from_mongo(mongo).upsert_all(models)
+    endpoint_repo = EndpointRepo.from_mongo(mongo)
+    delta_repo = DeltaRepo.from_mongo(mongo)
+
+    # Detect state changes against the stored version BEFORE overwriting it.
+    deltas = []
+    for model in models:
+        old = await endpoint_repo.get(tenant.tenant_id, model.fingerprint)
+        deltas.extend(compute_endpoint_deltas(tenant.tenant_id, program_id, old, model))
+
+    res = await endpoint_repo.upsert_all(models)
+    await delta_repo.record_all(deltas)
     new_urls = [m.url for m, x in zip(models, res, strict=True) if x.inserted]
 
     logger.info(
-        "probe {}: {} probeable, {} alive, {} new",
-        program_id, len(probeable), len(models), len(new_urls),
+        "probe {}: {} probeable, {} alive, {} new, {} deltas",
+        program_id,
+        len(probeable),
+        len(models),
+        len(new_urls),
+        len(deltas),
     )
     return {
         "probeable": len(probeable),
         "alive": len(models),
         "new": len(new_urls),
         "new_urls": new_urls,
+        "deltas": len(deltas),
     }

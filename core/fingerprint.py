@@ -14,19 +14,53 @@ import re
 
 # Substrings / patterns that strongly indicate a non-production, often-forgotten env.
 _EPHEMERAL_TOKENS = (
-    "staging", "stage", "dev", "development", "uat", "qa", "test", "demo",
-    "preview", "sandbox", "beta", "temp", "tmp", "internal", "old", "new",
+    "staging",
+    "stage",
+    "dev",
+    "development",
+    "uat",
+    "qa",
+    "test",
+    "demo",
+    "preview",
+    "sandbox",
+    "beta",
+    "temp",
+    "tmp",
+    "internal",
+    "old",
+    "new",
 )
 _EPHEMERAL_HOST_SUFFIXES = (
-    ".vercel.app", ".netlify.app", ".pages.dev", ".onrender.com",
-    ".herokuapp.com", ".web.app", ".firebaseapp.com", ".ngrok.io",
-    ".fly.dev", ".railway.app",
+    ".vercel.app",
+    ".netlify.app",
+    ".pages.dev",
+    ".onrender.com",
+    ".herokuapp.com",
+    ".web.app",
+    ".firebaseapp.com",
+    ".ngrok.io",
+    ".fly.dev",
+    ".railway.app",
 )
 _TOKEN_RE = re.compile(r"(?:^|[.\-_])(" + "|".join(_EPHEMERAL_TOKENS) + r")(?:[.\-_0-9]|$)")
 
 # Path/host hints that raise interest (admin surfaces, APIs, auth).
-_HIGH_INTEREST = ("admin", "api", "auth", "login", "vpn", "git", "jenkins",
-                  "gitlab", "grafana", "kibana", "portal", "internal", "dashboard")
+_HIGH_INTEREST = (
+    "admin",
+    "api",
+    "auth",
+    "login",
+    "vpn",
+    "git",
+    "jenkins",
+    "gitlab",
+    "grafana",
+    "kibana",
+    "portal",
+    "internal",
+    "dashboard",
+)
 
 
 def is_ephemeral_host(host: str) -> bool:

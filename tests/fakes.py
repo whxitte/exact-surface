@@ -68,6 +68,11 @@ class FakeCollection:
         found.update(update.get("$set", {}))  # $setOnInsert ignored on existing
         return _UpdateResult(modified=1)
 
+    async def insert_one(self, doc: dict) -> _UpdateResult:
+        key = (doc.get("tenant_id"), f"_ins{next(self._counter)}")
+        self.docs[key] = dict(doc)
+        return _UpdateResult(upserted_id=key)
+
     async def update_many(self, flt: dict, update: dict) -> _UpdateResult:
         n = 0
         for d in self.docs.values():

@@ -87,9 +87,7 @@ class Settings(BaseSettings):
 
     def secret_hash_key_bytes(self) -> bytes:
         """Return the HMAC key as bytes for ``core.hashing.keyed_hash``."""
-        return hashlib.sha256(
-            self.secret_hash_key.get_secret_value().encode("utf-8")
-        ).digest()
+        return hashlib.sha256(self.secret_hash_key.get_secret_value().encode("utf-8")).digest()
 
     def assert_prod_safe(self) -> None:
         """Fail fast if prod is running with insecure development defaults."""
@@ -97,9 +95,7 @@ class Settings(BaseSettings):
             return
         insecure = {
             "jwt_secret": self.jwt_secret.get_secret_value().startswith("dev-insecure"),
-            "secret_hash_key": self.secret_hash_key.get_secret_value().startswith(
-                "dev-insecure"
-            ),
+            "secret_hash_key": self.secret_hash_key.get_secret_value().startswith("dev-insecure"),
         }
         bad = [k for k, v in insecure.items() if v]
         if bad:

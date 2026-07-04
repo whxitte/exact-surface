@@ -72,9 +72,7 @@ class Mongo:
         try:
             from motor.motor_asyncio import AsyncIOMotorClient
         except ModuleNotFoundError as exc:  # pragma: no cover - env dependent
-            raise ConfigError(
-                "motor is not installed; add 'motor' to run against MongoDB"
-            ) from exc
+            raise ConfigError("motor is not installed; add 'motor' to run against MongoDB") from exc
         self._client = AsyncIOMotorClient(
             self._settings.mongo_uri, serverSelectionTimeoutMS=5000, tz_aware=True
         )
@@ -102,9 +100,7 @@ class Mongo:
 
         created = 0
         for coll_name, specs in INDEXES.items():
-            models = [
-                IndexModel(keys, name=name, **opts) for name, keys, opts in specs
-            ]
+            models = [IndexModel(keys, name=name, **opts) for name, keys, opts in specs]
             if models:
                 await self.db[coll_name].create_indexes(models)
                 created += len(models)

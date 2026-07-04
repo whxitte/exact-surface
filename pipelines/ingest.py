@@ -53,9 +53,7 @@ async def run_ingest(
             fingerprint=asset_fingerprint(program_id, host),
             hostname=host,
             resolved_ips=resolved.get(host, []),
-            ip_class=(
-                engine.classify_ip(resolved[host][0]).value if resolved.get(host) else None
-            ),
+            ip_class=(engine.classify_ip(resolved[host][0]).value if resolved.get(host) else None),
             source="ingest",
             is_ephemeral=is_ephemeral_host(host),
         )
@@ -66,7 +64,10 @@ async def run_ingest(
 
     logger.info(
         "ingest {}: {} candidates, {} in-scope, {} new",
-        apex, len(candidates), len(in_scope), len(new_hosts),
+        apex,
+        len(candidates),
+        len(in_scope),
+        len(new_hosts),
     )
     return {
         "candidates": len(candidates),

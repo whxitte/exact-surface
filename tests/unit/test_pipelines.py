@@ -28,10 +28,10 @@ SCOPE = ProgramScope(
 )
 
 RESOLVE_MAP = {
-    "customer.com": ["45.55.1.9"],       # dedicated
-    "app.customer.com": ["45.55.1.1"],   # dedicated
+    "customer.com": ["45.55.1.9"],  # dedicated
+    "app.customer.com": ["45.55.1.1"],  # dedicated
     "www.customer.com": ["104.16.5.5"],  # cloudflare CDN
-    "api.customer.com": ["8.8.8.8"],     # public, unconfirmed
+    "api.customer.com": ["8.8.8.8"],  # public, unconfirmed
     "evil.customer.com": ["169.254.169.254"],  # metadata — must never be contacted
 }
 
@@ -59,31 +59,52 @@ def make_fake_scan(capture):
     async def fake_scan(urls, _timeout, aggressive=False):
         capture.append({"urls": list(urls), "aggressive": aggressive})
         return [
-            {"template_id": "exposed-env", "name": "Exposed .env", "severity": "high",
-             "matched_at": u, "description": "", "reference": [], "raw": {}}
+            {
+                "template_id": "exposed-env",
+                "name": "Exposed .env",
+                "severity": "high",
+                "matched_at": u,
+                "description": "",
+                "reference": [],
+                "raw": {},
+            }
             for u in urls
         ]
+
     return fake_scan
 
 
 def _injected(scan_capture):
     return dict(
-        subfinder=fake_subfinder, crtsh=fake_crtsh, resolve=fake_resolve,
-        probe=fake_probe, scan=make_fake_scan(scan_capture),
+        subfinder=fake_subfinder,
+        crtsh=fake_crtsh,
+        resolve=fake_resolve,
+        probe=fake_probe,
+        scan=make_fake_scan(scan_capture),
     )
 
 
 async def test_ingest_drops_out_of_scope_hosts():
     mongo = FakeMongo()
     res = await run_ingest(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-        program_id="p1", apex="customer.com", timeout=10,
-        subfinder=fake_subfinder, crtsh=fake_crtsh, resolve=fake_resolve,
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        subfinder=fake_subfinder,
+        crtsh=fake_crtsh,
+        resolve=fake_resolve,
     )
-    assert "out.attacker.com" not in res["new_hosts"]         # not under apex
+    assert "out.attacker.com" not in res["new_hosts"]  # not under apex
     assert set(res["new_hosts"]) == {
-        "customer.com", "app.customer.com", "www.customer.com",
-        "api.customer.com", "evil.customer.com",
+        "customer.com",
+        "app.customer.com",
+        "www.customer.com",
+        "api.customer.com",
+        "evil.customer.com",
     }
 
 
@@ -91,8 +112,14 @@ async def test_full_pipeline_scope_enforcement():
     mongo = FakeMongo()
     scan_calls: list[dict] = []
     result = await run_full_pipeline(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-        program_id="p1", apex="customer.com", timeout=10, **_injected(scan_calls),
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        **_injected(scan_calls),
     )
 
     # evil.customer.com resolves to the metadata IP → never probed or scanned.
@@ -110,15 +137,27 @@ async def test_full_pipeline_scope_enforcement():
 async def test_full_pipeline_is_idempotent():
     mongo = FakeMongo()
     first = await run_full_pipeline(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-        program_id="p1", apex="customer.com", timeout=10, **_injected([]),
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        **_injected([]),
     )
     second = await run_full_pipeline(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-        program_id="p1", apex="customer.com", timeout=10, **_injected([]),
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        **_injected([]),
     )
     assert first["ingest"]["new"] > 0
-    assert second["ingest"]["new"] == 0      # nothing new the second time
+    assert second["ingest"]["new"] == 0  # nothing new the second time
     assert second["scan"]["new"] == 0
     assert await AssetRepo(mongo.collection("assets")).count("t1") == 5  # no duplicates
 
@@ -135,13 +174,24 @@ async def test_run_program_requires_authorization():
 
 async def test_build_program_scope_extracts_dedicated_cidrs():
     program = Program(
-        tenant_id="t1", program_id="p1", apex_domain="customer.com",
+        tenant_id="t1",
+        program_id="p1",
+        apex_domain="customer.com",
         excluded_hosts=["legacy.customer.com"],
     ).model_dump(mode="json")
     auth = Authorization(
-        tenant_id="t1", program_id="p1", authorized_by="u1", apex_verified=True,
-        ip_scope=[IpScopeEntry(cidr="45.55.0.0/16", ip_class="dedicated",
-                               action_set=["port_scan"], confirmed_via="whois:AS14061")],
+        tenant_id="t1",
+        program_id="p1",
+        authorized_by="u1",
+        apex_verified=True,
+        ip_scope=[
+            IpScopeEntry(
+                cidr="45.55.0.0/16",
+                ip_class="dedicated",
+                action_set=["port_scan"],
+                confirmed_via="whois:AS14061",
+            )
+        ],
     ).model_dump(mode="json")
     scope = build_program_scope(program, auth)
     assert scope.authorized_dedicated_cidrs == ("45.55.0.0/16",)
