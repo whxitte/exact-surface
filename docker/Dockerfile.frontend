@@ -6,6 +6,11 @@ WORKDIR /app
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# Next.js bakes the /api/* rewrite destination at BUILD time (into routes-manifest),
+# so API_PROXY_TARGET must be set here — not just at runtime. Defaults to the
+# compose service address; override with --build-arg for other topologies.
+ARG API_PROXY_TARGET=http://api:8000
+ENV API_PROXY_TARGET=${API_PROXY_TARGET}
 RUN npm run build
 
 FROM node:20-alpine AS runtime
