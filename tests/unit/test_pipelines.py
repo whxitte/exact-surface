@@ -74,13 +74,33 @@ def make_fake_scan(capture):
     return fake_scan
 
 
+async def fake_gau(_apex, _t):
+    return []
+
+
+async def fake_wayback(_apex, _t):
+    return []
+
+
+async def fake_katana(_url, _t):
+    return []
+
+
+async def fake_fetch(_url):
+    return ""
+
+
 def _injected(scan_capture):
     return dict(
         subfinder=fake_subfinder,
         crtsh=fake_crtsh,
         resolve=fake_resolve,
         probe=fake_probe,
+        gau=fake_gau,
+        wayback=fake_wayback,
+        katana=fake_katana,
         scan=make_fake_scan(scan_capture),
+        fetch=fake_fetch,
     )
 
 

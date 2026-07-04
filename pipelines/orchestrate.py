@@ -20,9 +20,11 @@ from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
+from pipelines.crawl import run_crawl
 from pipelines.ingest import run_ingest
 from pipelines.probe import run_probe
 from pipelines.scan import run_scan
+from pipelines.secrets import run_secret_scan
 
 
 def build_program_scope(program: dict, authorization: dict | None) -> ProgramScope:
@@ -55,8 +57,11 @@ async def run_full_pipeline(
     timeout: float,
     **injected: Any,
 ) -> dict:
-    """Run all three pipelines. ``injected`` forwards test doubles per stage:
-    ``subfinder``, ``crtsh``, ``resolve`` (ingest); ``probe``; ``scan``."""
+    """Run the full pipeline: ingest → probe → crawl → scan → secrets.
+
+    ``injected`` forwards test doubles per stage: ``subfinder``/``crtsh``/
+    ``resolve`` (ingest); ``probe``; ``gau``/``wayback``/``katana`` (crawl);
+    ``scan``; ``fetch`` (secrets)."""
     scan_id = uuid.uuid4().hex
     audit = ScanRunRepo.from_mongo(mongo)
     run = ScanRun(
@@ -92,6 +97,17 @@ async def run_full_pipeline(
                 timeout=timeout,
                 **probe_kw,
             )
+            crawl_kw = {k: injected[k] for k in ("gau", "wayback", "katana") if k in injected}
+            crawl = await run_crawl(
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                apex=apex,
+                timeout=timeout,
+                **crawl_kw,
+            )
             scan_kw = {"scan": injected["scan"]} if "scan" in injected else {}
             scan = await run_scan(
                 mongo=mongo,
@@ -102,6 +118,15 @@ async def run_full_pipeline(
                 timeout=timeout,
                 **scan_kw,
             )
+            secrets_kw = {"fetch": injected["fetch"]} if "fetch" in injected else {}
+            secrets = await run_secret_scan(
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                **secrets_kw,
+            )
         except Exception as exc:
             run.status = ScanStatus.FAILED
             run.finished_at = datetime.now(UTC)
@@ -110,13 +135,14 @@ async def run_full_pipeline(
             logger.error("pipeline failed for {}: {}", program_id, exc)
             raise
 
-        stats = {"ingest": ingest, "probe": probe, "scan": scan}
+        stats = {"ingest": ingest, "probe": probe, "crawl": crawl, "scan": scan, "secrets": secrets}
         run.status = ScanStatus.SUCCESS
         run.finished_at = datetime.now(UTC)
         run.stats = {
             "assets_new": ingest["new"],
-            "endpoints_new": probe["new"],
+            "endpoints_new": probe["new"] + crawl["new"],
             "findings_new": scan["new"],
+            "secrets_new": secrets["new"],
         }
         await audit.save(run)
         return {"scan_id": scan_id, **stats}
