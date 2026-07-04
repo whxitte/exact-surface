@@ -32,9 +32,18 @@ async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
   if (res.status === 204) return undefined as T;
 
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body: unknown = null;
+  if (text) {
+    try {
+      body = JSON.parse(text);
+    } catch {
+      // Non-JSON response (e.g. a proxy/gateway error page) — surface it readably.
+      if (!res.ok) throw new ApiError(res.status, text.slice(0, 200) || res.statusText);
+    }
+  }
   if (!res.ok) {
-    throw new ApiError(res.status, body?.detail || res.statusText);
+    const detail = (body as { detail?: string } | null)?.detail;
+    throw new ApiError(res.status, detail || res.statusText);
   }
   return body as T;
 }
@@ -80,6 +89,21 @@ export interface Stats {
   findings_by_severity: Record<string, number>;
 }
 export interface Verification { method: string; token: string; instructions: string }
+export interface Channel {
+  channel_id: string;
+  name: string;
+  type: string;
+  enabled: boolean;
+  min_severity: string;
+  config: Record<string, string>;
+}
+export interface Secret {
+  fingerprint: string;
+  kind: string;
+  masked: string;
+  source_locator: string;
+  severity: string;
+}
 
 const json = (b: unknown) => ({ method: "POST", body: JSON.stringify(b) });
 
@@ -115,6 +139,37 @@ export const api = {
     return request<Finding[]>(`/programs/${id}/findings${qs ? `?${qs}` : ""}`);
   },
   listAssets: (id: string) => request<Asset[]>(`/programs/${id}/assets`),
-  listSecrets: (id: string) => request<Record<string, unknown>[]>(`/programs/${id}/secrets`),
+  listSecrets: (id: string) => request<Secret[]>(`/programs/${id}/secrets`),
   listDeltas: (id: string) => request<Record<string, unknown>[]>(`/programs/${id}/deltas`),
+
+  listChannels: () => request<Channel[]>("/notifications"),
+  createChannel: (body: {
+    name: string;
+    type: string;
+    min_severity: string;
+    config: Record<string, string>;
+  }) => request<Channel>("/notifications", json(body)),
+  deleteChannel: (id: string) =>
+    request<void>(`/notifications/${id}`, { method: "DELETE" }),
 };
+
+/** Fetch a report with auth and trigger a browser download. */
+export async function downloadReport(programId: string, format: string): Promise<void> {
+  const token = getToken();
+  const res = await fetch(`${BASE}/programs/${programId}/reports?format=${format}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new ApiError(res.status, "report generation failed");
+  const blob = await res.blob();
+  const disposition = res.headers.get("content-disposition") || "";
+  const match = disposition.match(/filename="(.+?)"/);
+  const filename = match ? match[1] : `vantari-report.${format}`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

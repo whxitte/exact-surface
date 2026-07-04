@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { NotificationsSettings } from "@/components/notifications-settings";
 
 export default function SettingsPage() {
   const [me, setMe] = useState<{ tenant_id: string; role: string } | null>(null);
@@ -90,6 +91,8 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <NotificationsSettings />
     </div>
   );
 }

@@ -4,11 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Copy, RefreshCw, KeyRound, Server, ShieldAlert, Clock,
+  FileText, FileCode, FileBarChart, FileType,
 } from "lucide-react";
-import { api, type Asset, type Finding, type Program, type Verification } from "@/lib/api";
+import {
+  api, downloadReport,
+  type Asset, type Finding, type Program, type Secret, type Verification,
+} from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SeverityBadge } from "@/components/ui/badge";
+import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
 import { timeAgo } from "@/lib/utils";
 
@@ -22,8 +27,10 @@ export default function ProgramDetail() {
   const [tab, setTab] = useState<Tab>("findings");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
-  const [secrets, setSecrets] = useState<Record<string, unknown>[]>([]);
+  const [secrets, setSecrets] = useState<Secret[]>([]);
   const [deltas, setDeltas] = useState<Record<string, unknown>[]>([]);
+  const [selected, setSelected] = useState<Finding | null>(null);
+  const [reportBusy, setReportBusy] = useState("");
 
   const loadProgram = useCallback(() => {
     api.getProgram(id).then(setProgram).catch((e) => setMsg(e.message));
@@ -56,6 +63,16 @@ export default function ProgramDetail() {
   async function scan() {
     const res = await api.triggerScan(id);
     setMsg(`Scan ${res.status}.`);
+  }
+  async function download(fmt: string) {
+    setReportBusy(fmt);
+    try {
+      await downloadReport(id, fmt);
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "report failed");
+    } finally {
+      setReportBusy("");
+    }
   }
 
   const sortedFindings = [...findings].sort(
@@ -126,6 +143,33 @@ export default function ProgramDetail() {
         )
       )}
 
+      {/* Reports */}
+      {program?.verified && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center gap-3 p-4">
+            <span className="mr-2 text-sm font-medium text-muted-foreground">Reports</span>
+            {(
+              [
+                ["hackerone", "HackerOne", FileCode],
+                ["executive", "Executive", FileBarChart],
+                ["html", "HTML", FileText],
+                ["pdf", "PDF", FileType],
+              ] as const
+            ).map(([fmt, label, Icon]) => (
+              <Button
+                key={fmt}
+                variant="outline"
+                size="sm"
+                disabled={reportBusy === fmt}
+                onClick={() => download(fmt)}
+              >
+                <Icon className="h-4 w-4" /> {reportBusy === fmt ? "…" : label}
+              </Button>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {([
@@ -153,7 +197,11 @@ export default function ProgramDetail() {
         <div className="space-y-2">
           {sortedFindings.length === 0 && <Empty label="No findings yet — run a scan." />}
           {sortedFindings.map((f) => (
-            <Card key={f.fingerprint}>
+            <Card
+              key={f.fingerprint}
+              className="cursor-pointer transition-colors hover:border-primary/40"
+              onClick={() => setSelected(f)}
+            >
               <CardContent className="flex items-center gap-4 p-4">
                 <SeverityBadge severity={f.severity} />
                 <div className="min-w-0 flex-1">
@@ -232,6 +280,59 @@ export default function ProgramDetail() {
           ))}
         </div>
       )}
+
+      <Modal
+        open={!!selected}
+        onClose={() => setSelected(null)}
+        title={
+          selected && (
+            <span className="flex items-center gap-2">
+              <SeverityBadge severity={selected.severity} /> {selected.name}
+            </span>
+          )
+        }
+      >
+        {selected && (
+          <div className="space-y-4 text-sm">
+            <Field label="Location">
+              <code className="break-all text-xs">{selected.location}</code>
+            </Field>
+            <Field label="Detection">
+              {selected.module} / <code className="text-xs">{selected.check_id}</code>
+            </Field>
+            {selected.description && (
+              <Field label="Description">{selected.description}</Field>
+            )}
+            <Field label="Reproduce">
+              <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 text-xs">
+                curl -i {selected.location}
+              </pre>
+            </Field>
+            {selected.references && selected.references.length > 0 && (
+              <Field label="References">
+                <ul className="list-inside list-disc space-y-1">
+                  {selected.references.map((r) => (
+                    <li key={r}>
+                      <a href={r} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                        {r}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </Field>
+            )}
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">{label}</div>
+      <div>{children}</div>
     </div>
   );
 }
