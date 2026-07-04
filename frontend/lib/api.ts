@@ -132,7 +132,7 @@ export const api = {
   createAuthorization: (id: string) =>
     request<unknown>(`/programs/${id}/authorization`, json({})),
   triggerScan: (id: string) =>
-    request<{ status: string }>(`/programs/${id}/scan`, { method: "POST" }),
+    request<{ status: string; detail?: string }>(`/programs/${id}/scan`, { method: "POST" }),
 
   listFindings: (id: string, q: Record<string, string> = {}) => {
     const qs = new URLSearchParams(q).toString();

@@ -62,7 +62,12 @@ export default function ProgramDetail() {
   }
   async function scan() {
     const res = await api.triggerScan(id);
-    setMsg(`Scan ${res.status}.`);
+    setMsg(res.detail || `Scan ${res.status}.`);
+    // Give the worker a moment, then refresh findings/assets to show new results.
+    setTimeout(() => {
+      api.listFindings(id).then(setFindings).catch(() => {});
+      api.listAssets(id).then(setAssets).catch(() => {});
+    }, 8000);
   }
   async function download(fmt: string) {
     setReportBusy(fmt);

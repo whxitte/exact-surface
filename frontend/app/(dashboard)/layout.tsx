@@ -20,9 +20,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!ready) return null;
 
   return (
-    <div className="flex min-h-screen">
+    // Fixed-height shell: the sidebar stays pinned; only <main> scrolls.
+    <div className="flex h-screen overflow-hidden">
       <AppSidebar />
-      <main className="flex-1 overflow-x-hidden">
+      <main className="flex-1 overflow-y-auto">
         <div className="mx-auto max-w-6xl px-8 py-8">{children}</div>
       </main>
     </div>

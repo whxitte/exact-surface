@@ -164,8 +164,35 @@ async def trigger_scan(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "a current authorization record is required before scanning"
         )
-    # Enqueue is best-effort here; the scheduler/arq wiring owns real execution.
-    return {"status": "queued", "program_id": program["program_id"]}
+
+    # Enqueue a full-pipeline run now so a worker picks it up immediately. If Redis
+    # is unreachable, the scheduler still runs it on its normal cadence.
+    from core.logging import logger
+
+    enqueued = False
+    try:
+        from taskqueue.arq_client import create_pool
+
+        pool = await create_pool()
+        try:
+            await pool.enqueue_job(
+                "run_program_task", principal.tenant_id, program["program_id"]
+            )
+            enqueued = True
+        finally:
+            await pool.aclose()
+    except Exception as exc:  # noqa: BLE001 - fall back to scheduler cadence
+        logger.warning("scan enqueue failed (scheduler will still run it): {}", exc)
+
+    return {
+        "status": "queued" if enqueued else "scheduled",
+        "program_id": program["program_id"],
+        "detail": (
+            "A worker is running the scan now; findings appear as they are discovered."
+            if enqueued
+            else "Queued for the next scheduler cycle."
+        ),
+    }
 
 
 # -- reads -------------------------------------------------------------------
