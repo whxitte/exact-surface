@@ -3,8 +3,10 @@
 # masscan is installed but DISABLED at the application layer in v1 (ADR-0004).
 
 # ---- stage 1: build Go-based tooling --------------------------------------
-FROM golang:1.22-bookworm AS gotools
-ENV GOBIN=/tools GOFLAGS=-buildvcs=false
+# Go 1.24+ is required by recent ProjectDiscovery releases (e.g. subfinder 2.14).
+# GOTOOLCHAIN=auto lets `go install` fetch an even newer toolchain if a tool needs it.
+FROM golang:1.24-bookworm AS gotools
+ENV GOBIN=/tools GOFLAGS=-buildvcs=false GOTOOLCHAIN=auto
 RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev && rm -rf /var/lib/apt/lists/*
 # ProjectDiscovery suite (JSON-native, rate-limit-aware) + companions.
 RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
