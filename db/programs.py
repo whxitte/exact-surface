@@ -30,3 +30,19 @@ class ProgramRepo:
             upsert=True,
         )
         return doc
+
+    async def _update(self, tenant_id: str, program_id: str, fields: dict) -> None:
+        await self._c.update_one(
+            {"tenant_id": tenant_id, "program_id": program_id}, {"$set": fields}
+        )
+
+    async def set_verification(self, tenant_id, program_id, method: str, token: str) -> None:
+        await self._update(
+            tenant_id, program_id, {"verification_method": method, "verification_token": token}
+        )
+
+    async def set_verified(self, tenant_id, program_id, verified: bool) -> None:
+        await self._update(tenant_id, program_id, {"verified": verified})
+
+    async def set_enabled(self, tenant_id, program_id, enabled: bool) -> None:
+        await self._update(tenant_id, program_id, {"enabled": enabled})

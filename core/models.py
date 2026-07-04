@@ -65,6 +65,33 @@ class Tenant(BaseModel):
     updated_at: datetime = Field(default_factory=_utcnow)
 
 
+class Role(str, Enum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MEMBER = "member"
+
+
+class User(TenantScopedModel):
+    """An account. Email is globally unique; the owner is created at signup."""
+
+    user_id: str
+    email: str
+    password_hash: str
+    role: Role = Role.OWNER
+
+
+class ApiKey(TenantScopedModel):
+    """A per-tenant API key. Only the SHA-256 hash is stored; raw shown once (§9)."""
+
+    key_id: str
+    name: str
+    key_hash: str
+    prefix: str  # first chars of the raw key, for display/identification
+    role: Role = Role.MEMBER
+    created_by: str | None = None
+    last_used_at: datetime | None = None
+
+
 class VerificationMethod(str, Enum):
     DNS_TXT = "dns_txt"
     HTTP_FILE = "http_file"

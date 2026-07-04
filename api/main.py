@@ -12,7 +12,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 
+from api.rate_limit import limiter
+from api.routes import auth as auth_routes
+from api.routes import programs as program_routes
+from api.routes import stats as stats_routes
+from api.ws import stream as ws_stream
 from core.config import get_settings
 from core.logging import configure_logging, logger
 from daemon.health import run_health_checks
@@ -62,6 +69,17 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Per-tenant rate limiting (slowapi).
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+    app.add_middleware(SlowAPIMiddleware)
+
+    # Feature routers.
+    app.include_router(auth_routes.router)
+    app.include_router(program_routes.router)
+    app.include_router(stats_routes.router)
+    app.include_router(ws_stream.router)
+
     @app.get("/healthz")
     async def healthz() -> dict:
         return {"status": "ok"}
@@ -83,6 +101,10 @@ def create_app() -> FastAPI:
         return Response(content=REGISTRY.render(), media_type="text/plain; version=0.0.4")
 
     return app
+
+
+def _rate_limit_handler(request, exc: RateLimitExceeded) -> Response:
+    return Response("rate limit exceeded", status_code=429)
 
 
 app = create_app()

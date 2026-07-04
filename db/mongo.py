@@ -34,6 +34,14 @@ _TRIAGE = ("by_severity", [("tenant_id", ASC), ("severity", ASC), ("first_seen",
 
 INDEXES: dict[str, list[tuple[str, list[tuple[str, int]], dict[str, Any]]]] = {
     "tenants": [("uniq_tenant", [("tenant_id", ASC)], {"unique": True})],
+    "users": [
+        ("uniq_email", [("email", ASC)], {"unique": True}),
+        ("by_user", [("tenant_id", ASC), ("user_id", ASC)], {"unique": True}),
+    ],
+    "apikeys": [
+        ("uniq_hash", [("key_hash", ASC)], {"unique": True}),
+        ("by_key", [("tenant_id", ASC), ("key_id", ASC)], {"unique": True}),
+    ],
     "programs": [
         ("uniq_program", [("tenant_id", ASC), ("program_id", ASC)], {"unique": True}),
         ("by_apex", [("tenant_id", ASC), ("apex_domain", ASC)], {}),

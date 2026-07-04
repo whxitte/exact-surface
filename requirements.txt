@@ -10,5 +10,6 @@ fastapi>=0.110
 uvicorn[standard]>=0.29
 aiohttp>=3.9
 python-jose[cryptography]>=3.3
-passlib[bcrypt]>=1.7
+bcrypt>=4.1
+email-validator>=2.1
 slowapi>=0.1.9

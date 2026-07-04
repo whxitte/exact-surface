@@ -17,7 +17,8 @@ dependencies = [
     "uvicorn[standard]>=0.29",
     "aiohttp>=3.9",
     "python-jose[cryptography]>=3.3",
-    "passlib[bcrypt]>=1.7",
+    "bcrypt>=4.1",
+    "email-validator>=2.1",
     "slowapi>=0.1.9",
 ]
 
@@ -58,6 +59,16 @@ ignore = ["S101", "UP042", "ASYNC109"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI dependency-injection idiom: calling these in argument defaults is correct.
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Path",
+    "fastapi.Body",
+]
 
 [tool.mypy]
 python_version = "3.11"
