@@ -124,3 +124,15 @@ async def run_tool_lines(
     """Run a line-emitting tool (gau, waybackurls) and return stripped non-empty lines."""
     run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
     return [ln.strip() for ln in run.stdout.splitlines() if ln.strip()]
+
+
+async def run_tool_stdout(
+    binary: str,
+    args: Sequence[str],
+    *,
+    timeout: float,
+    stdin: str | None = None,
+) -> str:
+    """Run a tool and return its raw stdout (for nmap greppable, ffuf JSON blob, ...)."""
+    run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
+    return run.stdout
