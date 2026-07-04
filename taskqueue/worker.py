@@ -33,19 +33,45 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
     settings = get_settings()
     ctx["settings"] = settings
     ctx["limiter"] = build_limiter(settings)
+    from db.mongo import get_mongo
+
+    mongo = get_mongo()
+    await mongo.connect()
+    ctx["mongo"] = mongo
     logger.info("worker started (concurrency={})", settings.worker_concurrency)
 
 
 async def shutdown(ctx: dict) -> None:  # arq lifecycle hook
+    mongo = ctx.get("mongo")
+    if mongo is not None:
+        await mongo.close()
     logger.info("worker shutting down")
 
 
+async def run_program_task(
+    ctx: dict, tenant_id: str, program_id: str, actor_id: str | None = None
+) -> dict:
+    """arq task: run the full pipeline for a program (auth-gated, scope-enforced)."""
+    from core.scope import default_engine
+    from core.tenant import TenantContext
+    from pipelines.orchestrate import run_program
+
+    settings = ctx["settings"]
+    return await run_program(
+        mongo=ctx["mongo"],
+        engine=default_engine(),
+        tenant=TenantContext(tenant_id=tenant_id, actor_id=actor_id),
+        program_id=program_id,
+        timeout=settings.tool_default_timeout,
+    )
+
+
 class WorkerSettings:
-    """arq WorkerSettings shape. Functions/redis wiring added in Phase B."""
+    """arq WorkerSettings. Redis wiring is provided by arq from settings at deploy."""
 
     on_startup = startup
     on_shutdown = shutdown
-    functions: list = []  # pipeline task callables registered in Phase B
+    functions = [run_program_task]
 
     @property
     def max_jobs(self) -> int:
