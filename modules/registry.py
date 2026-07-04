@@ -50,7 +50,10 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
         Action.ACTIVE_SCAN,
         note="safe policy: exclude dos,intrusive,fuzz",
     ),
-    ModuleSpec("secretfinder", "scanning", "gitleaks", "1", Action.HTTP_PROBE),
+    ModuleSpec(
+        "secretfinder", "scanning", None, "1", Action.HTTP_PROBE,
+        note="regex-based JS/content secret detection (no external binary)",
+    ),
     ModuleSpec("katana", "crawling", "katana", "1", Action.HTTP_PROBE),
     ModuleSpec("waybackurls", "crawling", "waybackurls", "1", Action.PASSIVE_RECON),
     ModuleSpec("gau", "crawling", "gau", "1", Action.PASSIVE_RECON),

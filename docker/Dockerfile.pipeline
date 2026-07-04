@@ -23,8 +23,10 @@ RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && 
     go install github.com/projectdiscovery/alterx/cmd/alterx@latest && \
     go install github.com/ffuf/ffuf/v2@latest && \
     go install github.com/lc/gau/v2/cmd/gau@latest && \
-    go install github.com/tomnomnom/waybackurls@latest && \
-    go install github.com/gitleaks/gitleaks/v8@latest
+    go install github.com/tomnomnom/waybackurls@latest
+# NOTE: gitleaks is intentionally NOT installed — secret detection is regex-based
+# (core/secrets_policy.py), it does not shell out to the gitleaks binary. (Its
+# module path also mismatches its repo, breaking `go install @latest`.)
 
 # ---- stage 2: runtime ------------------------------------------------------
 FROM python:3.11-slim-bookworm AS runtime
