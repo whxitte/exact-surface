@@ -54,6 +54,11 @@ class Settings(BaseSettings):
 
     # -- scope engine ----------------------------------------------------
     scope_feed_refresh_hours: int = Field(default=24)
+    lab_allow_private: bool = Field(
+        default=False,
+        description="DEV ONLY: allow scanning RFC1918 private IPs (e.g. a local lab VM). "
+        "Refused in prod.",
+    )
 
     # -- retention (days) ------------------------------------------------
     retention_findings_days: int = Field(default=730)
@@ -113,6 +118,10 @@ class Settings(BaseSettings):
             from core.errors import ConfigError
 
             raise ConfigError(f"insecure default(s) in prod: {', '.join(bad)}")
+        if self.lab_allow_private:
+            from core.errors import ConfigError
+
+            raise ConfigError("lab_allow_private must never be enabled in prod")
 
 
 @lru_cache(maxsize=1)

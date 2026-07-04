@@ -137,6 +137,22 @@ def test_require_raises_when_action_not_permitted():
     d.require(Action.HTTP_PROBE)  # permitted → no raise
 
 
+def test_lab_mode_allows_private_but_still_denies_metadata():
+    lab = ScopeEngine.from_data_file(allow_private=True)
+    lab_scope = ProgramScope(verified_apexes=("lab.local",))
+    # RFC1918 private target is now scannable with the full action set
+    d = lab.evaluate("box.lab.local", ["192.168.64.5"], lab_scope)
+    assert d.allowed and d.permits(Action.PORT_SCAN) and d.permits(Action.ACTIVE_SCAN)
+    # but the metadata IP and loopback are STILL denied, even in lab mode
+    assert not lab.evaluate("x.lab.local", ["169.254.169.254"], lab_scope).allowed
+    assert not lab.evaluate("x.lab.local", ["127.0.0.1"], lab_scope).allowed
+
+
+def test_private_denied_by_default():
+    d = ENGINE.evaluate("app.customer.com", ["192.168.1.10"], SCOPE)
+    assert not d.allowed  # default engine (no lab mode) hard-denies private
+
+
 async def test_assert_in_scope_allows_and_denies():
     async def resolver_ok(_host):
         return ["45.55.1.1"]

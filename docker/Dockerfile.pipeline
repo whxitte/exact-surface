@@ -29,9 +29,17 @@ FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
 
 # nmap + masscan + libpcap runtime + feroxbuster (prebuilt).
+# Arch-aware feroxbuster download so the image builds on both amd64 and arm64
+# (Apple Silicon / M-series Macs).
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nmap masscan libpcap0.8 ca-certificates curl \
-    && curl -sSL https://github.com/epi052/feroxbuster/releases/latest/download/x86_64-linux-feroxbuster.tar.gz \
+    && ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+         amd64) FB=x86_64-linux-feroxbuster.tar.gz ;; \
+         arm64) FB=aarch64-linux-feroxbuster.tar.gz ;; \
+         *) FB=x86_64-linux-feroxbuster.tar.gz ;; \
+       esac \
+    && curl -sSL "https://github.com/epi052/feroxbuster/releases/latest/download/$FB" \
         | tar -xz -C /usr/local/bin feroxbuster \
     && rm -rf /var/lib/apt/lists/*
 

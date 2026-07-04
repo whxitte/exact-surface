@@ -158,12 +158,23 @@ class ScopeEngine:
     guarantees testable.
     """
 
-    def __init__(self, provider_ranges: dict[IpClass, list] | None = None) -> None:
+    def __init__(
+        self,
+        provider_ranges: dict[IpClass, list] | None = None,
+        *,
+        allow_private: bool = False,
+    ) -> None:
         self._ranges: dict[IpClass, list] = provider_ranges or {}
+        # LAB MODE (dev only): permit RFC1918 private targets so a local VM can be
+        # scanned. Loopback, link-local/metadata, CGNAT, multicast, and reserved
+        # stay denied even here. Prod refuses to enable this (Settings.assert_prod_safe).
+        self._allow_private = allow_private
 
     # -- construction ----------------------------------------------------
     @classmethod
-    def from_data_file(cls, path: Path | None = None) -> ScopeEngine:
+    def from_data_file(
+        cls, path: Path | None = None, *, allow_private: bool = False
+    ) -> ScopeEngine:
         path = path or _DATA_FILE
         raw = json.loads(path.read_text())
         buckets: dict[IpClass, list] = {IpClass.CDN: [], IpClass.CLOUD_SHARED: []}
@@ -171,7 +182,7 @@ class ScopeEngine:
             cls_name = provider.get("class", "cdn")
             ip_class = IpClass.CDN if cls_name == "cdn" else IpClass.CLOUD_SHARED
             buckets[ip_class].extend(_parse_networks(provider.get("cidrs", [])))
-        return cls(buckets)
+        return cls(buckets, allow_private=allow_private)
 
     # -- classification --------------------------------------------------
     def classify_ip(self, ip: str) -> IpClass:
@@ -244,7 +255,10 @@ class ScopeEngine:
             cls = self.classify_ip(ip)
 
             # 3. Any hard-deny IP poisons the whole host (DNS-rebinding guard).
-            if cls in HARD_DENY:
+            #    Lab mode is the ONE exception: RFC1918 private is allowed so a
+            #    local VM can be scanned. Everything else stays hard-denied.
+            lab_private = self._allow_private and cls == IpClass.PRIVATE
+            if cls in HARD_DENY and not lab_private:
                 return ScopeDecision(
                     host_l,
                     False,
@@ -259,8 +273,10 @@ class ScopeEngine:
                     host_l, False, f"IP {ip} on program CIDR exclusion list", ip_class=cls
                 )
 
-            # 5. Is this IP confirmed dedicated to the customer?
-            is_dedicated = any(addr.version == n.version and addr in n for n in dedicated_nets)
+            # 5. Is this IP confirmed dedicated to the customer? (Lab-mode private counts.)
+            is_dedicated = lab_private or any(
+                addr.version == n.version and addr in n for n in dedicated_nets
+            )
             if is_dedicated:
                 classes.append(IpClass.DEDICATED)
             else:
@@ -289,8 +305,13 @@ class ScopeEngine:
 
 @lru_cache(maxsize=1)
 def default_engine() -> ScopeEngine:
-    """Process-wide engine built from the bundled feed file."""
-    return ScopeEngine.from_data_file()
+    """Process-wide engine built from the bundled feed file.
+
+    Honors ``VANTARI_LAB_ALLOW_PRIVATE`` (dev only) so a local VM can be scanned.
+    """
+    from core.config import get_settings
+
+    return ScopeEngine.from_data_file(allow_private=get_settings().lab_allow_private)
 
 
 def classify_ip(ip: str) -> IpClass:
