@@ -38,6 +38,14 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
     mongo = get_mongo()
     await mongo.connect()
     ctx["mongo"] = mongo
+    # Publish ScanRun updates to the live activity bus so the /ws/activity stream
+    # reflects scans advancing in real time. Best-effort — never block startup.
+    try:
+        from core.activity_bus import RedisActivityBus, set_bus
+
+        set_bus(RedisActivityBus.connect(settings.redis_uri))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("activity bus unavailable in worker: {}", exc)
     logger.info("worker started (concurrency={})", settings.worker_concurrency)
 
 

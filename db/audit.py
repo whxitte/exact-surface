@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from core.activity_bus import publish_run
 from core.logging import logger
 from core.models import ScanRun, ScanStatus
 from db.base import _to_bson
@@ -32,6 +33,9 @@ class ScanRunRepo:
             {"$set": doc},
             upsert=True,
         )
+        # Push the update so the /activity websocket reflects it live (no-op if no
+        # bus configured — the frontend still polls).
+        await publish_run(doc["tenant_id"], doc)
 
     async def list(
         self, tenant_id: str, program_id: str | None = None, limit: int = 100

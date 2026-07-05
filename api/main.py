@@ -46,7 +46,24 @@ async def lifespan(app: FastAPI):
         await mongo.ensure_indexes()
     except Exception as exc:  # noqa: BLE001 - don't block liveness on a DB blip
         logger.warning("startup DB bootstrap skipped/failed: {}", exc)
+    # Live activity bus (Redis pub/sub) powers /ws/activity. Best-effort: if Redis
+    # is unavailable the websocket falls back to snapshot-only and the UI polls.
+    try:
+        from core.activity_bus import RedisActivityBus, set_bus
+
+        set_bus(RedisActivityBus.connect(settings.redis_uri))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("activity bus unavailable: {}", exc)
     yield
+    try:
+        from core.activity_bus import get_bus, set_bus
+
+        bus = get_bus()
+        if bus is not None:
+            await bus.close()
+        set_bus(None)
+    except Exception as exc:  # noqa: BLE001 - shutdown is best-effort
+        logger.debug("activity bus close skipped: {}", exc)
     try:
         from db.mongo import get_mongo
 

@@ -6,6 +6,7 @@ import { api, type ScanRun, type ScanStage } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, timeAgo } from "@/lib/utils";
 import { pipelineDesc, pipelineLabel } from "@/lib/pipelines";
+import { getToken } from "@/lib/auth";
 
 const STATUS: Record<string, { label: string; cls: string; Icon: React.ElementType; spin?: boolean }> = {
   running: { label: "running", cls: "text-severity-medium", Icon: Loader2, spin: true },
@@ -124,11 +125,15 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
   );
 }
 
+const runKey = (r: ScanRun) => String(r.started_at || r.created_at || "");
+const sortRuns = (rs: ScanRun[]) => [...rs].sort((a, b) => (runKey(a) < runKey(b) ? 1 : -1));
+
 export default function ActivityPage() {
   const [runs, setRuns] = useState<ScanRun[]>([]);
   const [live, setLive] = useState(true);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  // Baseline: poll every 3s (always on — survives refresh, works with no websocket).
   useEffect(() => {
     let stopped = false;
     async function poll() {
@@ -143,11 +148,40 @@ export default function ActivityPage() {
       }
     }
     poll();
-    timer.current = setInterval(poll, 3000); // live update, survives refresh (reads DB)
+    timer.current = setInterval(poll, 3000);
     return () => {
       stopped = true;
       if (timer.current) clearInterval(timer.current);
     };
+  }, []);
+
+  // Accelerator: a websocket pushes each ScanRun update instantly. Purely
+  // additive — any failure is ignored and the poll above keeps the feed current.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let ws: WebSocket | null = null;
+    try {
+      const token = getToken();
+      if (!token) return;
+      const proto = window.location.protocol === "https:" ? "wss" : "ws";
+      ws = new WebSocket(`${proto}://${window.location.host}/api/ws/activity?token=${token}`);
+      ws.onmessage = (ev) => {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === "snapshot") {
+          setRuns(sortRuns(msg.runs as ScanRun[]));
+        } else if (msg.type === "run") {
+          const incoming = msg.run as ScanRun;
+          setRuns((prev) => {
+            const rest = prev.filter((r) => r.scan_id !== incoming.scan_id);
+            return sortRuns([incoming, ...rest]).slice(0, 60);
+          });
+        }
+        setLive(true);
+      };
+    } catch {
+      // ignore — the 3s poll remains the source of truth
+    }
+    return () => ws?.close();
   }, []);
 
   // A run stuck "running" for >20 min is almost certainly orphaned (worker died).

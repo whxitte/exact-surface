@@ -101,6 +101,7 @@ export interface ScanRun {
   program_id: string;
   pipeline: string;
   status: string; // queued | running | success | failed | skipped
+  created_at?: string;
   started_at?: string;
   finished_at?: string;
   error?: string;
