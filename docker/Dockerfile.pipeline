@@ -8,22 +8,41 @@
 FROM golang:1.24-bookworm AS gotools
 ENV GOBIN=/tools GOFLAGS=-buildvcs=false GOTOOLCHAIN=auto
 RUN apt-get update && apt-get install -y --no-install-recommends libpcap-dev && rm -rf /var/lib/apt/lists/*
+# Pinned tool versions for reproducible builds (verified real release tags).
+# Bump by overriding a build-arg: `docker build --build-arg NUCLEI_VERSION=v3.10.1 ...`
+# To refresh all pins from upstream, see scripts/tool_versions.sh.
+ARG SUBFINDER_VERSION=v2.14.0
+ARG DNSX_VERSION=v1.2.3
+ARG HTTPX_VERSION=v1.9.0
+ARG NAABU_VERSION=v2.6.1
+ARG KATANA_VERSION=v1.6.1
+ARG NUCLEI_VERSION=v3.10.0
+ARG TLSX_VERSION=v1.2.2
+ARG ASNMAP_VERSION=v1.1.1
+ARG CLOUDLIST_VERSION=v1.4.0
+ARG UNCOVER_VERSION=v1.2.1
+ARG NOTIFY_VERSION=v1.0.7
+ARG ALTERX_VERSION=v0.1.0
+ARG FFUF_VERSION=v2.1.0
+ARG GAU_VERSION=v2.2.4
+# waybackurls has no release tags; pin to a commit if reproducibility is critical.
+ARG WAYBACKURLS_VERSION=latest
 # ProjectDiscovery suite (JSON-native, rate-limit-aware) + companions.
-RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && \
-    go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest && \
-    go install github.com/projectdiscovery/httpx/cmd/httpx@latest && \
-    go install github.com/projectdiscovery/naabu/v2/cmd/naabu@latest && \
-    go install github.com/projectdiscovery/katana/cmd/katana@latest && \
-    go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && \
-    go install github.com/projectdiscovery/tlsx/cmd/tlsx@latest && \
-    go install github.com/projectdiscovery/asnmap/cmd/asnmap@latest && \
-    go install github.com/projectdiscovery/cloudlist/cmd/cloudlist@latest && \
-    go install github.com/projectdiscovery/uncover/cmd/uncover@latest && \
-    go install github.com/projectdiscovery/notify/cmd/notify@latest && \
-    go install github.com/projectdiscovery/alterx/cmd/alterx@latest && \
-    go install github.com/ffuf/ffuf/v2@latest && \
-    go install github.com/lc/gau/v2/cmd/gau@latest && \
-    go install github.com/tomnomnom/waybackurls@latest
+RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@${SUBFINDER_VERSION} && \
+    go install github.com/projectdiscovery/dnsx/cmd/dnsx@${DNSX_VERSION} && \
+    go install github.com/projectdiscovery/httpx/cmd/httpx@${HTTPX_VERSION} && \
+    go install github.com/projectdiscovery/naabu/v2/cmd/naabu@${NAABU_VERSION} && \
+    go install github.com/projectdiscovery/katana/cmd/katana@${KATANA_VERSION} && \
+    go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@${NUCLEI_VERSION} && \
+    go install github.com/projectdiscovery/tlsx/cmd/tlsx@${TLSX_VERSION} && \
+    go install github.com/projectdiscovery/asnmap/cmd/asnmap@${ASNMAP_VERSION} && \
+    go install github.com/projectdiscovery/cloudlist/cmd/cloudlist@${CLOUDLIST_VERSION} && \
+    go install github.com/projectdiscovery/uncover/cmd/uncover@${UNCOVER_VERSION} && \
+    go install github.com/projectdiscovery/notify/cmd/notify@${NOTIFY_VERSION} && \
+    go install github.com/projectdiscovery/alterx/cmd/alterx@${ALTERX_VERSION} && \
+    go install github.com/ffuf/ffuf/v2@${FFUF_VERSION} && \
+    go install github.com/lc/gau/v2/cmd/gau@${GAU_VERSION} && \
+    go install github.com/tomnomnom/waybackurls@${WAYBACKURLS_VERSION}
 # NOTE: gitleaks is intentionally NOT installed — secret detection is regex-based
 # (core/secrets_policy.py), it does not shell out to the gitleaks binary. (Its
 # module path also mismatches its repo, breaking `go install @latest`.)
