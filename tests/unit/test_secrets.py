@@ -12,6 +12,7 @@ from core.tenant import TenantContext
 from db.assets import AssetRepo
 from db.endpoints import EndpointRepo
 from db.secrets import SecretRepo
+from modules.scanning.secretfinder import is_scannable_url, scan_urls
 from pipelines.secrets import run_secret_scan
 from tests.fakes import FakeMongo
 
@@ -23,6 +24,32 @@ SCOPE = ProgramScope(
 KEY = b"unit-hmac-key"
 
 AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
+
+
+def test_is_scannable_url_skips_binary_assets():
+    assert is_scannable_url("https://x.com/app.js")
+    assert is_scannable_url("https://x.com/.env")
+    assert is_scannable_url("https://x.com/api/config")  # no extension → scan
+    assert not is_scannable_url("https://x.com/logo.png")
+    assert not is_scannable_url("https://x.com/font.woff2")
+    assert not is_scannable_url("https://x.com/favicon.ico")
+    # strips ;jsessionid before checking the extension
+    assert not is_scannable_url("https://x.com/logo.png;jsessionid=ABC123")
+
+
+async def test_scan_urls_skips_binary_without_fetching():
+    fetched: list[str] = []
+
+    async def fetch(url):
+        fetched.append(url)
+        return "AKIAIOSFODNN7EXAMPLE"
+
+    hits = await scan_urls(
+        ["https://x.com/app.js", "https://x.com/logo.png", "https://x.com/f.ttf"],
+        fetch=fetch,
+    )
+    assert fetched == ["https://x.com/app.js"]  # binary assets never fetched
+    assert len(hits) == 1  # secret found in the one text asset
 
 
 def test_find_secrets_detects_high_signal_types():
