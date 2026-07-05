@@ -293,6 +293,7 @@ class ScanStage(BaseModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     stats: dict = Field(default_factory=dict)
+    note: str | None = None  # why skipped, or a short human explanation
 
 
 class ScanRun(TenantScopedModel):
@@ -306,4 +307,5 @@ class ScanRun(TenantScopedModel):
     finished_at: datetime | None = None
     stats: dict = Field(default_factory=dict)  # counts: discovered/new/errors
     stages: list[ScanStage] = Field(default_factory=list)  # per-stage progress (full runs)
+    note: str | None = None  # why skipped / short explanation (single-pipeline runs)
     error: str | None = None

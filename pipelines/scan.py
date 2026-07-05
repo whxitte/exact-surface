@@ -57,6 +57,13 @@ async def run_scan(
             continue
         (aggressive_urls if decision.permits(Action.ACTIVE_SCAN) else safe_urls).append(ep["url"])
 
+    if not safe_urls and not aggressive_urls:
+        logger.info("scan {}: nothing to scan (no endpoints yet)", program_id)
+        return {
+            "scanned_safe": 0, "scanned_aggressive": 0, "findings": 0, "new": 0, "new_findings": [],
+            "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
+        }
+
     raw: list[dict] = []
     if safe_urls:
         raw += await scan(safe_urls, timeout, aggressive=False)

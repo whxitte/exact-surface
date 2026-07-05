@@ -56,7 +56,10 @@ async def run_notify(
         if c.get("enabled", True)
     ]
     if not channels:
-        return {"channels": 0, "delivered": 0, "note": "no channels configured"}
+        return {
+            "channels": 0, "delivered": 0,
+            "skipped": True, "note": "no notification channels configured",
+        }
 
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     apex = program["apex_domain"] if program else program_id

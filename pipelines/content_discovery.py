@@ -67,6 +67,14 @@ async def run_content_discovery(
                 )
             )
 
+    if scanned == 0:
+        logger.info("content-discovery {}: no confirmed-dedicated hosts to scan", program_id)
+        return {
+            "hosts": 0, "paths": 0, "new": 0,
+            "skipped": True,
+            "note": "no confirmed-dedicated hosts — bruteforce withheld on shared infra (§9b)",
+        }
+
     total, new = await EndpointRepo.from_mongo(mongo).upsert_many(found_models)
     logger.info("content-discovery {}: {} hosts, {} paths, {} new", program_id, scanned, total, new)
     return {"hosts": scanned, "paths": total, "new": new}

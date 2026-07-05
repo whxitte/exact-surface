@@ -73,6 +73,13 @@ async def run_crawl(
         )
         for u in in_scope_urls
     ]
+    if not assets and not in_scope_urls:
+        logger.info("crawl {}: nothing to crawl yet (no assets, no archive urls)", apex)
+        return {
+            "discovered_urls": 0, "in_scope": 0, "endpoints": 0, "new": 0,
+            "skipped": True, "note": "no assets discovered yet — run discovery first",
+        }
+
     total, new = await EndpointRepo.from_mongo(mongo).upsert_many(models)
 
     logger.info("crawl {}: {} urls in-scope, {} new endpoints", apex, len(in_scope_urls), new)

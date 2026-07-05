@@ -40,6 +40,13 @@ async def run_probe(
         if decision.permits(Action.HTTP_PROBE):
             probeable.append(asset["hostname"])
 
+    if not probeable:
+        logger.info("probe {}: nothing to probe (no assets yet)", program_id)
+        return {
+            "probeable": 0, "alive": 0, "new": 0, "new_urls": [], "deltas": 0,
+            "skipped": True, "note": "no assets to probe yet — run discovery first",
+        }
+
     results = await probe(probeable, timeout)
     models = [
         Endpoint(

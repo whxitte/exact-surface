@@ -40,6 +40,13 @@ async def run_port_scan(
             Action.PORT_SCAN
         )
     ]
+    if not scannable:
+        logger.info("port-scan {}: no confirmed-dedicated hosts to scan", program_id)
+        return {
+            "scannable": 0, "ports": 0, "new": 0,
+            "skipped": True,
+            "note": "no confirmed-dedicated hosts — CDN/cloud-shared IPs are HTTP-probe only (§9b)",
+        }
     open_ports = await naabu(scannable, timeout)
 
     # Optional service/version enrichment per IP.

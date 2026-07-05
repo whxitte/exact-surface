@@ -109,8 +109,12 @@ async def run_pipeline(
         run.error = f"{type(exc).__name__}: {exc}"
         await audit.save(run)
         raise
-    run.status = ScanStatus.SUCCESS
     run.finished_at = datetime.now(UTC)
-    run.stats = {k: v for k, v in result.items() if isinstance(v, int)}
+    if result.get("skipped"):
+        run.status = ScanStatus.SKIPPED
+        run.note = result.get("note")
+    else:
+        run.status = ScanStatus.SUCCESS
+        run.stats = {k: v for k, v in result.items() if isinstance(v, int)}
     await audit.save(run)
     return result

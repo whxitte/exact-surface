@@ -133,11 +133,15 @@ async def run_full_pipeline(
                 await audit.save(run)
                 logger.error("pipeline failed for {} at stage {}: {}", program_id, name, exc)
                 raise
-            stage_obj.status = ScanStatus.SUCCESS
             stage_obj.finished_at = datetime.now(UTC)
-            stage_obj.stats = {k: v for k, v in res.items() if isinstance(v, int)}
+            if res.get("skipped"):
+                stage_obj.status = ScanStatus.SKIPPED
+                stage_obj.note = res.get("note")
+            else:
+                stage_obj.status = ScanStatus.SUCCESS
+                stage_obj.stats = {k: v for k, v in res.items() if isinstance(v, int)}
             results[name] = res
-            await audit.save(run)  # flip to success (+ stats) after the stage completes
+            await audit.save(run)  # flip to done (+ stats/note) after the stage completes
 
         run.status = ScanStatus.SUCCESS
         run.finished_at = datetime.now(UTC)

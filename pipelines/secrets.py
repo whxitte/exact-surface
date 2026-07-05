@@ -46,6 +46,13 @@ async def run_secret_scan(
         if engine.evaluate(host, ips_by_host.get(host, []), scope).permits(Action.HTTP_PROBE):
             targets.append(ep["url"])
 
+    if not targets:
+        logger.info("secret scan {}: nothing to scan (no endpoints yet)", program_id)
+        return {
+            "scanned": 0, "secrets": 0, "new": 0, "new_secrets": [],
+            "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
+        }
+
     hits = await scan_urls(targets, fetch=fetch)
     models = [
         ExposedSecret(

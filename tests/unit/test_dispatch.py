@@ -54,6 +54,33 @@ async def test_routes_port_scan_pipeline():
     assert "scannable" in res and res["ports"] == 0
 
 
+async def test_probe_with_no_assets_is_skipped_not_success():
+    mongo = FakeMongo()
+    await _seed(mongo)
+    res = await _run(mongo, "probe")
+    assert res["skipped"] is True and "no assets" in res["note"]
+    run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
+    assert run["status"] == "skipped" and run["note"]
+
+
+async def test_github_osint_without_token_is_skipped():
+    mongo = FakeMongo()
+    await _seed(mongo)
+    res = await _run(mongo, "github_osint")  # no GITHUB token in test settings
+    assert res["skipped"] is True and "token" in res["note"].lower()
+    run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
+    assert run["status"] == "skipped"
+
+
+async def test_notify_without_channels_is_skipped():
+    mongo = FakeMongo()
+    await _seed(mongo)
+    res = await _run(mongo, "notify")
+    assert res["skipped"] is True
+    run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
+    assert run["status"] == "skipped" and "channel" in run["note"].lower()
+
+
 async def test_unknown_pipeline_raises():
     mongo = FakeMongo()
     await _seed(mongo)
