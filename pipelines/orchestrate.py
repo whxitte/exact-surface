@@ -127,39 +127,44 @@ async def run_full_pipeline(
 
     stage_budget = get_settings().stage_timeout
     results: dict[str, dict] = {}
-    with bind_context(tenant.tenant_id, scan_id):
+    with bind_context(tenant_id=tenant.tenant_id, scan_id=scan_id, program_id=program_id):
+        logger.info("full scan started: {} ({} stages)", apex, len(stage_defs))
         for stage_obj, (name, factory) in zip(run.stages, stage_defs, strict=True):
-            stage_obj.status = ScanStatus.RUNNING
-            stage_obj.started_at = datetime.now(UTC)
-            await audit.save(run)  # flip to running so the poller sees the stage start
-            try:
-                # Hard per-stage ceiling: a stuck stage raises TimeoutError (caught
-                # below → clean FAILED) rather than hanging until arq hard-cancels.
-                res = await asyncio.wait_for(factory(), stage_budget)
-            except (Exception, asyncio.CancelledError) as exc:
-                now = datetime.now(UTC)
-                timed_out = isinstance(exc, (asyncio.TimeoutError, asyncio.CancelledError))
-                stage_obj.status = ScanStatus.FAILED
-                stage_obj.finished_at = now
-                run.status = ScanStatus.FAILED
-                run.finished_at = now
-                run.error = (
-                    f"{name}: timed out" if timed_out else f"{name}: {type(exc).__name__}: {exc}"
-                )
-                # shield: if this is an outer cancellation, still persist FAILED
-                # rather than leaving the run stuck RUNNING.
-                await asyncio.shield(audit.save(run))
-                logger.error("pipeline failed for {} at stage {}: {}", program_id, name, exc)
-                raise
-            stage_obj.finished_at = datetime.now(UTC)
-            if res.get("skipped"):
-                stage_obj.status = ScanStatus.SKIPPED
-                stage_obj.note = res.get("note")
-            else:
-                stage_obj.status = ScanStatus.SUCCESS
-                stage_obj.stats = {k: v for k, v in res.items() if isinstance(v, int)}
-            results[name] = res
-            await audit.save(run)  # flip to done (+ stats/note) after the stage completes
+            with bind_context(pipeline=name):
+                stage_obj.status = ScanStatus.RUNNING
+                stage_obj.started_at = datetime.now(UTC)
+                await audit.save(run)  # flip to running so the poller sees the stage start
+                logger.info("stage {} started", name)
+                try:
+                    # Hard per-stage ceiling: a stuck stage raises TimeoutError (caught
+                    # below → clean FAILED) rather than hanging until arq hard-cancels.
+                    res = await asyncio.wait_for(factory(), stage_budget)
+                except (Exception, asyncio.CancelledError) as exc:
+                    now = datetime.now(UTC)
+                    timed_out = isinstance(exc, (asyncio.TimeoutError, asyncio.CancelledError))
+                    stage_obj.status = ScanStatus.FAILED
+                    stage_obj.finished_at = now
+                    run.status = ScanStatus.FAILED
+                    run.finished_at = now
+                    run.error = (
+                        f"{name}: timed out"
+                        if timed_out
+                        else f"{name}: {type(exc).__name__}: {exc}"
+                    )
+                    # shield: if this is an outer cancellation, still persist FAILED
+                    # rather than leaving the run stuck RUNNING.
+                    await asyncio.shield(audit.save(run))
+                    logger.error("pipeline failed for {} at stage {}: {}", program_id, name, exc)
+                    raise
+                stage_obj.finished_at = datetime.now(UTC)
+                if res.get("skipped"):
+                    stage_obj.status = ScanStatus.SKIPPED
+                    stage_obj.note = res.get("note")
+                else:
+                    stage_obj.status = ScanStatus.SUCCESS
+                    stage_obj.stats = {k: v for k, v in res.items() if isinstance(v, int)}
+                results[name] = res
+                await audit.save(run)  # flip to done (+ stats/note) after the stage completes
 
         run.status = ScanStatus.SUCCESS
         run.finished_at = datetime.now(UTC)

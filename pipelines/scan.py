@@ -64,6 +64,11 @@ async def run_scan(
             "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
         }
 
+    logger.info(
+        "scanning {} safe + {} aggressive url(s) with nuclei",
+        len(safe_urls),
+        len(aggressive_urls),
+    )
     raw: list[dict] = []
     if safe_urls:
         raw += await scan(safe_urls, timeout, aggressive=False)

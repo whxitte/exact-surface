@@ -38,9 +38,14 @@ async def run_ingest(
     crtsh=crtsh_enum,
     resolve=dnsx_resolve,
 ) -> dict:
+    logger.info("discovering subdomains of {} (subfinder + crt.sh)", apex)
     subs = await subfinder(apex, timeout)
     crt = await crtsh(apex)
     candidates = sorted(set(subs) | set(crt) | {apex.lower().rstrip(".")})
+    logger.info(
+        "found {} candidate(s) ({} subfinder, {} crt.sh); resolving with dnsx",
+        len(candidates), len(subs), len(crt),
+    )
 
     # Scope gate: never persist a host outside a verified apex.
     in_scope = [h for h in candidates if scope.owns_host(h)]

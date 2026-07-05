@@ -54,6 +54,7 @@ async def run_content_discovery(
         ):
             continue
         scanned += 1
+        logger.info("content-discovery on {} with feroxbuster", host)
         wordlist = wordlist_for(tech_by_host.get(host, []))
         for hit in await discover(f"https://{host}", wordlist, timeout):
             found_models.append(

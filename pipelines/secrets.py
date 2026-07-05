@@ -53,6 +53,7 @@ async def run_secret_scan(
             "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
         }
 
+    logger.info("secret-scanning {} endpoint(s)", len(targets))
     hits = await scan_urls(targets, fetch=fetch)
     models = [
         ExposedSecret(

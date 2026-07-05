@@ -65,7 +65,13 @@ async def run_crawl(
             Action.HTTP_PROBE
         )
     ][:MAX_ACTIVE_CRAWL_HOSTS]
+    logger.info(
+        "crawling archives (gau/wayback) on {} + active katana on {} host(s)",
+        apex,
+        len(crawl_hosts),
+    )
     for hostname in crawl_hosts:
+        logger.info("katana crawling {}", hostname)
         try:
             urls.update(await katana(f"https://{hostname}", host_timeout))
         except Exception as exc:  # noqa: BLE001

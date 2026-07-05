@@ -47,6 +47,7 @@ async def run_port_scan(
             "skipped": True,
             "note": "no confirmed-dedicated hosts — CDN/cloud-shared IPs are HTTP-probe only (§9b)",
         }
+    logger.info("port-scanning {} dedicated host(s) with naabu", len(scannable))
     open_ports = await naabu(scannable, timeout)
 
     # Optional service/version enrichment per IP.

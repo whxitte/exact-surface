@@ -47,6 +47,7 @@ async def run_probe(
             "skipped": True, "note": "no assets to probe yet — run discovery first",
         }
 
+    logger.info("probing {} host(s) with httpx", len(probeable))
     results = await probe(probeable, timeout)
     models = [
         Endpoint(

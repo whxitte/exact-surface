@@ -92,6 +92,7 @@ async def run_pipeline(
     import uuid
     from datetime import UTC, datetime
 
+    from core.logging import bind_context, logger
     from core.models import ScanRun, ScanStatus
     from db.audit import ScanRunRepo
 
@@ -100,21 +101,30 @@ async def run_pipeline(
         tenant_id=tenant.tenant_id, scan_id=uuid.uuid4().hex, program_id=program_id,
         pipeline=pipeline, status=ScanStatus.RUNNING, started_at=datetime.now(UTC),
     )
-    await audit.save(run)
-    try:
-        result = await _execute()
-    except Exception as exc:
-        run.status = ScanStatus.FAILED
-        run.finished_at = datetime.now(UTC)
-        run.error = f"{type(exc).__name__}: {exc}"
+    # Attribute every log line from this cadence run (tenant/program/scan/pipeline)
+    # — the scheduler path previously logged with no context (t=- s=-).
+    with bind_context(
+        tenant_id=tenant.tenant_id, scan_id=run.scan_id,
+        program_id=program_id, pipeline=pipeline,
+    ):
         await audit.save(run)
-        raise
-    run.finished_at = datetime.now(UTC)
-    if result.get("skipped"):
-        run.status = ScanStatus.SKIPPED
-        run.note = result.get("note")
-    else:
-        run.status = ScanStatus.SUCCESS
-        run.stats = {k: v for k, v in result.items() if isinstance(v, int)}
-    await audit.save(run)
-    return result
+        logger.info("{} started", pipeline)
+        try:
+            result = await _execute()
+        except Exception as exc:
+            run.status = ScanStatus.FAILED
+            run.finished_at = datetime.now(UTC)
+            run.error = f"{type(exc).__name__}: {exc}"
+            await audit.save(run)
+            logger.error("{} failed: {}", pipeline, exc)
+            raise
+        run.finished_at = datetime.now(UTC)
+        if result.get("skipped"):
+            run.status = ScanStatus.SKIPPED
+            run.note = result.get("note")
+            logger.info("{} skipped: {}", pipeline, run.note)
+        else:
+            run.status = ScanStatus.SUCCESS
+            run.stats = {k: v for k, v in result.items() if isinstance(v, int)}
+        await audit.save(run)
+        return result
