@@ -60,33 +60,57 @@ async def run_pipeline(
         timeout=timeout,
     )
 
-    if pipeline == "ingest":
-        return await run_ingest(**common, apex=apex)
-    if pipeline == "probe":
-        return await run_probe(**common)
-    if pipeline == "crawl":
-        return await run_crawl(**common, apex=apex)
-    if pipeline == "scan":
-        return await run_scan(**common)
-    if pipeline == "content_discovery":
-        return await run_content_discovery(**common)
-    if pipeline == "port_scan":
-        return await run_port_scan(**common)
-    if pipeline == "secrets":
-        return await run_secret_scan(
-            mongo=mongo,
-            engine=engine,
-            scope=scope,
-            tenant=tenant,
-            program_id=program_id,
-            hmac_key=hmac_key,
-        )
-    if pipeline == "cve_watch":
-        return await run_cve_watch(mongo=mongo, tenant=tenant, program_id=program_id)
-    if pipeline == "github_osint":
-        return await run_github_leak_scan(
-            mongo=mongo, tenant=tenant, program_id=program_id, domain=apex, hmac_key=hmac_key
-        )
-    if pipeline == "notify":
-        return await run_notify(mongo=mongo, tenant=tenant, program_id=program_id)
-    raise ValueError(f"unknown pipeline: {pipeline}")
+    async def _execute() -> dict:
+        if pipeline == "ingest":
+            return await run_ingest(**common, apex=apex)
+        if pipeline == "probe":
+            return await run_probe(**common)
+        if pipeline == "crawl":
+            return await run_crawl(**common, apex=apex)
+        if pipeline == "scan":
+            return await run_scan(**common)
+        if pipeline == "content_discovery":
+            return await run_content_discovery(**common)
+        if pipeline == "port_scan":
+            return await run_port_scan(**common)
+        if pipeline == "secrets":
+            return await run_secret_scan(
+                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
+                program_id=program_id, hmac_key=hmac_key,
+            )
+        if pipeline == "cve_watch":
+            return await run_cve_watch(mongo=mongo, tenant=tenant, program_id=program_id)
+        if pipeline == "github_osint":
+            return await run_github_leak_scan(
+                mongo=mongo, tenant=tenant, program_id=program_id, domain=apex, hmac_key=hmac_key
+            )
+        if pipeline == "notify":
+            return await run_notify(mongo=mongo, tenant=tenant, program_id=program_id)
+        raise ValueError(f"unknown pipeline: {pipeline}")
+
+    # Record a ScanRun so every pipeline execution is visible in the activity feed.
+    import uuid
+    from datetime import UTC, datetime
+
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    audit = ScanRunRepo.from_mongo(mongo)
+    run = ScanRun(
+        tenant_id=tenant.tenant_id, scan_id=uuid.uuid4().hex, program_id=program_id,
+        pipeline=pipeline, status=ScanStatus.RUNNING, started_at=datetime.now(UTC),
+    )
+    await audit.save(run)
+    try:
+        result = await _execute()
+    except Exception as exc:
+        run.status = ScanStatus.FAILED
+        run.finished_at = datetime.now(UTC)
+        run.error = f"{type(exc).__name__}: {exc}"
+        await audit.save(run)
+        raise
+    run.status = ScanStatus.SUCCESS
+    run.finished_at = datetime.now(UTC)
+    run.stats = {k: v for k, v in result.items() if isinstance(v, int)}
+    await audit.save(run)
+    return result

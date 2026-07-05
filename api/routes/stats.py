@@ -6,14 +6,26 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from api.deps import Principal, get_mongo_dep, get_principal
+from api.deps import Principal, clean_doc, get_mongo_dep, get_principal
 from db.assets import AssetRepo
+from db.audit import ScanRunRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
 from db.programs import ProgramRepo
 from db.secrets import SecretRepo
 
 router = APIRouter(tags=["stats"])
+
+
+@router.get("/activity")
+async def activity(
+    principal: Principal = Depends(get_principal), mongo: Any = Depends(get_mongo_dep)
+) -> list[dict]:
+    """Recent scan-run activity for the tenant (most recent first) — powers the
+    live workflow feed. Polled by the frontend; survives refresh (reads the DB)."""
+    runs = await ScanRunRepo.from_mongo(mongo).list(principal.tenant_id, limit=200)
+    runs.sort(key=lambda r: str(r.get("started_at") or r.get("created_at") or ""), reverse=True)
+    return [clean_doc(r) for r in runs[:60]]
 
 
 @router.get("/stats")
