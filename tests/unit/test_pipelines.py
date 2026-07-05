@@ -182,6 +182,48 @@ async def test_full_pipeline_is_idempotent():
     assert await AssetRepo(mongo.collection("assets")).count("t1") == 5  # no duplicates
 
 
+async def test_full_pipeline_records_per_stage_progress():
+    from db.audit import ScanRunRepo
+
+    mongo = FakeMongo()
+    result = await run_full_pipeline(
+        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
+        program_id="p1", apex="customer.com", timeout=10, **_injected([]),
+    )
+    run = await mongo.collection("scan_runs").find_one({"scan_id": result["scan_id"]})
+    assert run["status"] == "success"
+    names = [s["name"] for s in run["stages"]]
+    assert names == ["ingest", "probe", "crawl", "scan", "secrets"]
+    assert all(s["status"] == "success" for s in run["stages"])
+    # per-stage stats captured (ingest discovered assets)
+    ingest_stage = next(s for s in run["stages"] if s["name"] == "ingest")
+    assert ingest_stage["stats"].get("new", 0) > 0
+    # sanity: only one run row for this scan
+    assert len(await ScanRunRepo.from_mongo(mongo).list("t1")) == 1
+
+
+async def test_full_pipeline_marks_failing_stage_and_leaves_later_stages_queued():
+    mongo = FakeMongo()
+
+    async def boom_scan(_urls, _t, aggressive=False):
+        raise RuntimeError("scanner exploded")
+
+    injected = _injected([]) | {"scan": boom_scan}
+    with pytest.raises(RuntimeError, match="scanner exploded"):
+        await run_full_pipeline(
+            mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
+            program_id="p1", apex="customer.com", timeout=10, **injected,
+        )
+    run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
+    assert run["status"] == "failed" and run["error"].startswith("scan:")
+    by_name = {s["name"]: s["status"] for s in run["stages"]}
+    assert by_name["ingest"] == "success"
+    assert by_name["probe"] == "success"
+    assert by_name["crawl"] == "success"
+    assert by_name["scan"] == "failed"
+    assert by_name["secrets"] == "queued"  # never reached
+
+
 async def test_run_program_requires_authorization():
     mongo = FakeMongo()
     await ProgramRepo.from_mongo(mongo).save(

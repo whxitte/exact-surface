@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from core.models import Authorization, Program, ScanRun, ScanStatus
+from core.models import Authorization, Program, ScanRun, ScanStage, ScanStatus
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
@@ -59,6 +59,33 @@ async def test_reaps_only_stale_running_runs():
     assert runs["stale"]["finished_at"] == NOW
     assert runs["fresh"]["status"] == ScanStatus.RUNNING.value
     assert runs["done"]["status"] == ScanStatus.SUCCESS.value
+
+
+async def test_reaper_closes_out_non_terminal_stages():
+    mongo = FakeMongo()
+    repo = ScanRunRepo.from_mongo(mongo)
+    await repo.save(
+        ScanRun(
+            tenant_id="t1",
+            scan_id="s1",
+            program_id="p1",
+            pipeline="full",
+            status=ScanStatus.RUNNING,
+            started_at=NOW - timedelta(hours=2),
+            stages=[
+                ScanStage(name="ingest", status=ScanStatus.SUCCESS),
+                ScanStage(name="probe", status=ScanStatus.RUNNING),
+                ScanStage(name="scan", status=ScanStatus.QUEUED),
+            ],
+        )
+    )
+    assert await repo.reap_stale(3600, now=NOW) == 1
+
+    run = (await repo.list("t1", limit=10))[0]
+    by_name = {s["name"]: s["status"] for s in run["stages"]}
+    assert by_name["ingest"] == ScanStatus.SUCCESS.value  # already done → untouched
+    assert by_name["probe"] == ScanStatus.FAILED.value  # was running → failed
+    assert by_name["scan"] == ScanStatus.SKIPPED.value  # never started → skipped
 
 
 async def test_reaper_is_idempotent():

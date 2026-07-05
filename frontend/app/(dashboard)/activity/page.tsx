@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { CheckCircle2, XCircle, Loader2, Clock, MinusCircle, AlertTriangle } from "lucide-react";
-import { api, type ScanRun } from "@/lib/api";
+import { api, type ScanRun, type ScanStage } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, timeAgo } from "@/lib/utils";
 
@@ -28,6 +28,66 @@ function statsSummary(stats?: Record<string, number>): string {
     .filter(([, v]) => v > 0)
     .map(([k, v]) => `${v} ${k.replace(/_/g, " ")}`)
     .join(" · ");
+}
+
+// n8n-style horizontal stepper: one node per pipeline stage, connectors between.
+const STAGE_DOT: Record<string, string> = {
+  success: "border-primary bg-primary text-background",
+  running: "border-severity-medium bg-severity-medium/20 text-severity-medium",
+  failed: "border-severity-critical bg-severity-critical/20 text-severity-critical",
+  skipped: "border-muted bg-transparent text-muted-foreground",
+  queued: "border-muted bg-transparent text-muted-foreground",
+};
+
+function StageStepper({ stages }: { stages: ScanStage[] }) {
+  return (
+    <div className="mt-3 flex items-center">
+      {stages.map((st, i) => {
+        const dot = STAGE_DOT[st.status] || STAGE_DOT.queued;
+        const done = st.status === "success";
+        return (
+          <Fragment key={st.name}>
+            {i > 0 && (
+              <div
+                className={cn(
+                  "h-px flex-1",
+                  stages[i - 1].status === "success" ? "bg-primary" : "bg-border",
+                )}
+              />
+            )}
+            <div className="flex flex-col items-center gap-1" title={`${st.name}: ${st.status}`}>
+              <span
+                className={cn(
+                  "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
+                  dot,
+                )}
+              >
+                {st.status === "running" ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : st.status === "failed" ? (
+                  <XCircle className="h-3 w-3" />
+                ) : done ? (
+                  <CheckCircle2 className="h-3 w-3" />
+                ) : (
+                  i + 1
+                )}
+              </span>
+              <span
+                className={cn(
+                  "text-[10px] leading-none",
+                  st.status === "queued" || st.status === "skipped"
+                    ? "text-muted-foreground"
+                    : "text-foreground",
+                )}
+              >
+                {st.name}
+              </span>
+            </div>
+          </Fragment>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function ActivityPage() {
@@ -96,23 +156,26 @@ export default function ActivityPage() {
             const s = STATUS[effStatus(r)] || STATUS.queued;
             return (
               <Card key={r.scan_id}>
-                <CardContent className="flex items-center gap-4 p-4">
-                  <s.Icon className={cn("h-5 w-5 shrink-0", s.cls, s.spin && "animate-spin")} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{r.pipeline}</span>
-                      <span className={cn("text-xs uppercase tracking-wide", s.cls)}>{s.label}</span>
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-4">
+                    <s.Icon className={cn("h-5 w-5 shrink-0", s.cls, s.spin && "animate-spin")} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{r.pipeline}</span>
+                        <span className={cn("text-xs uppercase tracking-wide", s.cls)}>{s.label}</span>
+                      </div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {r.program_id}
+                        {statsSummary(r.stats) ? ` · ${statsSummary(r.stats)}` : ""}
+                        {r.error ? ` · ${r.error}` : ""}
+                      </div>
                     </div>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {r.program_id}
-                      {statsSummary(r.stats) ? ` · ${statsSummary(r.stats)}` : ""}
-                      {r.error ? ` · ${r.error}` : ""}
+                    <div className="text-right text-xs text-muted-foreground">
+                      <div>{duration(r)}</div>
+                      <div>{timeAgo(r.started_at)}</div>
                     </div>
                   </div>
-                  <div className="text-right text-xs text-muted-foreground">
-                    <div>{duration(r)}</div>
-                    <div>{timeAgo(r.started_at)}</div>
-                  </div>
+                  {r.stages && r.stages.length > 0 && <StageStepper stages={r.stages} />}
                 </CardContent>
               </Card>
             );

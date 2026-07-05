@@ -88,6 +88,13 @@ export interface Stats {
   new_findings: number;
   findings_by_severity: Record<string, number>;
 }
+export interface ScanStage {
+  name: string;
+  status: string; // queued | running | success | failed | skipped
+  started_at?: string;
+  finished_at?: string;
+  stats?: Record<string, number>;
+}
 export interface ScanRun {
   scan_id: string;
   program_id: string;
@@ -97,6 +104,7 @@ export interface ScanRun {
   finished_at?: string;
   error?: string;
   stats?: Record<string, number>;
+  stages?: ScanStage[];
 }
 export interface Verification { method: string; token: string; instructions: string }
 export interface Channel {

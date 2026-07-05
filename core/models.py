@@ -281,6 +281,20 @@ class ScanStatus(str, Enum):
     SKIPPED = "skipped"  # e.g. state-aware no-op or out-of-scope
 
 
+class ScanStage(BaseModel):
+    """One stage of a multi-stage run (ingest→probe→crawl→scan→secrets).
+
+    Persisted inside :class:`ScanRun.stages` and rewritten as the pipeline
+    advances, so the activity feed renders a live queued→running→done stepper.
+    """
+
+    name: str
+    status: ScanStatus = ScanStatus.QUEUED
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
+    stats: dict = Field(default_factory=dict)
+
+
 class ScanRun(TenantScopedModel):
     """Audit record of one pipeline execution."""
 
@@ -291,4 +305,5 @@ class ScanRun(TenantScopedModel):
     started_at: datetime | None = None
     finished_at: datetime | None = None
     stats: dict = Field(default_factory=dict)  # counts: discovered/new/errors
+    stages: list[ScanStage] = Field(default_factory=list)  # per-stage progress (full runs)
     error: str | None = None

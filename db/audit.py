@@ -60,6 +60,15 @@ class ScanRunRepo:
             started = _as_aware(doc.get("started_at")) or _as_aware(doc.get("created_at"))
             if started is None or started >= cutoff:
                 continue
+            # Keep the per-stage stepper consistent: the stage that was mid-flight
+            # failed with the run; stages that never started are skipped.
+            stages = doc.get("stages") or []
+            for st in stages:
+                if st.get("status") == ScanStatus.RUNNING.value:
+                    st["status"] = ScanStatus.FAILED.value
+                    st["finished_at"] = now
+                elif st.get("status") == ScanStatus.QUEUED.value:
+                    st["status"] = ScanStatus.SKIPPED.value
             await self._c.update_one(
                 {"tenant_id": doc["tenant_id"], "scan_id": doc["scan_id"]},
                 {
@@ -67,6 +76,7 @@ class ScanRunRepo:
                         "status": ScanStatus.FAILED.value,
                         "finished_at": now,
                         "error": "orphaned",
+                        "stages": stages,
                     }
                 },
             )
