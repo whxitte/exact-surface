@@ -2,10 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from core.models import ScanRun
+from core.logging import logger
+from core.models import ScanRun, ScanStatus
 from db.base import _to_bson
+
+
+def _as_aware(dt: Any) -> datetime | None:
+    """Coerce a stored timestamp to a tz-aware UTC datetime, or None if unusable."""
+    if not isinstance(dt, datetime):
+        return None
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
 
 
 class ScanRunRepo:
@@ -31,3 +40,37 @@ class ScanRunRepo:
         if program_id is not None:
             flt["program_id"] = program_id
         return await self._c.find(flt).limit(limit).to_list(limit)
+
+    async def reap_stale(self, older_than_seconds: float, now: datetime | None = None) -> int:
+        """Mark orphaned RUNNING runs as FAILED("orphaned"); return the count reaped.
+
+        A worker killed or restarted mid-run leaves its ScanRun stuck ``RUNNING``
+        forever (§ context.md known bug). This system-wide sweep — run each
+        scheduler tick, so the first tick after startup also cleans up — closes out
+        any run whose ``started_at`` is older than ``older_than_seconds`` so the
+        activity feed reflects reality. Age is filtered in Python (the RUNNING set is
+        tiny) to stay portable across the real driver and the test fake. If a worker
+        is in fact still alive, its final ``save`` re-overwrites this FAILED record.
+        """
+        now = now or datetime.now(UTC)
+        cutoff = now - timedelta(seconds=older_than_seconds)
+        running = await self._c.find({"status": ScanStatus.RUNNING.value}).to_list(None)
+        reaped = 0
+        for doc in running:
+            started = _as_aware(doc.get("started_at")) or _as_aware(doc.get("created_at"))
+            if started is None or started >= cutoff:
+                continue
+            await self._c.update_one(
+                {"tenant_id": doc["tenant_id"], "scan_id": doc["scan_id"]},
+                {
+                    "$set": {
+                        "status": ScanStatus.FAILED.value,
+                        "finished_at": now,
+                        "error": "orphaned",
+                    }
+                },
+            )
+            reaped += 1
+        if reaped:
+            logger.warning("reaped {} orphaned RUNNING scan-run(s)", reaped)
+        return reaped

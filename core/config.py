@@ -84,6 +84,15 @@ class Settings(BaseSettings):
     scheduler_max_jobs_per_tenant: int = Field(
         default=25, description="Fairness cap: max jobs enqueued per tenant per tick"
     )
+    scan_run_stale_seconds: int = Field(
+        default=3600,
+        description=(
+            "A RUNNING ScanRun older than this is treated as orphaned (worker died "
+            "mid-run) and reaped to FAILED. Kept well above a full 5-stage pipeline's "
+            "worst case so live scans are never reaped; a still-alive worker re-saves "
+            "its final status regardless."
+        ),
+    )
 
     # -- observability ---------------------------------------------------
     sentry_dsn: SecretStr | None = Field(default=None)

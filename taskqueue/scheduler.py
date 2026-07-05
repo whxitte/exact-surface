@@ -22,6 +22,7 @@ from typing import Any
 
 from core.config import Settings, get_settings
 from core.logging import logger
+from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
 from db.schedule import ScheduleRepo
@@ -99,6 +100,12 @@ class Scheduler:
     async def run_once(self, now: datetime | None = None) -> int:
         """Plan → enqueue → record last-run. Returns the number of jobs enqueued."""
         now = now or datetime.now(UTC)
+        try:
+            await ScanRunRepo.from_mongo(self._mongo).reap_stale(
+                self._settings.scan_run_stale_seconds, now=now
+            )
+        except Exception as exc:  # noqa: BLE001 - reaping must never block scheduling
+            logger.error("scan-run reaper failed: {}", exc)
         schedule = ScheduleRepo.from_mongo(self._mongo)
         jobs = await self.plan(now)
         for job in jobs:
