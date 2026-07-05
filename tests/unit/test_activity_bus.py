@@ -47,6 +47,23 @@ async def test_save_is_noop_without_bus():
     assert len(saved) == 1
 
 
+def test_format_log_line():
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from core.activity_bus import format_log_line
+
+    rec = {
+        "time": datetime(2026, 7, 5, 13, 20, 18),
+        "level": SimpleNamespace(name="INFO"),
+        "extra": {"pipeline": "crawl"},
+        "message": "katana crawling x.com",
+    }
+    line = format_log_line(rec)
+    assert "13:20:18" in line and "INFO" in line
+    assert "[crawl]" in line and "katana crawling x.com" in line
+
+
 async def test_publish_swallows_bus_errors():
     class Boom:
         async def publish(self, *_a):

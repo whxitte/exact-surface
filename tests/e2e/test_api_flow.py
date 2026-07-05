@@ -146,6 +146,41 @@ def test_scan_refused_while_one_already_running():
     assert r.status_code == 409 and "already running" in r.json()["detail"]
 
 
+def test_scan_run_logs_endpoint_tenant_scoped():
+    from core import activity_bus
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    client, fake, _ = build()
+    tok = _signup(client)
+    token, tenant_id = tok["access_token"], tok["tenant_id"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+    _run(
+        ScanRunRepo(fake.collection("scan_runs")).save(
+            ScanRun(tenant_id=tenant_id, scan_id="s1", program_id=pid, pipeline="full",
+                    status=ScanStatus.RUNNING)
+        )
+    )
+
+    class FakeBus:
+        async def get_logs(self, scan_id, limit=500):
+            return ["13:20:18 INFO    [crawl] katana crawling acme.com"]
+
+    activity_bus.set_bus(FakeBus())
+    try:
+        r = client.get(f"/programs/{pid}/scan-runs/s1/logs", headers=_auth(token))
+        assert r.status_code == 200
+        assert r.json()["lines"] == ["13:20:18 INFO    [crawl] katana crawling acme.com"]
+        # a scan id that isn't this program's run → 404 (can't read another's logs)
+        assert client.get(
+            f"/programs/{pid}/scan-runs/nope/logs", headers=_auth(token)
+        ).status_code == 404
+    finally:
+        activity_bus.set_bus(None)
+
+
 def test_verify_check_before_request_is_400():
     client, _, _ = build()
     token = _signup(client)["access_token"]

@@ -37,6 +37,9 @@ class ScanRunRepo:
         # bus configured — the frontend still polls).
         await publish_run(doc["tenant_id"], doc)
 
+    async def get(self, tenant_id: str, scan_id: str) -> dict | None:
+        return await self._c.find_one({"tenant_id": tenant_id, "scan_id": scan_id})
+
     async def list(
         self, tenant_id: str, program_id: str | None = None, limit: int = 100
     ) -> list[dict]:

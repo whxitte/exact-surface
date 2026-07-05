@@ -274,6 +274,27 @@ router.add_api_route(
 )
 
 
+@router.get("/{program_id}/scan-runs/{scan_id}/logs", tags=["data"])
+async def scan_run_logs(
+    scan_id: str,
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Live log lines for one scan run (what each tool is doing), for the
+    expandable activity panel. Tenant/program-scoped: the run must belong to the
+    caller's program. Returns [] when no live bus is configured."""
+    run = await ScanRunRepo.from_mongo(mongo).get(principal.tenant_id, scan_id)
+    if not run or run.get("program_id") != program["program_id"]:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "scan run not found")
+
+    from core.activity_bus import get_bus
+
+    bus = get_bus()
+    lines = await bus.get_logs(scan_id) if bus is not None and hasattr(bus, "get_logs") else []
+    return {"scan_id": scan_id, "lines": lines}
+
+
 @router.get("/{program_id}/findings", tags=["data"])
 async def list_findings(
     severity: str | None = None,

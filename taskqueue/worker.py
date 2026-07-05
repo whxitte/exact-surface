@@ -31,6 +31,11 @@ def build_limiter(settings: Settings, store=None) -> PolitenessLimiter:
 
 async def startup(ctx: dict) -> None:  # arq lifecycle hook
     settings = get_settings()
+    # The worker had NO logging config → default loguru format, no tenant/scan
+    # context. Configure our format so worker logs are attributable and captured.
+    from core.logging import configure_logging
+
+    configure_logging(level=settings.log_level, json_logs=settings.is_prod)
     ctx["settings"] = settings
     ctx["limiter"] = build_limiter(settings)
     from db.mongo import get_mongo
@@ -38,12 +43,13 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
     mongo = get_mongo()
     await mongo.connect()
     ctx["mongo"] = mongo
-    # Publish ScanRun updates to the live activity bus so the /ws/activity stream
-    # reflects scans advancing in real time. Best-effort — never block startup.
+    # Publish ScanRun updates + per-scan logs to the live bus so /activity reflects
+    # scans advancing in real time. Best-effort — never block startup.
     try:
-        from core.activity_bus import RedisActivityBus, set_bus
+        from core.activity_bus import RedisActivityBus, install_scan_log_capture, set_bus
 
         set_bus(RedisActivityBus.connect(settings.redis_uri))
+        install_scan_log_capture(min_level=settings.log_level)
     except Exception as exc:  # noqa: BLE001
         logger.warning("activity bus unavailable in worker: {}", exc)
     logger.info("worker started (concurrency={})", settings.worker_concurrency)
