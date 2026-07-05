@@ -60,18 +60,25 @@ def scan_content(content: str, source: str) -> list[dict]:
 
 async def scan_urls(urls: list[str], *, fetch: Fetch = _default_fetch) -> list[dict]:
     """Fetch each scannable URL and return all detected secrets across them."""
+    scannable = [u for u in urls if is_scannable_url(u)]
+    skipped = len(urls) - len(scannable)
+    logger.info(
+        "secret scan: fetching {} text endpoint(s) ({} binary/asset skipped)",
+        len(scannable),
+        skipped,
+    )
     hits: list[dict] = []
-    skipped = 0
-    for url in urls:
-        if not is_scannable_url(url):
-            skipped += 1
-            continue
+    failed = 0
+    for i, url in enumerate(scannable, 1):
         try:
             content = await fetch(url)
         except Exception as exc:  # noqa: BLE001 - one bad URL must not abort the scan
+            failed += 1
             logger.debug("secret scan fetch failed for {}: {}", url, exc)
             continue
         hits.extend(find_secrets(content, url))
-    if skipped:
-        logger.debug("secret scan skipped {} binary/asset url(s)", skipped)
+        if i % 50 == 0:
+            logger.info("secret scan progress: {}/{} fetched", i, len(scannable))
+    if failed:
+        logger.info("secret scan: {} endpoint(s) failed to fetch (unreachable/expired TLS)", failed)
     return hits

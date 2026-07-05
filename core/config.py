@@ -79,19 +79,19 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(default=4)
     tool_default_timeout: float = Field(default=300.0)
     stage_timeout: float = Field(
-        default=600.0,
+        default=900.0,
         description=(
             "Hard per-stage ceiling in the full pipeline. A stuck stage fails cleanly "
-            "(TimeoutError → stage FAILED) instead of hanging the whole job. Must exceed "
-            "the tool timeouts a single stage can accumulate."
+            "(TimeoutError → stage FAILED) instead of hanging the whole job. Sized for "
+            "concurrent passive crawl (~300s) + capped active katana in one stage."
         ),
     )
     worker_job_timeout: int = Field(
-        default=3600,
+        default=5400,
         description=(
-            "arq per-job timeout. Set above the sum of the 5 stage budgets so stages "
-            "self-bound and arq never has to hard-cancel a live job (a cancel would "
-            "otherwise leave the run RUNNING until the reaper)."
+            "arq per-job timeout. Above the realistic sum of all full-pipeline stage "
+            "budgets so stages self-bound and arq never hard-cancels a live job (a "
+            "cancel would otherwise leave the run RUNNING until the reaper)."
         ),
     )
 
@@ -101,7 +101,7 @@ class Settings(BaseSettings):
         default=25, description="Fairness cap: max jobs enqueued per tenant per tick"
     )
     scan_run_stale_seconds: int = Field(
-        default=7200,
+        default=10800,
         description=(
             "A queued/running ScanRun older than this is treated as orphaned and reaped "
             "to FAILED. A last-resort backstop: kept above worker_job_timeout so it only "

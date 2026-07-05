@@ -8,6 +8,7 @@ capped so an archive with tens of thousands of URLs cannot blow up a run.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -28,7 +29,10 @@ MAX_ENDPOINTS_PER_RUN = 2000
 #: full-run timeouts; cap the host count and give each host a small slice.
 MAX_ACTIVE_CRAWL_HOSTS = 25
 MAX_HOST_CRAWL_SECONDS = 45.0
-MAX_PASSIVE_SECONDS = 120.0
+# gau --subs harvests the whole domain's archived URLs and can be slow on a big
+# domain; give it real time and run it alongside waybackurls (not after) so the
+# passive phase is max(gau, wayback), not their sum.
+MAX_PASSIVE_SECONDS = 300.0
 
 
 async def run_crawl(
@@ -48,12 +52,21 @@ async def run_crawl(
     passive_timeout = min(timeout, MAX_PASSIVE_SECONDS)
     host_timeout = min(timeout, MAX_HOST_CRAWL_SECONDS)
 
-    # Passive archive sources (allowed for any in-scope program).
-    for source in (gau, wayback):
-        try:
-            urls.update(await source(apex, passive_timeout))
-        except Exception as exc:  # noqa: BLE001 - archive sources are flaky; degrade
-            logger.warning("crawl archive source failed for {}: {}", apex, exc)
+    # Passive archive sources (allowed for any in-scope program) — run concurrently.
+    logger.info("crawl: harvesting archives for {} (gau + waybackurls)", apex)
+    for name, result in zip(
+        ("gau", "waybackurls"),
+        await asyncio.gather(
+            gau(apex, passive_timeout), wayback(apex, passive_timeout),
+            return_exceptions=True,
+        ),
+        strict=True,
+    ):
+        if isinstance(result, BaseException):
+            logger.warning("crawl archive source {} failed for {}: {}", name, apex, result)
+        else:
+            urls.update(result)
+            logger.info("crawl: {} returned {} archived url(s)", name, len(result))
 
     # Active crawl of hosts whose scope permits HTTP probing — capped so a domain
     # with dozens of subdomains cannot exceed the run's time budget.

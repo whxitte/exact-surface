@@ -50,6 +50,9 @@ async def run_ingest(
     # Scope gate: never persist a host outside a verified apex.
     in_scope = [h for h in candidates if scope.owns_host(h)]
     resolved = await resolve(in_scope, timeout)
+    logger.info(
+        "dnsx resolved {}/{} in-scope host(s) to live IPs", len(resolved), len(in_scope)
+    )
 
     models = [
         Asset(
@@ -68,7 +71,7 @@ async def run_ingest(
     new_hosts = [m.hostname for m, r in zip(models, results, strict=True) if r.inserted]
 
     logger.info(
-        "ingest {}: {} candidates, {} in-scope, {} new",
+        "ingest complete for {}: {} candidates → {} in-scope assets, {} new",
         apex,
         len(candidates),
         len(in_scope),

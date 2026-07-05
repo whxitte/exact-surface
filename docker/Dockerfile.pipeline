@@ -85,9 +85,6 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-fetch nuclei templates at build time (pinned/updated by nuclei_watch later).
-RUN nuclei -update-templates -silent || true
-
 COPY core/ core/
 COPY db/ db/
 COPY modules/ modules/
@@ -100,6 +97,11 @@ COPY scripts/ scripts/
 # Non-root: scanning does not need root (naabu falls back to connect-scan).
 RUN useradd -m -u 10001 vantari && chown -R vantari:vantari /app
 USER vantari
+
+# Pre-fetch nuclei templates AS THE RUNTIME USER so scans actually run. Running
+# this as root (previously) put templates in /root, invisible to `vantari` →
+# nuclei found no templates and exited in <1s without scanning anything.
+RUN nuclei -update-templates -silent || true
 
 # Health check validates binaries + config + scope feeds (no network).
 HEALTHCHECK --interval=60s --timeout=20s --retries=3 \

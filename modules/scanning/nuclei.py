@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
-from modules.exec import run_tool_jsonl
+from core.logging import logger
+from modules.exec import iter_jsonl, run_tool
 
 Runner = Callable[..., Awaitable[list[dict]]]
 
@@ -19,12 +20,23 @@ Runner = Callable[..., Awaitable[list[dict]]]
 SAFE_EXCLUDE_TAGS = ("dos", "intrusive", "fuzz")
 
 
+async def _default_runner(binary: str, args, *, timeout: float, stdin: str | None = None):
+    """Run nuclei and surface a silent failure. nuclei exiting fast with no output
+    but a stderr message usually means missing templates or a config error — that
+    would make every scan a no-op, so we log it loudly instead of hiding it."""
+    run = await run_tool(binary, args, timeout=timeout, stdin=stdin)
+    if not run.stdout.strip() and run.returncode != 0 and run.stderr.strip():
+        last = run.stderr.strip().splitlines()[-1][:200]
+        logger.warning("nuclei exited {} with no output — {}", run.returncode, last)
+    return list(iter_jsonl(run.stdout))
+
+
 async def scan(
     urls: list[str],
     timeout: float,
     *,
     aggressive: bool = False,
-    runner: Runner = run_tool_jsonl,
+    runner: Runner = _default_runner,
 ) -> list[dict]:
     """Scan *urls* and return normalised findings.
 
