@@ -1,7 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { CheckCircle2, XCircle, Loader2, Clock, MinusCircle, AlertTriangle } from "lucide-react";
+import {
+  CheckCircle2, XCircle, Loader2, Clock, MinusCircle, AlertTriangle,
+  ChevronRight, ChevronDown, Terminal,
+} from "lucide-react";
 import { api, type ScanRun, type ScanStage } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, timeAgo } from "@/lib/utils";
@@ -125,6 +128,64 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
   );
 }
 
+// Live log tail for one scan — polls while the panel is open; auto-scrolls.
+function ScanLogs({ programId, scanId, active }: { programId: string; scanId: string; active: boolean }) {
+  const [lines, setLines] = useState<string[]>([]);
+  const [err, setErr] = useState(false);
+  const boxRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let stopped = false;
+    let timer: ReturnType<typeof setInterval> | null = null;
+    async function poll() {
+      try {
+        const data = await api.scanLogs(programId, scanId);
+        if (!stopped) {
+          setLines(data.lines);
+          setErr(false);
+        }
+      } catch {
+        if (!stopped) setErr(true);
+      }
+    }
+    poll();
+    // keep polling only while the run is still active; otherwise fetch once.
+    if (active) timer = setInterval(poll, 2000);
+    return () => {
+      stopped = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [programId, scanId, active]);
+
+  useEffect(() => {
+    if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
+  }, [lines]);
+
+  return (
+    <div className="mt-3">
+      <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <Terminal className="h-3.5 w-3.5" /> Live logs
+      </div>
+      <div
+        ref={boxRef}
+        className="max-h-56 overflow-auto rounded-md border border-border bg-background/60 p-2 font-mono text-[11px] leading-relaxed"
+      >
+        {lines.length === 0 ? (
+          <span className="text-muted-foreground">
+            {err ? "Logs unavailable (needs Redis / live worker)." : "No log lines yet…"}
+          </span>
+        ) : (
+          lines.map((l, i) => (
+            <div key={i} className="whitespace-pre-wrap break-all text-foreground/80">
+              {l}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 const runKey = (r: ScanRun) => String(r.started_at || r.created_at || "");
 const sortRuns = (rs: ScanRun[]) => [...rs].sort((a, b) => (runKey(a) < runKey(b) ? 1 : -1));
 
@@ -184,6 +245,8 @@ export default function ActivityPage() {
     return () => ws?.close();
   }, []);
 
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
   // A run stuck "running" for >20 min is almost certainly orphaned (worker died).
   function effStatus(r: ScanRun): string {
     if (r.status !== "running" || !r.started_at) return r.status;
@@ -191,6 +254,12 @@ export default function ActivityPage() {
     return ageMin > 20 ? "stalled" : "running";
   }
   const running = runs.filter((r) => effStatus(r) === "running").length;
+
+  const isActive = (r: ScanRun) => r.status === "running" || r.status === "queued";
+  // Full runs auto-open while active; otherwise honor the user's toggle (default closed).
+  const isExpanded = (r: ScanRun) => expanded[r.scan_id] ?? isActive(r);
+  const toggle = (r: ScanRun) =>
+    setExpanded((e) => ({ ...e, [r.scan_id]: !(e[r.scan_id] ?? isActive(r)) }));
 
   return (
     <div className="space-y-6">
@@ -222,10 +291,46 @@ export default function ActivityPage() {
         <div className="space-y-2">
           {runs.map((r) => {
             const s = STATUS[effStatus(r)] || STATUS.queued;
+            const isFull = r.pipeline === "full";
+
+            // Compact one-line row for the scheduler's per-pipeline cadence runs,
+            // so they don't drown out the full-scan stepper (dedupes the feed).
+            if (!isFull) {
+              return (
+                <div
+                  key={r.scan_id}
+                  className="flex items-center gap-3 rounded-lg border border-border/60 px-4 py-2 text-sm"
+                >
+                  <s.Icon className={cn("h-4 w-4 shrink-0", s.cls, s.spin && "animate-spin")} />
+                  <span className="font-medium">{pipelineLabel(r.pipeline)}</span>
+                  <span className={cn("text-[10px] uppercase tracking-wide", s.cls)}>{s.label}</span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {statsSummary(r.stats) || (r.note ? `skipped — ${r.note}` : pipelineDesc(r.pipeline))}
+                    {r.error ? ` · ⚠ ${r.error}` : ""}
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground opacity-60">
+                    {r.program_id}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(r.started_at)}</span>
+                </div>
+              );
+            }
+
+            // Full scan: expandable card — header always; stepper + live logs on expand.
+            const open = isExpanded(r);
             return (
               <Card key={r.scan_id}>
                 <CardContent className="p-4">
-                  <div className="flex items-center gap-4">
+                  <button
+                    onClick={() => toggle(r)}
+                    className="flex w-full items-center gap-4 text-left"
+                    aria-expanded={open}
+                  >
+                    {open ? (
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    )}
                     <s.Icon className={cn("h-5 w-5 shrink-0", s.cls, s.spin && "animate-spin")} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
@@ -233,18 +338,11 @@ export default function ActivityPage() {
                         <span className={cn("text-xs uppercase tracking-wide", s.cls)}>{s.label}</span>
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {pipelineDesc(r.pipeline) || r.program_id}
+                        {pipelineDesc(r.pipeline)}
                         {statsSummary(r.stats) ? ` · ${statsSummary(r.stats)}` : ""}
                       </div>
-                      {(r.note || r.error) && (
-                        <div
-                          className={cn(
-                            "mt-0.5 truncate text-xs",
-                            r.error ? "text-severity-critical" : "text-muted-foreground",
-                          )}
-                        >
-                          {r.error ? `⚠ ${r.error}` : `skipped — ${r.note}`}
-                        </div>
+                      {r.error && (
+                        <div className="mt-0.5 truncate text-xs text-severity-critical">⚠ {r.error}</div>
                       )}
                     </div>
                     <div className="shrink-0 text-right text-xs text-muted-foreground">
@@ -252,8 +350,13 @@ export default function ActivityPage() {
                       <div>{timeAgo(r.started_at)}</div>
                       <div className="font-mono opacity-60">{r.program_id}</div>
                     </div>
-                  </div>
-                  {r.stages && r.stages.length > 0 && <StageStepper stages={r.stages} />}
+                  </button>
+                  {open && (
+                    <>
+                      {r.stages && r.stages.length > 0 && <StageStepper stages={r.stages} />}
+                      <ScanLogs programId={r.program_id} scanId={r.scan_id} active={isActive(r)} />
+                    </>
+                  )}
                 </CardContent>
               </Card>
             );

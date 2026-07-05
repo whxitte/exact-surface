@@ -142,6 +142,10 @@ export const api = {
 
   stats: () => request<Stats>("/stats"),
   activity: () => request<ScanRun[]>("/activity"),
+  scanLogs: (programId: string, scanId: string) =>
+    request<{ scan_id: string; lines: string[] }>(
+      `/programs/${programId}/scan-runs/${scanId}/logs`,
+    ),
 
   listPrograms: () => request<Program[]>("/programs"),
   createProgram: (apex_domain: string) =>
