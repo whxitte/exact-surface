@@ -31,6 +31,7 @@ export default function ProgramDetail() {
   const [deltas, setDeltas] = useState<Record<string, unknown>[]>([]);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [reportBusy, setReportBusy] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
 
   const loadProgram = useCallback(() => {
     api.getProgram(id).then(setProgram).catch((e) => setMsg(e.message));
@@ -61,13 +62,21 @@ export default function ProgramDetail() {
     setMsg("Authorization recorded. You can scan now.");
   }
   async function scan() {
-    const res = await api.triggerScan(id);
-    setMsg(res.detail || `Scan ${res.status}.`);
-    // Give the worker a moment, then refresh findings/assets to show new results.
-    setTimeout(() => {
-      api.listFindings(id).then(setFindings).catch(() => {});
-      api.listAssets(id).then(setAssets).catch(() => {});
-    }, 8000);
+    setScanBusy(true);
+    try {
+      const res = await api.triggerScan(id);
+      setMsg(res.detail || `Scan ${res.status}.`);
+      // Give the worker a moment, then refresh findings/assets to show new results.
+      setTimeout(() => {
+        api.listFindings(id).then(setFindings).catch(() => {});
+        api.listAssets(id).then(setAssets).catch(() => {});
+      }, 8000);
+    } catch (e) {
+      // 409 = a scan is already running for this program (backend-enforced).
+      setMsg((e as Error).message || "Could not start scan.");
+    } finally {
+      setScanBusy(false);
+    }
   }
   async function download(fmt: string) {
     setReportBusy(fmt);
@@ -141,8 +150,8 @@ export default function ProgramDetail() {
             <Button onClick={authorize} variant="secondary">
               <ShieldCheck className="h-4 w-4" /> Authorize scanning
             </Button>
-            <Button onClick={scan}>
-              <Play className="h-4 w-4" /> Run scan
+            <Button onClick={scan} disabled={scanBusy}>
+              <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
             </Button>
           </div>
         )

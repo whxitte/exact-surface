@@ -22,7 +22,15 @@ from api.schemas import (
     VerifyCheckResponse,
     VerifyRequestResponse,
 )
-from core.models import Authorization, Program, VerificationMethod
+from core.config import get_settings
+from core.models import (
+    Authorization,
+    Program,
+    ScanRun,
+    ScanStage,
+    ScanStatus,
+    VerificationMethod,
+)
 from core.verification import dns_instructions, http_instructions
 from db.assets import AssetRepo
 from db.audit import ScanRunRepo
@@ -165,32 +173,77 @@ async def trigger_scan(
             status.HTTP_409_CONFLICT, "a current authorization record is required before scanning"
         )
 
-    # Enqueue a full-pipeline run now so a worker picks it up immediately. If Redis
-    # is unreachable, the scheduler still runs it on its normal cadence.
     from core.logging import logger
+    from pipelines.orchestrate import FULL_STAGE_NAMES
 
+    tid, pid = principal.tenant_id, program["program_id"]
+    audit = ScanRunRepo.from_mongo(mongo)
+    settings = get_settings()
+
+    # Refuse a duplicate scan while one is already in flight (backend-enforced —
+    # not just a disabled button; a direct API call is blocked too). A stale run
+    # (worker died) does not count as active, so scanning is never blocked forever.
+    active = await audit.find_active_full(
+        tid, pid, stale_seconds=settings.scan_run_stale_seconds
+    )
+    if active is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "a scan is already running for this program; wait for it to finish",
+        )
+
+    # Record a QUEUED run up front so the button click shows immediately and the
+    # worker reuses this row (no duplicate). Pre-render the stepper as all-queued.
+    scan_id = uuid.uuid4().hex
+    await audit.save(
+        ScanRun(
+            tenant_id=tid,
+            program_id=pid,
+            scan_id=scan_id,
+            pipeline="full",
+            status=ScanStatus.QUEUED,
+            stages=[ScanStage(name=name) for name in FULL_STAGE_NAMES],
+        )
+    )
+
+    # Enqueue so a worker picks it up immediately. If Redis is unreachable, the
+    # scheduler still runs it on its normal cadence (the QUEUED row is then reaped
+    # if never claimed).
     enqueued = False
     try:
         from taskqueue.arq_client import create_pool
 
         pool = await create_pool()
         try:
-            await pool.enqueue_job(
-                "run_program_task", principal.tenant_id, program["program_id"]
-            )
+            await pool.enqueue_job("run_program_task", tid, pid, scan_id=scan_id)
             enqueued = True
         finally:
             await pool.aclose()
     except Exception as exc:  # noqa: BLE001 - fall back to scheduler cadence
         logger.warning("scan enqueue failed (scheduler will still run it): {}", exc)
 
+    if not enqueued:
+        # Don't leave a phantom QUEUED "full" row blocking future scans: the
+        # scheduler runs individual pipelines on cadence, not this full row.
+        await audit.save(
+            ScanRun(
+                tenant_id=tid,
+                program_id=pid,
+                scan_id=scan_id,
+                pipeline="full",
+                status=ScanStatus.FAILED,
+                note="could not enqueue now; the scheduler will run pipelines on cadence",
+            )
+        )
+
     return {
         "status": "queued" if enqueued else "scheduled",
-        "program_id": program["program_id"],
+        "program_id": pid,
+        "scan_id": scan_id,
         "detail": (
             "A worker is running the scan now; findings appear as they are discovered."
             if enqueued
-            else "Queued for the next scheduler cycle."
+            else "Couldn't start immediately; the scheduler will run it on its next cycle."
         ),
     }
 

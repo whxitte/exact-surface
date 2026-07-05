@@ -116,6 +116,36 @@ def test_scan_refused_without_verification_and_authorization():
     assert client.post(f"/programs/{pid}/scan", headers=_auth(token)).status_code == 409
 
 
+def test_scan_refused_while_one_already_running():
+    """A second scan is blocked at the API (not just the UI) while one is in flight."""
+    from datetime import UTC, datetime
+
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    client, fake, _ = build()
+    tok = _signup(client)
+    token, tenant_id = tok["access_token"], tok["tenant_id"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+    client.post(f"/programs/{pid}/verify/request?method=dns_txt", headers=_auth(token))
+    client.post(f"/programs/{pid}/verify/check", headers=_auth(token))
+    client.post(f"/programs/{pid}/authorization", headers=_auth(token), json={})
+
+    # Seed an in-flight full run for this program.
+    _run(
+        ScanRunRepo(fake.collection("scan_runs")).save(
+            ScanRun(
+                tenant_id=tenant_id, scan_id="inflight", program_id=pid, pipeline="full",
+                status=ScanStatus.RUNNING, started_at=datetime.now(UTC),
+            )
+        )
+    )
+    r = client.post(f"/programs/{pid}/scan", headers=_auth(token))
+    assert r.status_code == 409 and "already running" in r.json()["detail"]
+
+
 def test_verify_check_before_request_is_400():
     client, _, _ = build()
     token = _signup(client)["access_token"]

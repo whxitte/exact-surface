@@ -49,9 +49,17 @@ async def shutdown(ctx: dict) -> None:  # arq lifecycle hook
 
 
 async def run_program_task(
-    ctx: dict, tenant_id: str, program_id: str, actor_id: str | None = None
+    ctx: dict,
+    tenant_id: str,
+    program_id: str,
+    actor_id: str | None = None,
+    scan_id: str | None = None,
 ) -> dict:
-    """arq task: run the FULL pipeline for a program (used by the API scan trigger)."""
+    """arq task: run the FULL pipeline for a program (used by the API scan trigger).
+
+    ``scan_id`` (passed by the API) reuses the QUEUED ScanRun created at enqueue so
+    the button click shows immediately and no duplicate row is created.
+    """
     from core.scope import default_engine
     from core.tenant import TenantContext
     from pipelines.orchestrate import run_program
@@ -63,6 +71,7 @@ async def run_program_task(
         tenant=TenantContext(tenant_id=tenant_id, actor_id=actor_id),
         program_id=program_id,
         timeout=settings.tool_default_timeout,
+        scan_id=scan_id,
     )
 
 

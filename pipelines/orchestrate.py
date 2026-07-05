@@ -46,6 +46,11 @@ def _auth_is_current(auth: dict | None) -> bool:
     return bool(auth and auth.get("apex_verified") and not auth.get("revoked"))
 
 
+#: canonical full-pipeline stage order — shared with the API so an enqueue-time
+#: QUEUED ScanRun can pre-render the same stepper before a worker picks it up.
+FULL_STAGE_NAMES: tuple[str, ...] = ("ingest", "probe", "crawl", "scan", "secrets")
+
+
 async def run_full_pipeline(
     *,
     mongo: Any,
@@ -55,14 +60,17 @@ async def run_full_pipeline(
     program_id: str,
     apex: str,
     timeout: float,
+    scan_id: str | None = None,
     **injected: Any,
 ) -> dict:
     """Run the full pipeline: ingest → probe → crawl → scan → secrets.
 
+    ``scan_id`` reuses a pre-created (QUEUED) ScanRun so the API's enqueue-time row
+    becomes this run rather than a second row; omitted, a fresh id is generated.
     ``injected`` forwards test doubles per stage: ``subfinder``/``crtsh``/
     ``resolve`` (ingest); ``probe``; ``gau``/``wayback``/``katana`` (crawl);
     ``scan``; ``fetch`` (secrets)."""
-    scan_id = uuid.uuid4().hex
+    scan_id = scan_id or uuid.uuid4().hex
     audit = ScanRunRepo.from_mongo(mongo)
 
     common = dict(
@@ -162,6 +170,7 @@ async def run_program(
     tenant: TenantContext,
     program_id: str,
     timeout: float,
+    scan_id: str | None = None,
 ) -> dict:
     """Load program + authorization, enforce authorization, then run the pipeline."""
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
@@ -183,4 +192,5 @@ async def run_program(
         program_id=program_id,
         apex=program["apex_domain"],
         timeout=timeout,
+        scan_id=scan_id,
     )
