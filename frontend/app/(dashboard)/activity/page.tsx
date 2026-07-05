@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CheckCircle2, XCircle, Loader2, Clock, MinusCircle } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, Clock, MinusCircle, AlertTriangle } from "lucide-react";
 import { api, type ScanRun } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, timeAgo } from "@/lib/utils";
 
 const STATUS: Record<string, { label: string; cls: string; Icon: React.ElementType; spin?: boolean }> = {
   running: { label: "running", cls: "text-severity-medium", Icon: Loader2, spin: true },
+  stalled: { label: "stalled", cls: "text-severity-high", Icon: AlertTriangle },
   success: { label: "success", cls: "text-primary", Icon: CheckCircle2 },
   failed: { label: "failed", cls: "text-severity-critical", Icon: XCircle },
   queued: { label: "queued", cls: "text-severity-low", Icon: Clock },
@@ -55,7 +56,13 @@ export default function ActivityPage() {
     };
   }, []);
 
-  const running = runs.filter((r) => r.status === "running").length;
+  // A run stuck "running" for >20 min is almost certainly orphaned (worker died).
+  function effStatus(r: ScanRun): string {
+    if (r.status !== "running" || !r.started_at) return r.status;
+    const ageMin = (Date.now() - new Date(r.started_at).getTime()) / 60000;
+    return ageMin > 20 ? "stalled" : "running";
+  }
+  const running = runs.filter((r) => effStatus(r) === "running").length;
 
   return (
     <div className="space-y-6">
@@ -86,7 +93,7 @@ export default function ActivityPage() {
       ) : (
         <div className="space-y-2">
           {runs.map((r) => {
-            const s = STATUS[r.status] || STATUS.queued;
+            const s = STATUS[effStatus(r)] || STATUS.queued;
             return (
               <Card key={r.scan_id}>
                 <CardContent className="flex items-center gap-4 p-4">
