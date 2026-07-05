@@ -68,7 +68,26 @@ async def test_crtsh_degrades_on_error():
     async def fetch(_url):
         raise RuntimeError("crt.sh down")
 
-    assert await crtsh_enum("customer.com", fetch=fetch) == []
+    async def no_sleep(_s):
+        return None
+
+    assert await crtsh_enum("customer.com", fetch=fetch, attempts=1, sleep=no_sleep) == []
+
+
+async def test_crtsh_retries_then_succeeds():
+    calls = {"n": 0}
+
+    async def flaky_fetch(_url):
+        calls["n"] += 1
+        if calls["n"] < 2:
+            return ""  # crt.sh empty body → JSON parse fails → retry
+        return '[{"name_value": "app.customer.com"}]'
+
+    async def no_sleep(_s):
+        return None
+
+    out = await crtsh_enum("customer.com", fetch=flaky_fetch, sleep=no_sleep)
+    assert out == ["app.customer.com"] and calls["n"] == 2
 
 
 async def test_nuclei_enforces_safe_excludes_and_parses():
