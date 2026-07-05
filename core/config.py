@@ -78,6 +78,22 @@ class Settings(BaseSettings):
     # -- worker / queue --------------------------------------------------
     worker_concurrency: int = Field(default=4)
     tool_default_timeout: float = Field(default=300.0)
+    stage_timeout: float = Field(
+        default=600.0,
+        description=(
+            "Hard per-stage ceiling in the full pipeline. A stuck stage fails cleanly "
+            "(TimeoutError → stage FAILED) instead of hanging the whole job. Must exceed "
+            "the tool timeouts a single stage can accumulate."
+        ),
+    )
+    worker_job_timeout: int = Field(
+        default=3600,
+        description=(
+            "arq per-job timeout. Set above the sum of the 5 stage budgets so stages "
+            "self-bound and arq never has to hard-cancel a live job (a cancel would "
+            "otherwise leave the run RUNNING until the reaper)."
+        ),
+    )
 
     # -- scheduler -------------------------------------------------------
     scheduler_tick_seconds: int = Field(default=60)
@@ -85,12 +101,12 @@ class Settings(BaseSettings):
         default=25, description="Fairness cap: max jobs enqueued per tenant per tick"
     )
     scan_run_stale_seconds: int = Field(
-        default=3600,
+        default=7200,
         description=(
-            "A RUNNING ScanRun older than this is treated as orphaned (worker died "
-            "mid-run) and reaped to FAILED. Kept well above a full 5-stage pipeline's "
-            "worst case so live scans are never reaped; a still-alive worker re-saves "
-            "its final status regardless."
+            "A queued/running ScanRun older than this is treated as orphaned and reaped "
+            "to FAILED. A last-resort backstop: kept above worker_job_timeout so it only "
+            "fires for runs that evaded both the per-stage ceiling and arq's job timeout. "
+            "A still-alive worker re-saves its final status regardless."
         ),
     )
 

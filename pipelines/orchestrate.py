@@ -8,10 +8,12 @@ program + authorization, (3) runs the three pipelines in order, and (4) records 
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from core.config import get_settings
 from core.errors import AuthorizationRequired
 from core.logging import bind_context, logger
 from core.models import ScanRun, ScanStage, ScanStatus
@@ -123,6 +125,7 @@ async def run_full_pipeline(
     )
     await audit.save(run)
 
+    stage_budget = get_settings().stage_timeout
     results: dict[str, dict] = {}
     with bind_context(tenant.tenant_id, scan_id):
         for stage_obj, (name, factory) in zip(run.stages, stage_defs, strict=True):
@@ -130,15 +133,22 @@ async def run_full_pipeline(
             stage_obj.started_at = datetime.now(UTC)
             await audit.save(run)  # flip to running so the poller sees the stage start
             try:
-                res = await factory()
-            except Exception as exc:
+                # Hard per-stage ceiling: a stuck stage raises TimeoutError (caught
+                # below → clean FAILED) rather than hanging until arq hard-cancels.
+                res = await asyncio.wait_for(factory(), stage_budget)
+            except (Exception, asyncio.CancelledError) as exc:
                 now = datetime.now(UTC)
+                timed_out = isinstance(exc, (asyncio.TimeoutError, asyncio.CancelledError))
                 stage_obj.status = ScanStatus.FAILED
                 stage_obj.finished_at = now
                 run.status = ScanStatus.FAILED
                 run.finished_at = now
-                run.error = f"{name}: {type(exc).__name__}: {exc}"
-                await audit.save(run)
+                run.error = (
+                    f"{name}: timed out" if timed_out else f"{name}: {type(exc).__name__}: {exc}"
+                )
+                # shield: if this is an outer cancellation, still persist FAILED
+                # rather than leaving the run stuck RUNNING.
+                await asyncio.shield(audit.save(run))
                 logger.error("pipeline failed for {} at stage {}: {}", program_id, name, exc)
                 raise
             stage_obj.finished_at = datetime.now(UTC)

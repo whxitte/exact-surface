@@ -224,6 +224,39 @@ async def test_full_pipeline_marks_failing_stage_and_leaves_later_stages_queued(
     assert by_name["secrets"] == "queued"  # never reached
 
 
+async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
+    import asyncio
+    from types import SimpleNamespace
+
+    import pipelines.orchestrate as orch
+
+    # tiny per-stage ceiling so a slow stage trips it instantly
+    orig = orch.get_settings
+    orch.get_settings = lambda: SimpleNamespace(stage_timeout=0.02)
+    try:
+
+        async def slow_probe(_hosts, _t):
+            await asyncio.sleep(0.5)
+            return []
+
+        mongo = FakeMongo()
+        injected = _injected([]) | {"probe": slow_probe}
+        with pytest.raises(asyncio.TimeoutError):
+            await run_full_pipeline(
+                mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
+                program_id="p1", apex="customer.com", timeout=10, **injected,
+            )
+    finally:
+        orch.get_settings = orig
+
+    run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
+    assert run["status"] == "failed" and run["error"] == "probe: timed out"
+    by_name = {s["name"]: s["status"] for s in run["stages"]}
+    assert by_name["ingest"] == "success"  # ran before the stuck stage
+    assert by_name["probe"] == "failed"  # timed out → FAILED, not left RUNNING
+    assert by_name["crawl"] == "queued"  # never reached
+
+
 async def test_run_program_requires_authorization():
     mongo = FakeMongo()
     await ProgramRepo.from_mongo(mongo).save(

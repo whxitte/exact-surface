@@ -107,4 +107,7 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = get_settings().worker_concurrency
+    # A full pipeline runs 5 stages sequentially; the default 300s would cancel it
+    # mid-crawl (→ CancelledError → stuck RUNNING). Give it room; stages self-bound.
+    job_timeout = get_settings().worker_job_timeout
     redis_settings = _redis_settings()

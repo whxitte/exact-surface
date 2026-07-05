@@ -8,7 +8,11 @@ from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
 from db.endpoints import EndpointRepo
-from pipelines.crawl import run_crawl
+from pipelines.crawl import (
+    MAX_ACTIVE_CRAWL_HOSTS,
+    MAX_HOST_CRAWL_SECONDS,
+    run_crawl,
+)
 from tests.fakes import FakeMongo
 
 ENGINE = ScopeEngine.from_data_file()
@@ -68,3 +72,29 @@ async def test_crawl_filters_out_of_scope_and_gates_active_crawl():
     assert "https://api.customer.com/b" in urls
     assert "https://app.customer.com/admin" in urls  # from katana
     assert not any("attacker.com" in u for u in urls)  # out-of-scope dropped
+
+
+async def test_crawl_caps_active_hosts_and_bounds_per_host_timeout():
+    mongo = FakeMongo()
+    # more in-scope, HTTP-permitted hosts than the active-crawl cap
+    for i in range(MAX_ACTIVE_CRAWL_HOSTS + 10):
+        await _seed_asset(mongo, f"h{i}.customer.com", ["45.55.1.1"])
+
+    calls: list[tuple[str, float]] = []
+
+    async def katana(url, t):
+        calls.append((url, t))
+        return []
+
+    async def empty(_apex, _t):
+        return []
+
+    await run_crawl(
+        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT, program_id="p1",
+        apex="customer.com", timeout=300, gau=empty, wayback=empty, katana=katana,
+    )
+
+    # never crawl more hosts than the cap, and each host gets the small slice,
+    # not the full 300s tool budget (that was the full-run timeout bug).
+    assert len(calls) == MAX_ACTIVE_CRAWL_HOSTS
+    assert all(t == MAX_HOST_CRAWL_SECONDS for _, t in calls)

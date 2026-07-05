@@ -23,6 +23,12 @@ from modules.crawling.katana import crawl as katana_crawl
 from modules.crawling.waybackurls import fetch_urls as wayback_fetch
 
 MAX_ENDPOINTS_PER_RUN = 2000
+#: active-crawl bounds so one run cannot blow the job's time budget. katana at
+#: depth 2 over dozens of hosts, each at the full tool timeout, was the cause of
+#: full-run timeouts; cap the host count and give each host a small slice.
+MAX_ACTIVE_CRAWL_HOSTS = 25
+MAX_HOST_CRAWL_SECONDS = 45.0
+MAX_PASSIVE_SECONDS = 120.0
 
 
 async def run_crawl(
@@ -39,24 +45,31 @@ async def run_crawl(
     katana=katana_crawl,
 ) -> dict:
     urls: set[str] = set()
+    passive_timeout = min(timeout, MAX_PASSIVE_SECONDS)
+    host_timeout = min(timeout, MAX_HOST_CRAWL_SECONDS)
 
     # Passive archive sources (allowed for any in-scope program).
     for source in (gau, wayback):
         try:
-            urls.update(await source(apex, timeout))
+            urls.update(await source(apex, passive_timeout))
         except Exception as exc:  # noqa: BLE001 - archive sources are flaky; degrade
             logger.warning("crawl archive source failed for {}: {}", apex, exc)
 
-    # Active crawl of hosts whose scope permits HTTP probing.
+    # Active crawl of hosts whose scope permits HTTP probing — capped so a domain
+    # with dozens of subdomains cannot exceed the run's time budget.
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
-    for asset in assets:
-        decision = engine.evaluate(asset["hostname"], asset.get("resolved_ips", []), scope)
-        if not decision.permits(Action.HTTP_PROBE):
-            continue
+    crawl_hosts = [
+        asset["hostname"]
+        for asset in assets
+        if engine.evaluate(asset["hostname"], asset.get("resolved_ips", []), scope).permits(
+            Action.HTTP_PROBE
+        )
+    ][:MAX_ACTIVE_CRAWL_HOSTS]
+    for hostname in crawl_hosts:
         try:
-            urls.update(await katana(f"https://{asset['hostname']}", timeout))
+            urls.update(await katana(f"https://{hostname}", host_timeout))
         except Exception as exc:  # noqa: BLE001
-            logger.warning("katana crawl failed for {}: {}", asset["hostname"], exc)
+            logger.warning("katana crawl failed for {}: {}", hostname, exc)
 
     # Keep only in-scope hosts, cap volume.
     in_scope_urls = [u for u in sorted(urls) if scope.owns_host(urlsplit(u).hostname or "")][
