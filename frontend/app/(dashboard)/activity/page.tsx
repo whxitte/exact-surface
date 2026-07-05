@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, Loader2, Clock, MinusCircle, AlertTriangle } fro
 import { api, type ScanRun, type ScanStage } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn, timeAgo } from "@/lib/utils";
+import { pipelineDesc, pipelineLabel } from "@/lib/pipelines";
 
 const STATUS: Record<string, { label: string; cls: string; Icon: React.ElementType; spin?: boolean }> = {
   running: { label: "running", cls: "text-severity-medium", Icon: Loader2, spin: true },
@@ -39,53 +40,86 @@ const STAGE_DOT: Record<string, string> = {
   queued: "border-muted bg-transparent text-muted-foreground",
 };
 
+function stageStat(st: ScanStage): string {
+  if (st.note) return st.note;
+  return statsSummary(st.stats);
+}
+
 function StageStepper({ stages }: { stages: ScanStage[] }) {
+  // stages that need an explicit explanation (skipped reason / failure)
+  const explain = stages.filter((s) => s.status === "skipped" || s.status === "failed");
   return (
-    <div className="mt-3 flex items-center">
-      {stages.map((st, i) => {
-        const dot = STAGE_DOT[st.status] || STAGE_DOT.queued;
-        const done = st.status === "success";
-        return (
-          <Fragment key={st.name}>
-            {i > 0 && (
-              <div
-                className={cn(
-                  "h-px flex-1",
-                  stages[i - 1].status === "success" ? "bg-primary" : "bg-border",
-                )}
-              />
-            )}
-            <div className="flex flex-col items-center gap-1" title={`${st.name}: ${st.status}`}>
+    <div className="mt-3 space-y-2">
+      <div className="flex items-center">
+        {stages.map((st, i) => {
+          const dot = STAGE_DOT[st.status] || STAGE_DOT.queued;
+          const done = st.status === "success";
+          const tip = `${pipelineLabel(st.name)} — ${pipelineDesc(st.name)}${
+            stageStat(st) ? `\n${stageStat(st)}` : ""
+          }`;
+          return (
+            <Fragment key={st.name}>
+              {i > 0 && (
+                <div
+                  className={cn(
+                    "h-px flex-1",
+                    stages[i - 1].status === "success" ? "bg-primary" : "bg-border",
+                  )}
+                />
+              )}
+              <div className="flex flex-col items-center gap-1" title={tip}>
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
+                    dot,
+                  )}
+                >
+                  {st.status === "running" ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : st.status === "failed" ? (
+                    <XCircle className="h-3 w-3" />
+                  ) : st.status === "skipped" ? (
+                    <MinusCircle className="h-3 w-3" />
+                  ) : done ? (
+                    <CheckCircle2 className="h-3 w-3" />
+                  ) : (
+                    i + 1
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "text-[10px] leading-none",
+                    st.status === "queued" || st.status === "skipped"
+                      ? "text-muted-foreground"
+                      : "text-foreground",
+                  )}
+                >
+                  {pipelineLabel(st.name)}
+                </span>
+              </div>
+            </Fragment>
+          );
+        })}
+      </div>
+
+      {/* Spell out why any stage was skipped or failed — no silent "success". */}
+      {explain.length > 0 && (
+        <div className="space-y-0.5 pt-1">
+          {explain.map((st) => (
+            <div key={st.name} className="flex items-start gap-1.5 text-[11px]">
               <span
                 className={cn(
-                  "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
-                  dot,
+                  "shrink-0 uppercase tracking-wide",
+                  st.status === "failed" ? "text-severity-critical" : "text-muted-foreground",
                 )}
               >
-                {st.status === "running" ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : st.status === "failed" ? (
-                  <XCircle className="h-3 w-3" />
-                ) : done ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : (
-                  i + 1
-                )}
+                {pipelineLabel(st.name)} {st.status}
               </span>
-              <span
-                className={cn(
-                  "text-[10px] leading-none",
-                  st.status === "queued" || st.status === "skipped"
-                    ? "text-muted-foreground"
-                    : "text-foreground",
-                )}
-              >
-                {st.name}
-              </span>
+              {st.note && <span className="text-muted-foreground">— {st.note}</span>}
             </div>
-          </Fragment>
-        );
-      })}
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -161,18 +195,28 @@ export default function ActivityPage() {
                     <s.Icon className={cn("h-5 w-5 shrink-0", s.cls, s.spin && "animate-spin")} />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium">{r.pipeline}</span>
+                        <span className="font-medium">{pipelineLabel(r.pipeline)}</span>
                         <span className={cn("text-xs uppercase tracking-wide", s.cls)}>{s.label}</span>
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
-                        {r.program_id}
+                        {pipelineDesc(r.pipeline) || r.program_id}
                         {statsSummary(r.stats) ? ` · ${statsSummary(r.stats)}` : ""}
-                        {r.error ? ` · ${r.error}` : ""}
                       </div>
+                      {(r.note || r.error) && (
+                        <div
+                          className={cn(
+                            "mt-0.5 truncate text-xs",
+                            r.error ? "text-severity-critical" : "text-muted-foreground",
+                          )}
+                        >
+                          {r.error ? `⚠ ${r.error}` : `skipped — ${r.note}`}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-right text-xs text-muted-foreground">
+                    <div className="shrink-0 text-right text-xs text-muted-foreground">
                       <div>{duration(r)}</div>
                       <div>{timeAgo(r.started_at)}</div>
+                      <div className="font-mono opacity-60">{r.program_id}</div>
                     </div>
                   </div>
                   {r.stages && r.stages.length > 0 && <StageStepper stages={r.stages} />}

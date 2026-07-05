@@ -94,6 +94,7 @@ export interface ScanStage {
   started_at?: string;
   finished_at?: string;
   stats?: Record<string, number>;
+  note?: string; // why skipped / short explanation
 }
 export interface ScanRun {
   scan_id: string;
@@ -103,6 +104,7 @@ export interface ScanRun {
   started_at?: string;
   finished_at?: string;
   error?: string;
+  note?: string; // why skipped (single-pipeline runs)
   stats?: Record<string, number>;
   stages?: ScanStage[];
 }
