@@ -32,10 +32,12 @@ RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest && 
 FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
 
-# nmap + masscan + libpcap runtime + feroxbuster (prebuilt).
-# System packages: nmap, masscan, libpcap, curl.
+# nmap + masscan + libpcap runtime + feroxbuster (prebuilt). Also WeasyPrint's
+# native deps (pango/cairo/gdk-pixbuf/ffi + fonts) so worker-side PDF rendering works.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         nmap masscan libpcap0.8 ca-certificates curl \
+        libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+        libffi8 shared-mime-info fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # feroxbuster (content discovery). Arch-aware AND non-fatal: if the arch's asset

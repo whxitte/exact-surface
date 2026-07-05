@@ -13,3 +13,7 @@ python-jose[cryptography]>=3.3
 bcrypt>=4.1
 email-validator>=2.1
 slowapi>=0.1.9
+# PDF report rendering. Pure-Python but needs native libs (pango/cairo/gdk-pixbuf)
+# installed in the image — see docker/Dockerfile.api & Dockerfile.pipeline. Imported
+# lazily (modules/reporting/pdf_report.py) so its absence only affects PDF export.
+weasyprint>=61

@@ -3,7 +3,12 @@ FROM python:3.11-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
+# curl for the healthcheck; the rest are WeasyPrint's native deps (pango/cairo/
+# gdk-pixbuf/ffi + fonts) so PDF report export works instead of returning 501.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
+        libffi8 shared-mime-info fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
