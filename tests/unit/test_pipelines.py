@@ -90,6 +90,22 @@ async def fake_fetch(_url):
     return ""
 
 
+async def fake_discover(_url, _wordlist, _t):
+    return []
+
+
+async def fake_naabu(_hosts, _t):
+    return []
+
+
+async def fake_recent_cves():
+    return []
+
+
+async def fake_kev():
+    return set()
+
+
 def _injected(scan_capture):
     return dict(
         subfinder=fake_subfinder,
@@ -99,8 +115,12 @@ def _injected(scan_capture):
         gau=fake_gau,
         wayback=fake_wayback,
         katana=fake_katana,
+        discover=fake_discover,
+        naabu=fake_naabu,
         scan=make_fake_scan(scan_capture),
         fetch=fake_fetch,
+        recent=fake_recent_cves,
+        kev=fake_kev,
     )
 
 
@@ -193,8 +213,13 @@ async def test_full_pipeline_records_per_stage_progress():
     run = await mongo.collection("scan_runs").find_one({"scan_id": result["scan_id"]})
     assert run["status"] == "success"
     names = [s["name"] for s in run["stages"]]
-    assert names == ["ingest", "probe", "crawl", "scan", "secrets"]
-    assert all(s["status"] == "success" for s in run["stages"])
+    assert names == [
+        "ingest", "probe", "crawl", "content_discovery", "port_scan", "scan",
+        "secrets", "cve_watch", "github_osint", "correlate", "notify",
+    ]
+    # early stages ran with data; the rest either ran or skipped, none failed
+    assert all(s["status"] in ("success", "skipped") for s in run["stages"])
+    assert {s["name"]: s["status"] for s in run["stages"]}["ingest"] == "success"
     # per-stage stats captured (ingest discovered assets)
     ingest_stage = next(s for s in run["stages"] if s["name"] == "ingest")
     assert ingest_stage["stats"].get("new", 0) > 0

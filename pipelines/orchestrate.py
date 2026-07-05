@@ -22,8 +22,14 @@ from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
+from pipelines.content_discovery import run_content_discovery
+from pipelines.correlate import run_correlate
 from pipelines.crawl import run_crawl
+from pipelines.cve_watch import run_cve_watch
+from pipelines.github_osint import run_github_leak_scan
 from pipelines.ingest import run_ingest
+from pipelines.notify import run_notify
+from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
@@ -48,9 +54,23 @@ def _auth_is_current(auth: dict | None) -> bool:
     return bool(auth and auth.get("apex_verified") and not auth.get("revoked"))
 
 
-#: canonical full-pipeline stage order — shared with the API so an enqueue-time
-#: QUEUED ScanRun can pre-render the same stepper before a worker picks it up.
-FULL_STAGE_NAMES: tuple[str, ...] = ("ingest", "probe", "crawl", "scan", "secrets")
+#: canonical full-pipeline stage order — the complete outside-in attacker chain,
+#: shared with the API so an enqueue-time QUEUED ScanRun pre-renders the same
+#: stepper. Stages self-skip when they have nothing to do (e.g. no dedicated hosts
+#: for ports/content, no channels for notify) — see each pipeline's skip return.
+FULL_STAGE_NAMES: tuple[str, ...] = (
+    "ingest",
+    "probe",
+    "crawl",
+    "content_discovery",
+    "port_scan",
+    "scan",
+    "secrets",
+    "cve_watch",
+    "github_osint",
+    "correlate",
+    "notify",
+)
 
 
 async def run_full_pipeline(
@@ -65,13 +85,14 @@ async def run_full_pipeline(
     scan_id: str | None = None,
     **injected: Any,
 ) -> dict:
-    """Run the full pipeline: ingest → probe → crawl → scan → secrets.
+    """Run the full outside-in pipeline: discover → probe → crawl → content →
+    ports → scan → secrets → CVE match → GitHub OSINT → correlate → notify.
 
     ``scan_id`` reuses a pre-created (QUEUED) ScanRun so the API's enqueue-time row
     becomes this run rather than a second row; omitted, a fresh id is generated.
-    ``injected`` forwards test doubles per stage: ``subfinder``/``crtsh``/
-    ``resolve`` (ingest); ``probe``; ``gau``/``wayback``/``katana`` (crawl);
-    ``scan``; ``fetch`` (secrets)."""
+    ``injected`` forwards test doubles per stage (``subfinder``/``crtsh``/
+    ``resolve``, ``probe``, ``gau``/``wayback``/``katana``, ``discover``, ``naabu``,
+    ``scan``, ``fetch``, ``recent``/``kev``, ``search``, ``senders``)."""
     scan_id = scan_id or uuid.uuid4().hex
     audit = ScanRunRepo.from_mongo(mongo)
 
@@ -83,35 +104,30 @@ async def run_full_pipeline(
         program_id=program_id,
         timeout=timeout,
     )
-    ingest_kw = {k: injected[k] for k in ("subfinder", "crtsh", "resolve") if k in injected}
-    crawl_kw = {k: injected[k] for k in ("gau", "wayback", "katana") if k in injected}
-    # (name, coroutine factory) in execution order. secrets takes no timeout.
+    core = dict(mongo=mongo, tenant=tenant, program_id=program_id)  # DB-only stages
+
+    def inj(*keys: str) -> dict:
+        return {k: injected[k] for k in keys if k in injected}
+
+    # (name, coroutine factory) in execution order — the complete attacker chain.
     stage_defs: list[tuple[str, Any]] = [
-        ("ingest", lambda: run_ingest(**common, apex=apex, **ingest_kw)),
-        (
-            "probe",
-            lambda: run_probe(
-                **common, **({"probe": injected["probe"]} if "probe" in injected else {})
-            ),
-        ),
-        ("crawl", lambda: run_crawl(**common, apex=apex, **crawl_kw)),
-        (
-            "scan",
-            lambda: run_scan(
-                **common, **({"scan": injected["scan"]} if "scan" in injected else {})
-            ),
-        ),
+        ("ingest", lambda: run_ingest(**common, apex=apex, **inj("subfinder", "crtsh", "resolve"))),
+        ("probe", lambda: run_probe(**common, **inj("probe"))),
+        ("crawl", lambda: run_crawl(**common, apex=apex, **inj("gau", "wayback", "katana"))),
+        ("content_discovery", lambda: run_content_discovery(**common, **inj("discover"))),
+        ("port_scan", lambda: run_port_scan(**common, **inj("naabu"))),
+        ("scan", lambda: run_scan(**common, **inj("scan"))),
         (
             "secrets",
             lambda: run_secret_scan(
-                mongo=mongo,
-                engine=engine,
-                scope=scope,
-                tenant=tenant,
-                program_id=program_id,
-                **({"fetch": injected["fetch"]} if "fetch" in injected else {}),
+                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
+                program_id=program_id, **inj("fetch"),
             ),
         ),
+        ("cve_watch", lambda: run_cve_watch(**core, **inj("recent", "kev"))),
+        ("github_osint", lambda: run_github_leak_scan(**core, domain=apex, **inj("search"))),
+        ("correlate", lambda: run_correlate(**core)),
+        ("notify", lambda: run_notify(**core, **inj("senders"))),
     ]
 
     run = ScanRun(
@@ -170,9 +186,16 @@ async def run_full_pipeline(
         run.finished_at = datetime.now(UTC)
         run.stats = {
             "assets_new": results["ingest"]["new"],
-            "endpoints_new": results["probe"]["new"] + results["crawl"]["new"],
+            "endpoints_new": (
+                results["probe"]["new"]
+                + results["crawl"]["new"]
+                + results["content_discovery"]["new"]
+            ),
+            "ports_new": results["port_scan"]["new"],
             "findings_new": results["scan"]["new"],
             "secrets_new": results["secrets"]["new"],
+            "cve_matches": results["cve_watch"]["new_alertable"],
+            "issues": results["correlate"]["count"],
         }
         await audit.save(run)
         return {"scan_id": scan_id, **results}

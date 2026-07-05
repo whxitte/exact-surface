@@ -53,8 +53,8 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
   // stages that need an explicit explanation (skipped reason / failure)
   const explain = stages.filter((s) => s.status === "skipped" || s.status === "failed");
   return (
-    <div className="mt-3 space-y-2">
-      <div className="flex items-center">
+    <div className="mt-3 space-y-2 overflow-x-auto">
+      <div className="flex min-w-[720px] items-center pb-1">
         {stages.map((st, i) => {
           const dot = STAGE_DOT[st.status] || STAGE_DOT.queued;
           const done = st.status === "success";

@@ -38,6 +38,10 @@ export const PIPELINE_INFO: Record<string, { label: string; desc: string }> = {
     label: "CVE watch",
     desc: "Match fingerprinted tech against new CVE / CISA-KEV feeds.",
   },
+  correlate: {
+    label: "Correlate",
+    desc: "Chain findings across modules into prioritized issues.",
+  },
   github_osint: {
     label: "GitHub OSINT",
     desc: "Search public GitHub for leaked secrets referencing the domain.",
