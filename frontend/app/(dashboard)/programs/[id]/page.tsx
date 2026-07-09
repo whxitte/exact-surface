@@ -61,6 +61,19 @@ export default function ProgramDetail() {
     await api.createAuthorization(id);
     setMsg("Authorization recorded. You can scan now.");
   }
+  async function toggleSharedInfra(value: boolean) {
+    try {
+      await api.setScanSharedInfra(id, value);
+      setMsg(
+        value
+          ? "Cloud-scanning authorized: ports, content discovery & active scans will run on your cloud/public IPs (CDNs and internal ranges stay off)."
+          : "Cloud-scanning turned off: shared-infra hosts are HTTP-probe only.",
+      );
+      loadProgram();
+    } catch (e) {
+      setMsg((e as Error).message || "Could not update scan config.");
+    }
+  }
   async function scan() {
     setScanBusy(true);
     try {
@@ -153,6 +166,14 @@ export default function ProgramDetail() {
             <Button onClick={scan} disabled={scanBusy}>
               <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
             </Button>
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={!!program.scan_shared_infra}
+                onChange={(e) => toggleSharedInfra(e.target.checked)}
+              />
+              Scan my cloud infra (ports/content/active on cloud IPs — §9b)
+            </label>
           </div>
         )
       )}

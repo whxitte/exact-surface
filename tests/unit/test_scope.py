@@ -116,6 +116,30 @@ def test_mixed_dedicated_and_cdn_is_http_only():
     assert d.allowed and not d.permits(Action.PORT_SCAN)
 
 
+# --------------------------------------------------------------------------- #
+# scan_shared_infra opt-in (§9b) — unlocks cloud/public, never CDN or hard-deny
+# --------------------------------------------------------------------------- #
+SHARED_SCOPE = ProgramScope(verified_apexes=("customer.com",), scan_shared_infra=True)
+
+
+def test_shared_infra_optin_grants_full_actions_to_public():
+    # unconfirmed public IP would normally be HTTP-only; opt-in unlocks it
+    d = ENGINE.evaluate("api.customer.com", ["8.8.8.8"], SHARED_SCOPE)
+    assert d.allowed and d.permits(Action.PORT_SCAN) and d.permits(Action.ACTIVE_SCAN)
+
+
+def test_shared_infra_optin_still_blocks_cdn():
+    # third-party CDN edge (Cloudflare) is never the customer's → stays HTTP-only
+    d = ENGINE.evaluate("www.customer.com", ["104.16.5.5"], SHARED_SCOPE)
+    assert d.allowed and not d.permits(Action.PORT_SCAN)
+
+
+@pytest.mark.parametrize("ip", ["10.0.0.5", "169.254.169.254", "127.0.0.1"])
+def test_shared_infra_optin_never_overrides_hard_deny(ip):
+    d = ENGINE.evaluate("app.customer.com", [ip], SHARED_SCOPE)
+    assert not d.allowed  # RFC1918/metadata/loopback denied even with the opt-in
+
+
 def test_no_resolved_ips_is_passive_only():
     d = ENGINE.evaluate("ghost.customer.com", [], SCOPE)
     assert d.allowed and d.permits(Action.PASSIVE_RECON)

@@ -158,6 +158,23 @@ async def get_authorization(
     return clean_doc(doc)
 
 
+# -- scan config -------------------------------------------------------------
+@router.post("/{program_id}/scan-config", tags=["programs"])
+async def set_scan_config(
+    scan_shared_infra: bool = Query(...),
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Toggle the §9b opt-in: when on, the customer attests they own the cloud
+    infra their domain runs on, so ports/content/active scans run on cloud/public
+    IPs too (third-party CDNs and internal ranges stay locked by the scope engine)."""
+    await ProgramRepo.from_mongo(mongo).set_scan_shared_infra(
+        principal.tenant_id, program["program_id"], scan_shared_infra
+    )
+    return {"program_id": program["program_id"], "scan_shared_infra": scan_shared_infra}
+
+
 # -- scan trigger (auth-gated) ----------------------------------------------
 @router.post("/{program_id}/scan", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_scan(

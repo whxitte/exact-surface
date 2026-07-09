@@ -47,6 +47,7 @@ def build_program_scope(program: dict, authorization: dict | None) -> ProgramSco
         excluded_hosts=frozenset(program.get("excluded_hosts", [])),
         excluded_cidrs=tuple(program.get("excluded_cidrs", [])),
         authorized_dedicated_cidrs=dedicated,
+        scan_shared_infra=bool(program.get("scan_shared_infra", False)),
     )
 
 

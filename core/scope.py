@@ -105,6 +105,11 @@ class ProgramScope:
     excluded_hosts: frozenset[str] = frozenset()
     excluded_cidrs: tuple[str, ...] = ()
     authorized_dedicated_cidrs: tuple[str, ...] = ()
+    #: When the customer explicitly attests they own the cloud infra their domain
+    #: runs on (§9b), grant the full action set to CLOUD_SHARED/PUBLIC IPs too — so
+    #: ports/content/active-scan run on their own AWS/GCP/Azure assets. Third-party
+    #: CDN edges (Cloudflare/Akamai/Fastly) and every HARD_DENY class stay locked.
+    scan_shared_infra: bool = False
 
     def owns_host(self, host: str) -> bool:
         h = host.lower().rstrip(".")
@@ -274,8 +279,16 @@ class ScopeEngine:
                 )
 
             # 5. Is this IP confirmed dedicated to the customer? (Lab-mode private counts.)
-            is_dedicated = lab_private or any(
-                addr.version == n.version and addr in n for n in dedicated_nets
+            #    scan_shared_infra opt-in extends "dedicated" to generic cloud/public
+            #    IPs (NOT third-party CDN edges), for customers who own their cloud.
+            shared_ok = scope.scan_shared_infra and cls in (
+                IpClass.CLOUD_SHARED,
+                IpClass.PUBLIC,
+            )
+            is_dedicated = (
+                lab_private
+                or shared_ok
+                or any(addr.version == n.version and addr in n for n in dedicated_nets)
             )
             if is_dedicated:
                 classes.append(IpClass.DEDICATED)

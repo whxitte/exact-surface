@@ -55,6 +55,7 @@ export interface Program {
   apex_domain: string;
   verified: boolean;
   enabled: boolean;
+  scan_shared_infra?: boolean;
   verification_method?: string | null;
   created_at?: string;
 }
@@ -159,6 +160,11 @@ export const api = {
     request<unknown>(`/programs/${id}/authorization`, json({})),
   triggerScan: (id: string) =>
     request<{ status: string; detail?: string }>(`/programs/${id}/scan`, { method: "POST" }),
+  setScanSharedInfra: (id: string, value: boolean) =>
+    request<{ program_id: string; scan_shared_infra: boolean }>(
+      `/programs/${id}/scan-config?scan_shared_infra=${value}`,
+      { method: "POST" },
+    ),
 
   listFindings: (id: string, q: Record<string, string> = {}) => {
     const qs = new URLSearchParams(q).toString();

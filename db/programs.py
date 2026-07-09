@@ -50,3 +50,6 @@ class ProgramRepo:
 
     async def set_enabled(self, tenant_id, program_id, enabled: bool) -> None:
         await self._update(tenant_id, program_id, {"enabled": enabled})
+
+    async def set_scan_shared_infra(self, tenant_id, program_id, value: bool) -> None:
+        await self._update(tenant_id, program_id, {"scan_shared_infra": value})
