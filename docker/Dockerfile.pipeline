@@ -54,26 +54,28 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
 # nmap + masscan + libpcap runtime + feroxbuster (prebuilt). Also WeasyPrint's
 # native deps (pango/cairo/gdk-pixbuf/ffi + fonts) so worker-side PDF rendering works.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nmap masscan libpcap0.8 ca-certificates curl \
+        nmap masscan libpcap0.8 ca-certificates curl unzip \
         libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
         libffi8 shared-mime-info fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# feroxbuster (content discovery). Arch-aware AND non-fatal: if the arch's asset
-# is unavailable (e.g. no arm64 build), the image still builds — ffuf (installed
-# via Go above) covers content-discovery fuzzing. `curl -f` fails on 404 rather
-# than piping an HTML error page into tar.
+# feroxbuster (content discovery). Arch-aware AND non-fatal: if the download fails
+# the image still builds — ffuf (installed via Go above) covers content-discovery.
+# NOTE: aarch64/arm64 Linux only ships a `.zip` (no `.tar.gz`), so we use the `.zip`
+# for BOTH arches — requesting the arm64 tarball 404s and silently loses feroxbuster.
+# `curl -f` fails on 404 rather than piping an HTML error page into unzip.
 RUN ARCH="$(dpkg --print-architecture)" \
     && case "$ARCH" in \
-         amd64) FB=x86_64-linux-feroxbuster.tar.gz ;; \
-         arm64) FB=aarch64-linux-feroxbuster.tar.gz ;; \
+         amd64) FB=x86_64-linux-feroxbuster.zip ;; \
+         arm64) FB=aarch64-linux-feroxbuster.zip ;; \
          *) FB="" ;; \
        esac \
     && if [ -n "$FB" ] && curl -fsSL \
          "https://github.com/epi052/feroxbuster/releases/latest/download/$FB" \
-         -o /tmp/ferox.tar.gz; then \
-         tar -xzf /tmp/ferox.tar.gz -C /usr/local/bin feroxbuster \
-         && rm -f /tmp/ferox.tar.gz \
+         -o /tmp/ferox.zip; then \
+         unzip -o /tmp/ferox.zip feroxbuster -d /usr/local/bin \
+         && chmod +x /usr/local/bin/feroxbuster \
+         && rm -f /tmp/ferox.zip \
          && echo "feroxbuster installed for $ARCH"; \
        else \
          echo "WARN: feroxbuster unavailable for $ARCH; content discovery will use ffuf only"; \
