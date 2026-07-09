@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { NotificationsSettings } from "@/components/notifications-settings";
+import { IntegrationsSettings } from "@/components/integrations-settings";
 
 export default function SettingsPage() {
   const [me, setMe] = useState<{ tenant_id: string; role: string } | null>(null);
@@ -91,6 +92,8 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <IntegrationsSettings />
 
       <NotificationsSettings />
     </div>

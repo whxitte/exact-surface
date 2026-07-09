@@ -10,6 +10,7 @@ from core.logging import logger
 from core.models import Leak
 from core.secrets_policy import mask
 from core.tenant import TenantContext
+from db.integrations import resolve_secret
 from db.leaks import LeakRepo
 from modules.osint.github import search_leaks
 
@@ -23,18 +24,18 @@ async def run_github_leak_scan(
     hmac_key: bytes | None = None,
     search=None,
 ) -> dict:
-    settings = get_settings()
-    hmac_key = hmac_key or settings.secret_hash_key_bytes()
-    # Without a GitHub token the code-search API returns nothing — report that
-    # honestly as skipped rather than a misleading "success, 0 leaks".
-    if search is None and settings.github_token is None:
+    hmac_key = hmac_key or get_settings().secret_hash_key_bytes()
+    # Resolve the tenant's own GitHub token (falling back to the env default).
+    # Without one the code-search API returns nothing — report that honestly as
+    # skipped rather than a misleading "success, 0 leaks".
+    token = await resolve_secret(mongo, tenant.tenant_id, "github_token")
+    if search is None and not token:
         logger.info("github-osint {}: skipped (no GitHub token configured)", domain)
         return {
             "hits": 0, "new": 0, "new_leaks": [],
-            "skipped": True, "note": "GitHub token not configured",
+            "skipped": True, "note": "GitHub token not configured — add one in Settings",
         }
-    kwargs = {"search": search} if search is not None else {}
-    hits = await search_leaks(domain, **kwargs)
+    hits = await search_leaks(domain, search=search, token=token)
 
     models = [
         Leak(

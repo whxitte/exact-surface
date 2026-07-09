@@ -15,40 +15,47 @@ from core.secrets_policy import find_secrets
 Search = Callable[[str], Awaitable[list[dict]]]
 
 
-async def _default_search(query: str) -> list[dict]:  # pragma: no cover - needs a token
-    from core.config import get_settings
+def _make_search(token: str) -> Search:  # pragma: no cover - needs a token
+    async def _search(query: str) -> list[dict]:
+        import aiohttp
 
-    token = get_settings().github_token
-    if token is None:
-        return []
-    import aiohttp
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+        }
+        url = f"https://api.github.com/search/code?q={query}"
+        async with aiohttp.ClientSession(headers=headers) as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+                data = await resp.json()
+        items = []
+        for it in data.get("items", []):
+            fragment = " ".join(
+                m.get("fragment", "") for tm in it.get("text_matches", []) for m in [tm]
+            )
+            items.append(
+                {
+                    "repo": (it.get("repository") or {}).get("full_name"),
+                    "path": it.get("path"),
+                    "html_url": it.get("html_url"),
+                    "content": fragment,
+                }
+            )
+        return items
 
-    headers = {
-        "Authorization": f"Bearer {token.get_secret_value()}",
-        "Accept": "application/vnd.github+json",
-    }
-    url = f"https://api.github.com/search/code?q={query}"
-    async with aiohttp.ClientSession(headers=headers) as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
-            data = await resp.json()
-    items = []
-    for it in data.get("items", []):
-        fragment = " ".join(
-            m.get("fragment", "") for tm in it.get("text_matches", []) for m in [tm]
-        )
-        items.append(
-            {
-                "repo": (it.get("repository") or {}).get("full_name"),
-                "path": it.get("path"),
-                "html_url": it.get("html_url"),
-                "content": fragment,
-            }
-        )
-    return items
+    return _search
 
 
-async def search_leaks(domain: str, *, search: Search = _default_search) -> list[dict]:
-    """Return leaked-secret hits referencing *domain* in public GitHub code."""
+async def search_leaks(
+    domain: str, *, search: Search | None = None, token: str | None = None
+) -> list[dict]:
+    """Return leaked-secret hits referencing *domain* in public GitHub code.
+
+    Pass an explicit *search* (tests) or a *token* to build the authenticated
+    GitHub code-search client; with neither, there is nothing to query."""
+    if search is None:
+        if not token:
+            return []
+        search = _make_search(token)
     items = await search(f'"{domain}"')
     hits: list[dict] = []
     for item in items:

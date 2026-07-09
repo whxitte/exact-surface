@@ -328,3 +328,30 @@ def test_websocket_finding_snapshot():
         msg = ws.receive_json()
         assert msg["type"] == "snapshot"
         assert any(f["name"] == "Live finding" for f in msg["new_findings"])
+
+
+def test_integrations_set_list_and_clear():
+    client, _, _ = build()
+    token = _signup(client)["access_token"]
+
+    # listed but unconfigured out of the box
+    items = client.get("/integrations", headers=_auth(token)).json()
+    gh = next(i for i in items if i["name"] == "github_token")
+    assert gh["configured"] is False and gh["label"]
+
+    # set it → 204, then it reads back configured + masked (never the plaintext)
+    r = client.put(
+        "/integrations/github_token", headers=_auth(token), json={"value": "ghp_secret123456"}
+    )
+    assert r.status_code == 204
+    gh = next(i for i in client.get("/integrations", headers=_auth(token)).json()
+              if i["name"] == "github_token")
+    assert gh["configured"] is True and "ghp_secret123456" not in gh["masked"]
+
+    # unknown key rejected; clear removes it
+    bad = client.put("/integrations/nope", headers=_auth(token), json={"value": "x"})
+    assert bad.status_code == 404
+    assert client.delete("/integrations/github_token", headers=_auth(token)).status_code == 204
+    gh = next(i for i in client.get("/integrations", headers=_auth(token)).json()
+              if i["name"] == "github_token")
+    assert gh["configured"] is False

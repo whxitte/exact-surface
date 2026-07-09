@@ -127,6 +127,14 @@ export interface Secret {
   source_locator: string;
   severity: string;
 }
+export interface Integration {
+  name: string;
+  label: string;
+  help: string;
+  secret: boolean;
+  configured: boolean;
+  masked: string;
+}
 
 const json = (b: unknown) => ({ method: "POST", body: JSON.stringify(b) });
 
@@ -189,6 +197,12 @@ export const api = {
   }) => request<Channel>("/notifications", json(body)),
   deleteChannel: (id: string) =>
     request<void>(`/notifications/${id}`, { method: "DELETE" }),
+
+  listIntegrations: () => request<Integration[]>("/integrations"),
+  setIntegration: (name: string, value: string) =>
+    request<void>(`/integrations/${name}`, { method: "PUT", body: JSON.stringify({ value }) }),
+  clearIntegration: (name: string) =>
+    request<void>(`/integrations/${name}`, { method: "DELETE" }),
 };
 
 /** Fetch a report with auth and trigger a browser download. */
