@@ -47,6 +47,7 @@ def make_enqueuer(pool: Any):
             job.tenant_id,
             job.program_id,
             job.pipeline,
+            list(job.targets),  # cascade: hostnames to scope this run to ([] = whole program)
             _job_id=job.dedup_key(),
             _defer_by=0,
         )

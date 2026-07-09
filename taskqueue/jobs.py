@@ -30,11 +30,23 @@ class Job:
     program_id: str
     pipeline: str  # "ingest" | "probe" | "scan" | "crawl" | "port_scan" | ...
     target: str | None = None  # specific host/IP, or None for whole-program
+    targets: tuple[str, ...] = ()  # cascade: scope this run to these hostnames
     priority: int = Priority.NORMAL
     scan_id: str = ""
     reason: str = ""  # why this was enqueued (audit / debugging)
     payload: dict = field(default_factory=dict)
 
     def dedup_key(self) -> str:
-        """Key used to collapse duplicate enqueues of the same work."""
-        return f"{self.tenant_id}:{self.program_id}:{self.pipeline}:{self.target or '*'}"
+        """Key used to collapse duplicate enqueues of the same work. A targeted
+        (cascade) job dedups on a hash of its target set, so it never collides with
+        the whole-program cadence job for the same pipeline."""
+        if self.targets:
+            import hashlib
+
+            # dedup key only — not security-sensitive, so sha1 (fast) is fine
+            joined = ",".join(sorted(self.targets)).encode()
+            digest = hashlib.sha1(joined, usedforsecurity=False).hexdigest()[:12]
+            scope = f"t:{digest}"
+        else:
+            scope = self.target or "*"
+        return f"{self.tenant_id}:{self.program_id}:{self.pipeline}:{scope}"

@@ -9,6 +9,7 @@ detection.
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlsplit
 
 from core.hashing import canonical_hash, endpoint_fingerprint
 from core.logging import logger
@@ -30,9 +31,13 @@ async def run_probe(
     tenant: TenantContext,
     program_id: str,
     timeout: float,
+    targets: set[str] | None = None,
     probe=httpx_probe,
 ) -> dict:
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
+    assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
+    if targets:  # cascade: scope this run to the newly discovered hosts
+        assets = [a for a in assets if a["hostname"] in targets]
 
     probeable: list[str] = []
     for asset in assets:
@@ -43,13 +48,17 @@ async def run_probe(
     if not probeable:
         logger.info("probe {}: nothing to probe (no assets yet)", program_id)
         return {
-            "probeable": 0, "alive": 0, "new": 0, "new_urls": [], "deltas": 0,
-            "skipped": True, "note": "no assets to probe yet — run discovery first",
+            "probeable": 0,
+            "alive": 0,
+            "new": 0,
+            "new_urls": [],
+            "deltas": 0,
+            "skipped": True,
+            "note": "no assets to probe yet — run discovery first",
         }
 
     logger.info(
-        "probing {} of {} asset(s) with httpx "
-        "(the rest didn't resolve or aren't HTTP-probeable)",
+        "probing {} of {} asset(s) with httpx (the rest didn't resolve or aren't HTTP-probeable)",
         len(probeable),
         len(assets),
     )
@@ -82,6 +91,8 @@ async def run_probe(
     res = await endpoint_repo.upsert_all(models)
     await delta_repo.record_all(deltas)
     new_urls = [m.url for m, x in zip(models, res, strict=True) if x.inserted]
+    # cascade: hosts that just came alive → crawl + port-scan them next
+    cascade_targets = sorted({urlsplit(u).hostname or "" for u in new_urls} - {""})
 
     logger.info(
         "probe {}: {} probeable, {} alive, {} new, {} deltas",
@@ -97,4 +108,5 @@ async def run_probe(
         "new": len(new_urls),
         "new_urls": new_urls,
         "deltas": len(deltas),
+        "cascade_targets": cascade_targets,
     }

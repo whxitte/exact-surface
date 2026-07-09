@@ -44,15 +44,15 @@ async def run_ingest(
     candidates = sorted(set(subs) | set(crt) | {apex.lower().rstrip(".")})
     logger.info(
         "found {} candidate(s) ({} subfinder, {} crt.sh); resolving with dnsx",
-        len(candidates), len(subs), len(crt),
+        len(candidates),
+        len(subs),
+        len(crt),
     )
 
     # Scope gate: never persist a host outside a verified apex.
     in_scope = [h for h in candidates if scope.owns_host(h)]
     resolved = await resolve(in_scope, timeout)
-    logger.info(
-        "dnsx resolved {}/{} in-scope host(s) to live IPs", len(resolved), len(in_scope)
-    )
+    logger.info("dnsx resolved {}/{} in-scope host(s) to live IPs", len(resolved), len(in_scope))
 
     models = [
         Asset(
@@ -83,4 +83,6 @@ async def run_ingest(
         "discovered": len(models),
         "new": len(new_hosts),
         "new_hosts": new_hosts,
+        # cascade: probe the newly discovered hosts immediately (event-driven path)
+        "cascade_targets": new_hosts,
     }

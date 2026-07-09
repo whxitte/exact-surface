@@ -41,6 +41,7 @@ async def run_scan(
     tenant: TenantContext,
     program_id: str,
     timeout: float,
+    targets: set[str] | None = None,
     scan=nuclei_scan,
 ) -> dict:
     tid = tenant.tenant_id
@@ -52,6 +53,8 @@ async def run_scan(
     aggressive_urls: list[str] = []
     for ep in endpoints:
         host = urlsplit(ep["url"]).hostname or ""
+        if targets and host not in targets:  # cascade: only scan the new hosts
+            continue
         decision = engine.evaluate(host, ips_by_host.get(host, []), scope)
         if not decision.permits(Action.HTTP_PROBE):
             continue
@@ -60,8 +63,13 @@ async def run_scan(
     if not safe_urls and not aggressive_urls:
         logger.info("scan {}: nothing to scan (no endpoints yet)", program_id)
         return {
-            "scanned_safe": 0, "scanned_aggressive": 0, "findings": 0, "new": 0, "new_findings": [],
-            "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
+            "scanned_safe": 0,
+            "scanned_aggressive": 0,
+            "findings": 0,
+            "new": 0,
+            "new_findings": [],
+            "skipped": True,
+            "note": "no endpoints to scan yet — probe/crawl first",
         }
 
     # nuclei runs the full template set over every URL — far slower than the generic

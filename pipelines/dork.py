@@ -35,7 +35,9 @@ async def run_dork(
         if not key or not cx:
             logger.info("dork {}: skipped (no search API key configured)", domain)
             return {
-                "hits": 0, "new": 0, "skipped": True,
+                "hits": 0,
+                "new": 0,
+                "skipped": True,
                 "note": "needs a Google CSE API key — add one in Settings",
             }
 

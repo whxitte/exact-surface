@@ -57,8 +57,10 @@ async def run_notify(
     ]
     if not channels:
         return {
-            "channels": 0, "delivered": 0,
-            "skipped": True, "note": "no notification channels configured",
+            "channels": 0,
+            "delivered": 0,
+            "skipped": True,
+            "note": "no notification channels configured",
         }
 
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)

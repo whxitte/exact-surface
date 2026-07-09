@@ -40,8 +40,11 @@ async def run_tls_scan(
     ]
     if not hosts:
         return {
-            "inspected": 0, "expired": 0, "new": 0,
-            "skipped": True, "note": "no TLS-probeable hosts yet",
+            "inspected": 0,
+            "expired": 0,
+            "new": 0,
+            "skipped": True,
+            "note": "no TLS-probeable hosts yet",
         }
 
     logger.info("tls: inspecting certs on {} host(s) with tlsx", len(hosts))

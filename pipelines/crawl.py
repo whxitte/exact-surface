@@ -44,6 +44,7 @@ async def run_crawl(
     program_id: str,
     apex: str,
     timeout: float,
+    targets: set[str] | None = None,
     gau=gau_fetch,
     wayback=wayback_fetch,
     katana=katana_crawl,
@@ -52,26 +53,32 @@ async def run_crawl(
     passive_timeout = min(timeout, MAX_PASSIVE_SECONDS)
     host_timeout = min(timeout, MAX_HOST_CRAWL_SECONDS)
 
-    # Passive archive sources (allowed for any in-scope program) — run concurrently.
-    logger.info("crawl: harvesting archives for {} (gau + waybackurls)", apex)
-    for name, result in zip(
-        ("gau", "waybackurls"),
-        await asyncio.gather(
-            gau(apex, passive_timeout), wayback(apex, passive_timeout),
-            return_exceptions=True,
-        ),
-        strict=True,
-    ):
-        if isinstance(result, BaseException):
-            logger.warning("crawl archive source {} failed for {}: {}", name, apex, result)
-        else:
-            urls.update(result)
-            logger.info("crawl: {} returned {} archived url(s)", name, len(result))
+    # Passive archive is apex-wide, so it's only worthwhile for the periodic full
+    # crawl. A targeted cascade run focuses on the specific new hosts (active katana
+    # only) — the apex archive was already harvested on the last full crawl.
+    if not targets:
+        logger.info("crawl: harvesting archives for {} (gau + waybackurls)", apex)
+        for name, result in zip(
+            ("gau", "waybackurls"),
+            await asyncio.gather(
+                gau(apex, passive_timeout),
+                wayback(apex, passive_timeout),
+                return_exceptions=True,
+            ),
+            strict=True,
+        ):
+            if isinstance(result, BaseException):
+                logger.warning("crawl archive source {} failed for {}: {}", name, apex, result)
+            else:
+                urls.update(result)
+                logger.info("crawl: {} returned {} archived url(s)", name, len(result))
 
     # Active crawl of hosts whose scope permits HTTP probing — capped so a domain
     # with dozens of subdomains cannot exceed the run's time budget.
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
     assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
+    if targets:  # cascade: crawl only the newly discovered hosts
+        assets = [a for a in assets if a["hostname"] in targets]
     crawl_hosts = [
         asset["hostname"]
         for asset in assets
@@ -109,11 +116,19 @@ async def run_crawl(
     if not assets and not in_scope_urls:
         logger.info("crawl {}: nothing to crawl yet (no assets, no archive urls)", apex)
         return {
-            "discovered_urls": 0, "in_scope": 0, "endpoints": 0, "new": 0,
-            "skipped": True, "note": "no assets discovered yet — run discovery first",
+            "discovered_urls": 0,
+            "in_scope": 0,
+            "endpoints": 0,
+            "new": 0,
+            "skipped": True,
+            "note": "no assets discovered yet — run discovery first",
         }
 
-    total, new = await EndpointRepo.from_mongo(mongo).upsert_many(models)
+    results = await EndpointRepo.from_mongo(mongo).upsert_all(models)
+    new_urls = [m.url for m, r in zip(models, results, strict=True) if r.inserted]
+    total, new = len(results), len(new_urls)
+    # cascade: hosts that gained new endpoints → scan + secret-scan them next
+    cascade_targets = sorted({urlsplit(u).hostname or "" for u in new_urls} - {""})
 
     logger.info("crawl {}: {} urls in-scope, {} new endpoints", apex, len(in_scope_urls), new)
     return {
@@ -121,4 +136,5 @@ async def run_crawl(
         "in_scope": len(in_scope_urls),
         "endpoints": total,
         "new": new,
+        "cascade_targets": cascade_targets,
     }

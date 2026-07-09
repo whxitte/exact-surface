@@ -31,6 +31,7 @@ async def run_secret_scan(
     tenant: TenantContext,
     program_id: str,
     hmac_key: bytes | None = None,
+    targets: set[str] | None = None,
     fetch=_default_fetch,
 ) -> dict:
     hmac_key = hmac_key or get_settings().secret_hash_key_bytes()
@@ -40,21 +41,27 @@ async def run_secret_scan(
     ips_by_host = {a["hostname"]: a.get("resolved_ips", []) for a in assets}
     endpoints = await EndpointRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
 
-    targets: list[str] = []
+    urls: list[str] = []
     for ep in endpoints:
         host = urlsplit(ep["url"]).hostname or ""
+        if targets and host not in targets:  # cascade: only scan the new hosts
+            continue
         if engine.evaluate(host, ips_by_host.get(host, []), scope).permits(Action.HTTP_PROBE):
-            targets.append(ep["url"])
+            urls.append(ep["url"])
 
-    if not targets:
+    if not urls:
         logger.info("secret scan {}: nothing to scan (no endpoints yet)", program_id)
         return {
-            "scanned": 0, "secrets": 0, "new": 0, "new_secrets": [],
-            "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
+            "scanned": 0,
+            "secrets": 0,
+            "new": 0,
+            "new_secrets": [],
+            "skipped": True,
+            "note": "no endpoints to scan yet — probe/crawl first",
         }
 
-    logger.info("secret-scanning {} endpoint(s)", len(targets))
-    hits = await scan_urls(targets, fetch=fetch)
+    logger.info("secret-scanning {} endpoint(s)", len(urls))
+    hits = await scan_urls(urls, fetch=fetch)
     models = [
         ExposedSecret(
             tenant_id=tid,
@@ -78,8 +85,8 @@ async def run_secret_scan(
     logger.info(
         "secret scan {}: {} urls, {} secrets, {} new",
         program_id,
-        len(targets),
+        len(urls),
         len(models),
         len(new),
     )
-    return {"scanned": len(targets), "secrets": len(models), "new": len(new), "new_secrets": new}
+    return {"scanned": len(urls), "secrets": len(models), "new": len(new), "new_secrets": new}

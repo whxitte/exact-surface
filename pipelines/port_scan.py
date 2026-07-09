@@ -28,11 +28,14 @@ async def run_port_scan(
     tenant: TenantContext,
     program_id: str,
     timeout: float,
+    targets: set[str] | None = None,
     naabu=scan_ports,
     nmap=None,
 ) -> dict:
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
     assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
+    if targets:  # cascade: scope this run to the newly discovered hosts
+        assets = [a for a in assets if a["hostname"] in targets]
 
     scannable = [
         a["hostname"]
@@ -44,7 +47,9 @@ async def run_port_scan(
     if not scannable:
         logger.info("port-scan {}: no confirmed-dedicated hosts to scan", program_id)
         return {
-            "scannable": 0, "ports": 0, "new": 0,
+            "scannable": 0,
+            "ports": 0,
+            "new": 0,
             "skipped": True,
             "note": "no confirmed-dedicated hosts — CDN/cloud-shared IPs are HTTP-probe only (§9b)",
         }

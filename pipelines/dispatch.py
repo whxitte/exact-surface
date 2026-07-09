@@ -41,6 +41,7 @@ async def run_pipeline(
     pipeline: str,
     timeout: float,
     hmac_key: bytes | None = None,
+    targets: tuple[str, ...] = (),
 ) -> dict:
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
@@ -51,6 +52,8 @@ async def run_pipeline(
 
     scope = build_program_scope(program, auth)
     apex = program["apex_domain"]
+    # cascade: when a job carries specific hostnames, phases scope their work to them
+    tset: set[str] | None = set(targets) or None
     common = dict(
         mongo=mongo,
         engine=engine,
@@ -64,19 +67,24 @@ async def run_pipeline(
         if pipeline == "ingest":
             return await run_ingest(**common, apex=apex)
         if pipeline == "probe":
-            return await run_probe(**common)
+            return await run_probe(**common, targets=tset)
         if pipeline == "crawl":
-            return await run_crawl(**common, apex=apex)
+            return await run_crawl(**common, apex=apex, targets=tset)
         if pipeline == "scan":
-            return await run_scan(**common)
+            return await run_scan(**common, targets=tset)
         if pipeline == "content_discovery":
             return await run_content_discovery(**common)
         if pipeline == "port_scan":
-            return await run_port_scan(**common)
+            return await run_port_scan(**common, targets=tset)
         if pipeline == "secrets":
             return await run_secret_scan(
-                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
-                program_id=program_id, hmac_key=hmac_key,
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                hmac_key=hmac_key,
+                targets=tset,
             )
         if pipeline == "cve_watch":
             return await run_cve_watch(mongo=mongo, tenant=tenant, program_id=program_id)
@@ -98,14 +106,20 @@ async def run_pipeline(
 
     audit = ScanRunRepo.from_mongo(mongo)
     run = ScanRun(
-        tenant_id=tenant.tenant_id, scan_id=uuid.uuid4().hex, program_id=program_id,
-        pipeline=pipeline, status=ScanStatus.RUNNING, started_at=datetime.now(UTC),
+        tenant_id=tenant.tenant_id,
+        scan_id=uuid.uuid4().hex,
+        program_id=program_id,
+        pipeline=pipeline,
+        status=ScanStatus.RUNNING,
+        started_at=datetime.now(UTC),
     )
     # Attribute every log line from this cadence run (tenant/program/scan/pipeline)
     # — the scheduler path previously logged with no context (t=- s=-).
     with bind_context(
-        tenant_id=tenant.tenant_id, scan_id=run.scan_id,
-        program_id=program_id, pipeline=pipeline,
+        tenant_id=tenant.tenant_id,
+        scan_id=run.scan_id,
+        program_id=program_id,
+        pipeline=pipeline,
     ):
         await audit.save(run)
         logger.info("{} started", pipeline)

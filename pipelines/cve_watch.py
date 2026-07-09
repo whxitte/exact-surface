@@ -53,8 +53,12 @@ async def run_cve_watch(
     if not tech_items:
         logger.info("cve-watch {}: skipped (no fingerprinted tech yet)", program_id)
         return {
-            "tech_items": 0, "matches": 0, "new_alertable": 0, "alerts": [],
-            "skipped": True, "note": "no fingerprinted tech yet — probe endpoints first",
+            "tech_items": 0,
+            "matches": 0,
+            "new_alertable": 0,
+            "alerts": [],
+            "skipped": True,
+            "note": "no fingerprinted tech yet — probe endpoints first",
         }
 
     records = await recent()

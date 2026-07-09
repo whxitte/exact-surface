@@ -33,8 +33,11 @@ async def run_service_scan(
     ports = await PortRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
     if not ports:
         return {
-            "ports": 0, "enriched": 0, "new": 0,
-            "skipped": True, "note": "no open ports — run the port scan first",
+            "ports": 0,
+            "enriched": 0,
+            "new": 0,
+            "skipped": True,
+            "note": "no open ports — run the port scan first",
         }
 
     ports_by_ip: dict[str, list[int]] = defaultdict(list)

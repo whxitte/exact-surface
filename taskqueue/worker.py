@@ -89,14 +89,25 @@ async def run_program_task(
     )
 
 
-async def run_pipeline_task(ctx: dict, tenant_id: str, program_id: str, pipeline: str) -> dict:
-    """arq task: run ONE named pipeline for a program (enqueued by the scheduler)."""
+async def run_pipeline_task(
+    ctx: dict,
+    tenant_id: str,
+    program_id: str,
+    pipeline: str,
+    targets: list[str] | None = None,
+) -> dict:
+    """arq task: run ONE named pipeline for a program (enqueued by the scheduler).
+
+    ``targets`` (optional hostnames) scopes the run to specific assets — set by the
+    event-driven cascade so a newly discovered host flows straight through the
+    downstream phases. After the run, new discoveries fan out to the next phases.
+    """
     from core.scope import default_engine
     from core.tenant import TenantContext
     from pipelines.dispatch import run_pipeline
 
     settings = ctx["settings"]
-    return await run_pipeline(
+    result = await run_pipeline(
         mongo=ctx["mongo"],
         engine=default_engine(),
         tenant=TenantContext(tenant_id=tenant_id),
@@ -104,7 +115,40 @@ async def run_pipeline_task(ctx: dict, tenant_id: str, program_id: str, pipeline
         pipeline=pipeline,
         timeout=settings.tool_default_timeout,
         hmac_key=settings.secret_hash_key_bytes(),
+        targets=tuple(targets or ()),
     )
+    await _emit_cascade(ctx, tenant_id, program_id, pipeline, result)
+    return result
+
+
+async def _emit_cascade(
+    ctx: dict, tenant_id: str, program_id: str, pipeline: str, result: dict
+) -> None:
+    """Enqueue the downstream phases for whatever this phase newly discovered.
+
+    Best-effort: a cascade failure must never fail a phase that already succeeded —
+    the periodic cadence still picks the work up."""
+    try:
+        from taskqueue.arq_client import make_enqueuer
+        from taskqueue.cascade import cascade_jobs
+
+        jobs = cascade_jobs(
+            pipeline=pipeline, result=result, tenant_id=tenant_id, program_id=program_id
+        )
+        pool = ctx.get("redis")
+        if not jobs or pool is None:
+            return
+        enqueue = make_enqueuer(pool)
+        for job in jobs:
+            await enqueue(job)
+        logger.info(
+            "cascade: {} → {} follow-on job(s) [{}]",
+            pipeline,
+            len(jobs),
+            ", ".join(sorted({j.pipeline for j in jobs})),
+        )
+    except Exception as exc:  # noqa: BLE001 - cascade is best-effort
+        logger.warning("cascade after {} failed: {}", pipeline, exc)
 
 
 def _redis_settings():

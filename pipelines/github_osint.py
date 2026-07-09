@@ -32,8 +32,11 @@ async def run_github_leak_scan(
     if search is None and not token:
         logger.info("github-osint {}: skipped (no GitHub token configured)", domain)
         return {
-            "hits": 0, "new": 0, "new_leaks": [],
-            "skipped": True, "note": "GitHub token not configured — add one in Settings",
+            "hits": 0,
+            "new": 0,
+            "new_leaks": [],
+            "skipped": True,
+            "note": "GitHub token not configured — add one in Settings",
         }
     hits = await search_leaks(domain, search=search, token=token)
 
