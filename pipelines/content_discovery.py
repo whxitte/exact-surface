@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.errors import ToolNotFound
 from core.hashing import endpoint_fingerprint
 from core.logging import logger
 from core.models import Endpoint
@@ -56,7 +57,20 @@ async def run_content_discovery(
         scanned += 1
         logger.info("content-discovery on {} with feroxbuster", host)
         wordlist = wordlist_for(tech_by_host.get(host, []))
-        for hit in await discover(f"https://{host}", wordlist, timeout):
+        try:
+            hits = await discover(f"https://{host}", wordlist, timeout)
+        except ToolNotFound:
+            logger.warning("feroxbuster not found, trying fallback to ffuf for {}", host)
+            try:
+                from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
+
+                hits = await ffuf_fuzz(f"https://{host}/FUZZ", wordlist, timeout)
+            except ToolNotFound:
+                logger.error(
+                    "ffuf fallback also failed (not found); skipping content-discovery for {}", host
+                )
+                hits = []
+        for hit in hits:
             found_models.append(
                 Endpoint(
                     tenant_id=tid,
@@ -71,7 +85,9 @@ async def run_content_discovery(
     if scanned == 0:
         logger.info("content-discovery {}: no confirmed-dedicated hosts to scan", program_id)
         return {
-            "hosts": 0, "paths": 0, "new": 0,
+            "hosts": 0,
+            "paths": 0,
+            "new": 0,
             "skipped": True,
             "note": "no confirmed-dedicated hosts — bruteforce withheld on shared infra (§9b)",
         }

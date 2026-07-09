@@ -102,3 +102,44 @@ async def test_content_discovery_dedicated_only_and_tech_aware():
     assert calls[0]["url"] == "https://app.customer.com"
     assert calls[0]["wordlist"] == "wp-common.txt"
     assert res["new"] == 1
+
+
+async def test_content_discovery_fallback_to_ffuf(monkeypatch):
+    from core.errors import ToolNotFound
+
+    mongo = FakeMongo()
+    ar = AssetRepo(mongo.collection("assets"))
+    await ar.upsert(
+        Asset(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint=asset_fingerprint("p1", "app.customer.com"),
+            hostname="app.customer.com",
+            resolved_ips=["45.55.1.1"],
+        )
+    )  # dedicated
+
+    async def fake_discover(url, wordlist, _timeout):
+        raise ToolNotFound("feroxbuster")
+
+    ffuf_calls = []
+    async def fake_fuzz(url, wordlist, _timeout):
+        ffuf_calls.append({"url": url, "wordlist": wordlist})
+        return [{"url": "https://app.customer.com/admin", "status": 200}]
+
+    monkeypatch.setattr("modules.content_discovery.ffuf.fuzz", fake_fuzz)
+
+    res = await run_content_discovery(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        timeout=10,
+        discover=fake_discover,
+    )
+
+    assert len(ffuf_calls) == 1
+    assert ffuf_calls[0]["url"] == "https://app.customer.com/FUZZ"
+    assert res["new"] == 1
+

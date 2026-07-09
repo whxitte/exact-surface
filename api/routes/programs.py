@@ -175,6 +175,24 @@ async def set_scan_config(
     return {"program_id": program["program_id"], "scan_shared_infra": scan_shared_infra}
 
 
+@router.post("/{program_id}/modules", tags=["programs"])
+async def set_modules(
+    enabled: list[str],
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Enable/disable optional scan modules (tls, service_scan, dork). Unknown names
+    are ignored; disabled modules render as a gray node and do no work."""
+    from pipelines.orchestrate import OPTIONAL_MODULES
+
+    modules = [m for m in enabled if m in OPTIONAL_MODULES]
+    await ProgramRepo.from_mongo(mongo).set_enabled_modules(
+        principal.tenant_id, program["program_id"], modules
+    )
+    return {"program_id": program["program_id"], "enabled_modules": modules}
+
+
 # -- scan trigger (auth-gated) ----------------------------------------------
 @router.post("/{program_id}/scan", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_scan(

@@ -26,6 +26,7 @@ from pipelines.content_discovery import run_content_discovery
 from pipelines.correlate import run_correlate
 from pipelines.crawl import run_crawl
 from pipelines.cve_watch import run_cve_watch
+from pipelines.dork import run_dork
 from pipelines.github_osint import run_github_leak_scan
 from pipelines.ingest import run_ingest
 from pipelines.notify import run_notify
@@ -33,6 +34,8 @@ from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
+from pipelines.service_scan import run_service_scan
+from pipelines.tls import run_tls_scan
 
 
 def build_program_scope(program: dict, authorization: dict | None) -> ProgramScope:
@@ -55,20 +58,28 @@ def _auth_is_current(auth: dict | None) -> bool:
     return bool(auth and auth.get("apex_verified") and not auth.get("revoked"))
 
 
+#: optional modules — off by default, toggled per program via ``enabled_modules``.
+#: Each has a stage in the pipeline that renders as a (gray) SKIPPED node when the
+#: module is disabled, and runs its tool when enabled.
+OPTIONAL_MODULES: tuple[str, ...] = ("tls", "service_scan", "dork")
+
 #: canonical full-pipeline stage order — the complete outside-in attacker chain,
 #: shared with the API so an enqueue-time QUEUED ScanRun pre-renders the same
-#: stepper. Stages self-skip when they have nothing to do (e.g. no dedicated hosts
-#: for ports/content, no channels for notify) — see each pipeline's skip return.
+#: stepper. Core stages self-skip when they have nothing to do; the OPTIONAL_MODULES
+#: stages self-skip as "disabled" unless enabled for the program.
 FULL_STAGE_NAMES: tuple[str, ...] = (
     "ingest",
     "probe",
+    "tls",  # optional
     "crawl",
     "content_discovery",
     "port_scan",
+    "service_scan",  # optional
     "scan",
     "secrets",
     "cve_watch",
     "github_osint",
+    "dork",  # optional
     "correlate",
     "notify",
 )
@@ -84,16 +95,17 @@ async def run_full_pipeline(
     apex: str,
     timeout: float,
     scan_id: str | None = None,
+    enabled_modules: tuple[str, ...] = (),
     **injected: Any,
 ) -> dict:
-    """Run the full outside-in pipeline: discover → probe → crawl → content →
-    ports → scan → secrets → CVE match → GitHub OSINT → correlate → notify.
+    """Run the full outside-in pipeline: discover → probe → (tls) → crawl → content
+    → ports → (services) → scan → secrets → CVE → GitHub OSINT → (dork) → correlate
+    → notify.
 
     ``scan_id`` reuses a pre-created (QUEUED) ScanRun so the API's enqueue-time row
     becomes this run rather than a second row; omitted, a fresh id is generated.
-    ``injected`` forwards test doubles per stage (``subfinder``/``crtsh``/
-    ``resolve``, ``probe``, ``gau``/``wayback``/``katana``, ``discover``, ``naabu``,
-    ``scan``, ``fetch``, ``recent``/``kev``, ``search``, ``senders``)."""
+    ``enabled_modules`` turns on the OPTIONAL_MODULES stages (else they render as a
+    disabled/gray node). ``injected`` forwards test doubles per stage."""
     scan_id = scan_id or uuid.uuid4().hex
     audit = ScanRunRepo.from_mongo(mongo)
 
@@ -110,23 +122,54 @@ async def run_full_pipeline(
     def inj(*keys: str) -> dict:
         return {k: injected[k] for k in keys if k in injected}
 
+    enabled = set(enabled_modules)
+
+    async def _disabled() -> dict:
+        return {"skipped": True, "disabled": True, "note": "not enabled — turn on in settings"}
+
+    def optional(module: str, real):
+        """Run *real* (a zero-arg factory) only if the module is enabled; else the
+        stage renders as a disabled node."""
+        return real if module in enabled else _disabled
+
     # (name, coroutine factory) in execution order — the complete attacker chain.
+    # OPTIONAL_MODULES stages (tls/service_scan/dork) self-skip when not enabled.
     stage_defs: list[tuple[str, Any]] = [
         ("ingest", lambda: run_ingest(**common, apex=apex, **inj("subfinder", "crtsh", "resolve"))),
         ("probe", lambda: run_probe(**common, **inj("probe"))),
+        ("tls", optional("tls", lambda: run_tls_scan(**common, **inj("tlsinspect")))),
         ("crawl", lambda: run_crawl(**common, apex=apex, **inj("gau", "wayback", "katana"))),
         ("content_discovery", lambda: run_content_discovery(**common, **inj("discover"))),
         ("port_scan", lambda: run_port_scan(**common, **inj("naabu"))),
+        (
+            "service_scan",
+            optional("service_scan", lambda: run_service_scan(**common, **inj("nmap"))),
+        ),
         ("scan", lambda: run_scan(**common, **inj("scan"))),
         (
             "secrets",
             lambda: run_secret_scan(
-                mongo=mongo, engine=engine, scope=scope, tenant=tenant,
-                program_id=program_id, **inj("fetch"),
+                mongo=mongo,
+                engine=engine,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                **inj("fetch"),
             ),
         ),
         ("cve_watch", lambda: run_cve_watch(**core, **inj("recent", "kev"))),
         ("github_osint", lambda: run_github_leak_scan(**core, domain=apex, **inj("search"))),
+        (
+            "dork",
+            optional(
+                "dork",
+                lambda: run_dork(
+                    **core,
+                    domain=apex,
+                    **({"search": injected["dork_search"]} if "dork_search" in injected else {}),
+                ),
+            ),
+        ),
         ("correlate", lambda: run_correlate(**core)),
         ("notify", lambda: run_notify(**core, **inj("senders"))),
     ]
@@ -232,4 +275,5 @@ async def run_program(
         apex=program["apex_domain"],
         timeout=timeout,
         scan_id=scan_id,
+        enabled_modules=tuple(program.get("enabled_modules", [])),
     )

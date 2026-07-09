@@ -15,6 +15,7 @@ from core.models import Authorization, IpScopeEntry, Program
 from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
+from db.audit import ScanRunRepo
 from db.programs import ProgramRepo
 from pipelines.ingest import run_ingest
 from pipelines.orchestrate import build_program_scope, run_full_pipeline, run_program
@@ -203,23 +204,76 @@ async def test_full_pipeline_is_idempotent():
 
 
 async def test_full_pipeline_records_per_stage_progress():
-    from db.audit import ScanRunRepo
 
     mongo = FakeMongo()
     result = await run_full_pipeline(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-        program_id="p1", apex="customer.com", timeout=10, **_injected([]),
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        **_injected([]),
     )
     run = await mongo.collection("scan_runs").find_one({"scan_id": result["scan_id"]})
     assert run["status"] == "success"
     names = [s["name"] for s in run["stages"]]
     assert names == [
-        "ingest", "probe", "crawl", "content_discovery", "port_scan", "scan",
-        "secrets", "cve_watch", "github_osint", "correlate", "notify",
+        "ingest",
+        "probe",
+        "tls",
+        "crawl",
+        "content_discovery",
+        "port_scan",
+        "service_scan",
+        "scan",
+        "secrets",
+        "cve_watch",
+        "github_osint",
+        "dork",
+        "correlate",
+        "notify",
     ]
     # early stages ran with data; the rest either ran or skipped, none failed
     assert all(s["status"] in ("success", "skipped") for s in run["stages"])
-    assert {s["name"]: s["status"] for s in run["stages"]}["ingest"] == "success"
+    by = {s["name"]: s for s in run["stages"]}
+    assert by["ingest"]["status"] == "success"
+    # optional modules are off by default → rendered as a disabled/skipped node
+    assert (
+        by["tls"]["status"] == "skipped"
+        and by["tls"]["note"] == "not enabled — turn on in settings"
+    )
+    assert by["service_scan"]["status"] == "skipped"
+    assert by["dork"]["status"] == "skipped"
+
+
+async def test_enabled_optional_module_runs():
+    mongo = FakeMongo()
+
+    tls_calls: list = []
+
+    async def fake_tls(hosts, _t):
+        tls_calls.append(list(hosts))
+        return []
+
+    result = await run_full_pipeline(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        enabled_modules=("tls",),
+        tlsinspect=fake_tls,
+        **_injected([]),
+    )
+    run = await mongo.collection("scan_runs").find_one({"scan_id": result["scan_id"]})
+    by = {s["name"]: s for s in run["stages"]}
+    assert by["tls"]["status"] == "success"  # enabled → ran (not the disabled note)
+    assert tls_calls  # tlsx actually invoked on the probeable hosts
+    assert by["service_scan"]["status"] == "skipped"  # still off
     # per-stage stats captured (ingest discovered assets)
     ingest_stage = next(s for s in run["stages"] if s["name"] == "ingest")
     assert ingest_stage["stats"].get("new", 0) > 0
@@ -236,8 +290,14 @@ async def test_full_pipeline_marks_failing_stage_and_leaves_later_stages_queued(
     injected = _injected([]) | {"scan": boom_scan}
     with pytest.raises(RuntimeError, match="scanner exploded"):
         await run_full_pipeline(
-            mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-            program_id="p1", apex="customer.com", timeout=10, **injected,
+            mongo=mongo,
+            engine=ENGINE,
+            scope=SCOPE,
+            tenant=TENANT,
+            program_id="p1",
+            apex="customer.com",
+            timeout=10,
+            **injected,
         )
     run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
     assert run["status"] == "failed" and run["error"].startswith("scan:")
@@ -268,8 +328,14 @@ async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
         injected = _injected([]) | {"probe": slow_probe}
         with pytest.raises(asyncio.TimeoutError):
             await run_full_pipeline(
-                mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-                program_id="p1", apex="customer.com", timeout=10, **injected,
+                mongo=mongo,
+                engine=ENGINE,
+                scope=SCOPE,
+                tenant=TENANT,
+                program_id="p1",
+                apex="customer.com",
+                timeout=10,
+                **injected,
             )
     finally:
         orch.get_settings = orig

@@ -23,8 +23,22 @@ async def run_dork(
     tenant: TenantContext,
     program_id: str,
     domain: str,
-    search,
+    search=None,
 ) -> dict:
+    # Default search = Google CSE from settings; skip cleanly if no key configured.
+    if search is None:
+        from core.config import get_settings
+        from modules.dorking.google import search as google_search
+
+        s = get_settings()
+        key = s.google_cse_key.get_secret_value() if s.google_cse_key else None
+        if not key or not s.google_cse_cx:
+            logger.info("dork {}: skipped (no search API key configured)", domain)
+            return {"hits": 0, "new": 0, "skipped": True, "note": "needs a Google CSE API key"}
+
+        async def search(query: str) -> list[dict]:  # noqa: A001 - shadow is intentional
+            return await google_search(query, key=key, cx=s.google_cse_cx)
+
     models: list[Finding] = []
     seen: set[str] = set()
     for dork in render(domain):

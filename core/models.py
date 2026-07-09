@@ -131,6 +131,9 @@ class Program(TenantScopedModel):
     #: §9b opt-in: customer attests they own the cloud infra their domain runs on,
     #: unlocking port/content/active scans on cloud/public IPs (not third-party CDNs).
     scan_shared_infra: bool = False
+    #: optional modules turned on for this program (see orchestrate.OPTIONAL_MODULES);
+    #: disabled ones render as a gray node and do no work.
+    enabled_modules: list[str] = Field(default_factory=list)
 
 
 class IpScopeEntry(BaseModel):
