@@ -56,6 +56,7 @@ export interface Program {
   verified: boolean;
   enabled: boolean;
   scan_shared_infra?: boolean;
+  enabled_modules?: string[];
   verification_method?: string | null;
   created_at?: string;
 }
@@ -165,6 +166,11 @@ export const api = {
       `/programs/${id}/scan-config?scan_shared_infra=${value}`,
       { method: "POST" },
     ),
+  setModules: (id: string, enabled: string[]) =>
+    request<{ program_id: string; enabled_modules: string[] }>(`/programs/${id}/modules`, {
+      method: "POST",
+      body: JSON.stringify(enabled),
+    }),
 
   listFindings: (id: string, q: Record<string, string> = {}) => {
     const qs = new URLSearchParams(q).toString();

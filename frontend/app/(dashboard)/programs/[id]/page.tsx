@@ -74,6 +74,16 @@ export default function ProgramDetail() {
       setMsg((e as Error).message || "Could not update scan config.");
     }
   }
+  async function toggleModule(mod: string, on: boolean) {
+    const current = program?.enabled_modules || [];
+    const next = on ? [...new Set([...current, mod])] : current.filter((m) => m !== mod);
+    try {
+      await api.setModules(id, next);
+      loadProgram();
+    } catch (e) {
+      setMsg((e as Error).message || "Could not update modules.");
+    }
+  }
   async function scan() {
     setScanBusy(true);
     try {
@@ -176,6 +186,34 @@ export default function ProgramDetail() {
             </label>
           </div>
         )
+      )}
+
+      {/* Optional modules */}
+      {program?.verified && (
+        <Card>
+          <CardContent className="p-4">
+            <div className="mb-2 text-sm font-medium text-muted-foreground">Optional modules</div>
+            <div className="flex flex-wrap gap-x-6 gap-y-2">
+              {(
+                [
+                  ["tls", "TLS inspection", "cert chain + expiry (tlsx)"],
+                  ["service_scan", "Service ID", "nmap -sV on open ports"],
+                  ["dork", "Dorking", "search-engine exposures (needs Google CSE key)"],
+                ] as const
+              ).map(([mod, label, hint]) => (
+                <label key={mod} className="flex cursor-pointer items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={(program.enabled_modules || []).includes(mod)}
+                    onChange={(e) => toggleModule(mod, e.target.checked)}
+                  />
+                  <span>{label}</span>
+                  <span className="text-xs text-muted-foreground">— {hint}</span>
+                </label>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {/* Reports */}

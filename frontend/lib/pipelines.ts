@@ -14,6 +14,14 @@ export const PIPELINE_INFO: Record<string, { label: string; desc: string }> = {
     label: "Probe",
     desc: "Check which hosts are alive and fingerprint their tech stack (httpx).",
   },
+  tls: {
+    label: "TLS",
+    desc: "Inspect certificate chains + expiry on alive hosts (tlsx).",
+  },
+  service_scan: {
+    label: "Services",
+    desc: "Identify service/version on open ports (nmap -sV).",
+  },
   crawl: {
     label: "Crawl",
     desc: "Gather endpoints from archives (gau/wayback) and active crawling (katana).",

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import {
   CheckCircle2, XCircle, Loader2, Clock, MinusCircle, AlertTriangle,
-  ChevronRight, ChevronDown, Terminal,
+  ChevronRight, ChevronDown, Terminal, Ban,
 } from "lucide-react";
 import { api, type ScanRun, type ScanStage } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -49,6 +49,9 @@ function stageStat(st: ScanStage): string {
   return statsSummary(st.stats);
 }
 
+// A disabled optional module (toggle off) — rendered distinctly from a normal skip.
+const isDisabled = (s: ScanStage) => s.note === "not enabled — turn on in settings";
+
 function StageStepper({ stages }: { stages: ScanStage[] }) {
   // stages that need an explicit explanation (skipped reason / failure)
   const explain = stages.filter((s) => s.status === "skipped" || s.status === "failed");
@@ -82,6 +85,8 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
                     <Loader2 className="h-3 w-3 animate-spin" />
                   ) : st.status === "failed" ? (
                     <XCircle className="h-3 w-3" />
+                  ) : isDisabled(st) ? (
+                    <Ban className="h-3 w-3 opacity-50" />
                   ) : st.status === "skipped" ? (
                     <MinusCircle className="h-3 w-3" />
                   ) : done ? (
@@ -117,9 +122,11 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
                   st.status === "failed" ? "text-severity-critical" : "text-muted-foreground",
                 )}
               >
-                {pipelineLabel(st.name)} {st.status}
+                {pipelineLabel(st.name)} {isDisabled(st) ? "disabled" : st.status}
               </span>
-              {st.note && <span className="text-muted-foreground">— {st.note}</span>}
+              {st.note && !isDisabled(st) && (
+                <span className="text-muted-foreground">— {st.note}</span>
+              )}
             </div>
           ))}
         </div>
