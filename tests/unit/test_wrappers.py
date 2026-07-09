@@ -140,3 +140,17 @@ async def test_stream_tool_keeps_partial_output_on_timeout():
         "sh", ["-c", "printf 'early\\n'; sleep 5"], timeout=0.5
     )
     assert timed_out and "early" in out
+
+
+async def test_stream_tool_handles_lines_over_64kb():
+    # A single JSONL line larger than asyncio's 64 KB StreamReader limit must NOT
+    # raise "Separator is not found, and chunk exceed the limit" (the nuclei crash).
+    from modules.exec import stream_tool
+
+    big = "x" * 200_000  # 200 KB, well past the 64 KB readline limit
+    seen: list[str] = []
+    rc, out, _err, timed_out = await stream_tool(
+        "sh", ["-c", f"printf '%s\\nsmall\\n' '{big}'"], timeout=10, on_stdout=seen.append
+    )
+    assert not timed_out and rc == 0
+    assert out == [big, "small"] and seen == [big, "small"]

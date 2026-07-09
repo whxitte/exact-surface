@@ -115,8 +115,25 @@ async def stream_tool(
     stderr_lines: list[str] = []
 
     async def _pump(stream, sink, cb) -> None:
-        async for raw in stream:
-            line = raw.decode(errors="replace").rstrip("\n")
+        # Read fixed-size chunks and split on newlines ourselves. `async for`/
+        # readline() cap a single line at asyncio's StreamReader limit (64 KB) and
+        # raise ValueError past it — nuclei JSONL findings that embed a large HTTP
+        # response blow through that and would kill the whole scan. Chunked reads
+        # have no per-line limit.
+        buf = b""
+        while True:
+            chunk = await stream.read(65536)
+            if not chunk:
+                break
+            buf += chunk
+            while b"\n" in buf:
+                raw, buf = buf.split(b"\n", 1)
+                line = raw.decode(errors="replace")
+                sink.append(line)
+                if cb is not None:
+                    cb(line)
+        if buf:  # trailing line with no final newline
+            line = buf.decode(errors="replace")
             sink.append(line)
             if cb is not None:
                 cb(line)
