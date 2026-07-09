@@ -160,9 +160,9 @@ async def test_scheduler_tick_reaps_before_planning():
     await AuthorizationRepo.from_mongo(mongo).save(
         Authorization(tenant_id="t1", program_id="p1", authorized_by="u", apex_verified=True)
     )
-    # older than the default backstop (scan_run_stale_seconds = 14400s / 4h)
+    # older than the default backstop (scan_run_stale_seconds = 21600s / 6h)
     await _save(
-        mongo, scan_id="stale", status=ScanStatus.RUNNING, started_at=NOW - timedelta(hours=6)
+        mongo, scan_id="stale", status=ScanStatus.RUNNING, started_at=NOW - timedelta(hours=8)
     )
 
     class _Enq:

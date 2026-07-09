@@ -83,6 +83,69 @@ async def run_tool(
     return run
 
 
+async def stream_tool(
+    binary: str,
+    args: Sequence[str],
+    *,
+    timeout: float,
+    stdin: str | None = None,
+    on_stdout=None,
+    on_stderr=None,
+) -> tuple[int, list[str], str, bool]:
+    """Run a tool, streaming stdout/stderr line-by-line to callbacks as they arrive.
+
+    Unlike :func:`run_tool` (which buffers everything until exit), this surfaces
+    output live — essential for a long scanner like nuclei so progress and findings
+    show up in the logs in real time. Returns ``(returncode, stdout_lines,
+    stderr_text, timed_out)``. On timeout the process is killed but whatever was
+    already read is returned — partial results are never lost.
+    """
+    if shutil.which(binary) is None:
+        raise ToolNotFound(binary)
+
+    logger.debug("exec(stream): {} {}", binary, " ".join(args))
+    proc = await asyncio.create_subprocess_exec(
+        binary,
+        *args,
+        stdin=asyncio.subprocess.PIPE if stdin is not None else None,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+
+    async def _pump(stream, sink, cb) -> None:
+        async for raw in stream:
+            line = raw.decode(errors="replace").rstrip("\n")
+            sink.append(line)
+            if cb is not None:
+                cb(line)
+
+    async def _feed() -> None:
+        if stdin is not None and proc.stdin is not None:
+            proc.stdin.write(stdin.encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
+
+    timed_out = False
+    try:
+        await asyncio.wait_for(
+            asyncio.gather(
+                _feed(),
+                _pump(proc.stdout, stdout_lines, on_stdout),
+                _pump(proc.stderr, stderr_lines, on_stderr),
+            ),
+            timeout=timeout,
+        )
+        await proc.wait()
+    except TimeoutError:
+        timed_out = True
+        proc.kill()
+        await proc.wait()
+        logger.warning("tool {} killed after {:.0f}s (partial output kept)", binary, timeout)
+    return proc.returncode or 0, stdout_lines, "\n".join(stderr_lines), timed_out
+
+
 def iter_jsonl(text: str) -> Iterator[dict]:
     """Yield JSON objects from newline-delimited JSON, skipping blank/non-JSON lines."""
     for line in text.splitlines():

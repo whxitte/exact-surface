@@ -118,3 +118,25 @@ async def test_nuclei_aggressive_drops_tag_restriction_but_keeps_excludes():
     args = cap[0]["args"]
     assert "-tags" not in args  # aggressive widens template set
     assert "-etags" in args  # but still excludes harmful tags
+
+
+# -- stream_tool: live streaming + partial-on-timeout (nuclei's runner) -------
+async def test_stream_tool_streams_lines_and_calls_back():
+    from modules.exec import stream_tool
+
+    seen: list[str] = []
+    rc, out, _err, timed_out = await stream_tool(
+        "sh", ["-c", "printf 'a\\nb\\n'"], timeout=5, on_stdout=seen.append
+    )
+    assert not timed_out and rc == 0
+    assert out == ["a", "b"] and seen == ["a", "b"]
+
+
+async def test_stream_tool_keeps_partial_output_on_timeout():
+    from modules.exec import stream_tool
+
+    # emits one line, then hangs → killed at the timeout, but the line is kept
+    _rc, out, _err, timed_out = await stream_tool(
+        "sh", ["-c", "printf 'early\\n'; sleep 5"], timeout=0.5
+    )
+    assert timed_out and "early" in out

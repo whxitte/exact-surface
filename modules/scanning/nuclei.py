@@ -9,10 +9,11 @@ same exclusions — detection only, never exploitation.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable, Callable
 
 from core.logging import logger
-from modules.exec import iter_jsonl, run_tool
+from modules.exec import stream_tool
 
 Runner = Callable[..., Awaitable[list[dict]]]
 
@@ -21,14 +22,47 @@ SAFE_EXCLUDE_TAGS = ("dos", "intrusive", "fuzz")
 
 
 async def _default_runner(binary: str, args, *, timeout: float, stdin: str | None = None):
-    """Run nuclei and surface a silent failure. nuclei exiting fast with no output
-    but a stderr message usually means missing templates or a config error — that
-    would make every scan a no-op, so we log it loudly instead of hiding it."""
-    run = await run_tool(binary, args, timeout=timeout, stdin=stdin)
-    if not run.stdout.strip() and run.returncode != 0 and run.stderr.strip():
-        last = run.stderr.strip().splitlines()[-1][:200]
-        logger.warning("nuclei exited {} with no output — {}", run.returncode, last)
-    return list(iter_jsonl(run.stdout))
+    """Run nuclei with LIVE output: each finding + its periodic ``-stats`` progress
+    are logged as they happen (so you can see it working in the worker logs), and on
+    timeout whatever it found so far is kept rather than discarded."""
+    rows: list[dict] = []
+
+    def on_stdout(line: str) -> None:
+        line = line.strip()
+        if not line:
+            return
+        try:
+            obj = json.loads(line)
+        except json.JSONDecodeError:
+            return
+        if isinstance(obj, dict):
+            rows.append(obj)
+            info = obj.get("info") or {}
+            logger.info(
+                "nuclei ⚑ [{}] {} — {}",
+                (info.get("severity") or "info"),
+                info.get("name") or obj.get("template-id") or "?",
+                obj.get("matched-at") or obj.get("host") or "",
+            )
+
+    def on_stderr(line: str) -> None:
+        # nuclei -stats prints progress here (templates done, requests, matches, ETA)
+        line = line.strip()
+        if line:
+            logger.info("nuclei: {}", line[:300])
+
+    rc, _out, stderr, timed_out = await stream_tool(
+        binary, args, timeout=timeout, stdin=stdin, on_stdout=on_stdout, on_stderr=on_stderr
+    )
+    if timed_out:
+        logger.warning(
+            "nuclei hit the {:.0f}s budget — keeping {} finding(s) found so far", timeout, len(rows)
+        )
+    elif not rows and rc != 0 and stderr.strip():
+        logger.warning(
+            "nuclei exited {} with no output — {}", rc, stderr.strip().splitlines()[-1][:200]
+        )
+    return rows
 
 
 async def scan(
@@ -47,7 +81,20 @@ async def scan(
     if not urls:
         return []
 
-    args = ["-silent", "-jsonl", "-no-color", "-duc", "-etags", ",".join(SAFE_EXCLUDE_TAGS)]
+    # -stats + interval so progress streams to the logs; -c widens template
+    # concurrency to finish a big URL set in reasonable time.
+    args = [
+        "-jsonl",
+        "-no-color",
+        "-duc",
+        "-stats",
+        "-si",
+        "20",
+        "-c",
+        "50",
+        "-etags",
+        ",".join(SAFE_EXCLUDE_TAGS),
+    ]
     if not aggressive:
         # HTTP-layer-only targets: passive-leaning tags, no active exploitation attempts.
         args += ["-tags", "exposure,misconfig,tech,ssl,cve,default-login"]

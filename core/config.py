@@ -79,15 +79,16 @@ class Settings(BaseSettings):
     worker_concurrency: int = Field(default=4)
     tool_default_timeout: float = Field(default=300.0)
     scan_tool_timeout: float = Field(
-        default=1800.0,
+        default=3600.0,
         description=(
             "Timeout for the nuclei scan specifically — it runs the full template set "
-            "against every discovered URL, so on a real target it takes many minutes "
-            "(the generic 300s tool timeout cut it off mid-scan). Kept below stage_timeout."
+            "against every discovered URL (very slow on a big aggressive URL set). "
+            "nuclei streams findings live and keeps partial results at this budget, so "
+            "this bounds it rather than failing it. Kept below stage_timeout."
         ),
     )
     stage_timeout: float = Field(
-        default=2400.0,
+        default=4200.0,
         description=(
             "Hard per-stage ceiling in the full pipeline. A stuck stage fails cleanly "
             "(TimeoutError → stage FAILED) instead of hanging the whole job. Must exceed "
@@ -95,7 +96,7 @@ class Settings(BaseSettings):
         ),
     )
     worker_job_timeout: int = Field(
-        default=7200,
+        default=10800,
         description=(
             "arq per-job timeout. Above the realistic sum of all full-pipeline stage "
             "budgets so stages self-bound and arq never hard-cancels a live job (a "
@@ -109,7 +110,7 @@ class Settings(BaseSettings):
         default=25, description="Fairness cap: max jobs enqueued per tenant per tick"
     )
     scan_run_stale_seconds: int = Field(
-        default=14400,
+        default=21600,
         description=(
             "A queued/running ScanRun older than this is treated as orphaned and reaped "
             "to FAILED. A last-resort backstop: kept above worker_job_timeout so it only "
