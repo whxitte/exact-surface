@@ -64,16 +64,22 @@ async def run_scan(
             "skipped": True, "note": "no endpoints to scan yet — probe/crawl first",
         }
 
+    # nuclei runs the full template set over every URL — far slower than the generic
+    # tool timeout allows, so give it its own (larger) budget.
+    from core.config import get_settings
+
+    nuclei_timeout = max(timeout, get_settings().scan_tool_timeout)
     logger.info(
-        "scanning {} safe + {} aggressive url(s) with nuclei",
+        "scanning {} safe + {} aggressive url(s) with nuclei (timeout {:.0f}s)",
         len(safe_urls),
         len(aggressive_urls),
+        nuclei_timeout,
     )
     raw: list[dict] = []
     if safe_urls:
-        raw += await scan(safe_urls, timeout, aggressive=False)
+        raw += await scan(safe_urls, nuclei_timeout, aggressive=False)
     if aggressive_urls:
-        raw += await scan(aggressive_urls, timeout, aggressive=True)
+        raw += await scan(aggressive_urls, nuclei_timeout, aggressive=True)
 
     models = [
         Finding(
