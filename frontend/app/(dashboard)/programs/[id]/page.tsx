@@ -12,6 +12,7 @@ import {
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ScheduleCard } from "@/components/schedule-card";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
@@ -256,6 +257,9 @@ export default function ProgramDetail() {
           </CardContent>
         </Card>
       )}
+
+      {/* Scan schedule (cadence + last/next scan breakdown) */}
+      {program?.verified && <ScheduleCard programId={id} />}
 
       {/* Reports */}
       {program?.verified && (

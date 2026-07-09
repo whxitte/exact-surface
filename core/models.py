@@ -61,6 +61,9 @@ class Tenant(BaseModel):
     tenant_id: str
     name: str
     plan: Plan = Plan.FREE
+    #: account-wide per-pipeline cadence defaults (seconds); a program's own
+    #: cadence_overrides win over these. See taskqueue.cadence.effective_cadence.
+    cadence_overrides: dict[str, int] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -134,6 +137,12 @@ class Program(TenantScopedModel):
     #: optional modules turned on for this program (see orchestrate.OPTIONAL_MODULES);
     #: disabled ones render as a gray node and do no work.
     enabled_modules: list[str] = Field(default_factory=list)
+    #: per-pipeline cadence overrides (seconds) for THIS program; falls back to the
+    #: tenant defaults, then the built-ins. See taskqueue.cadence.effective_cadence.
+    cadence_overrides: dict[str, int] = Field(default_factory=dict)
+    #: set once the first full pipeline run completes — until then the scheduler
+    #: bootstraps a single ordered full run instead of fanning out per-phase.
+    initial_scan_completed_at: datetime | None = None
 
 
 class IpScopeEntry(BaseModel):

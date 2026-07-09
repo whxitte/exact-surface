@@ -21,6 +21,7 @@ from api.routes import integrations as integration_routes
 from api.routes import notifications as notification_routes
 from api.routes import programs as program_routes
 from api.routes import reports as report_routes
+from api.routes import schedule as schedule_routes
 from api.routes import stats as stats_routes
 from api.ws import stream as ws_stream
 from core.config import get_settings
@@ -116,6 +117,7 @@ def create_app() -> FastAPI:
     app.include_router(stats_routes.router)
     app.include_router(notification_routes.router)
     app.include_router(integration_routes.router)
+    app.include_router(schedule_routes.router)
     app.include_router(report_routes.router)
     app.include_router(ws_stream.router)
 

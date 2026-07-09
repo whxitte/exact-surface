@@ -5,21 +5,54 @@ import Link from "next/link";
 import {
   Globe, Plus, CheckCircle2, AlertCircle, ChevronRight, Trash2, Pause, Play,
 } from "lucide-react";
-import { api, type Program } from "@/lib/api";
+import { api, type Program, type Schedule } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { timeAgo, timeUntil } from "@/lib/utils";
 
 export default function ProgramsPage() {
   const [programs, setPrograms] = useState<Program[]>([]);
+  const [schedules, setSchedules] = useState<Record<string, Schedule>>({});
   const [apex, setApex] = useState("");
   const [error, setError] = useState("");
   const [adding, setAdding] = useState(false);
 
   function load() {
-    api.listPrograms().then(setPrograms).catch((e) => setError(e.message));
+    api
+      .listPrograms()
+      .then((ps) => {
+        setPrograms(ps);
+        // fetch each program's schedule for the last/next-scan summary
+        ps.forEach((p) =>
+          api
+            .getSchedule(p.program_id)
+            .then((s) => setSchedules((prev) => ({ ...prev, [p.program_id]: s })))
+            .catch(() => {}),
+        );
+      })
+      .catch((e) => setError(e.message));
   }
   useEffect(load, []);
+
+  function scanSummary(p: Program): string {
+    const s = schedules[p.program_id];
+    if (!s) return "";
+    if (p.enabled === false) return "Monitoring paused";
+    if (!s.initial_scan_completed_at && !s.last_full_run) return "First scan pending…";
+    const full = s.last_full_run;
+    const last = full?.finished_at
+      ? `Last scan ${timeAgo(full.finished_at)}`
+      : full
+        ? `Scan ${full.status}`
+        : "Not scanned yet";
+    // soonest upcoming phase
+    const upcoming = [...s.phases]
+      .filter((ph) => ph.next_due_at)
+      .sort((a, b) => Date.parse(a.next_due_at!) - Date.parse(b.next_due_at!))[0];
+    const next = upcoming ? ` · next ${upcoming.pipeline} ${timeUntil(upcoming.next_due_at)}` : "";
+    return last + next;
+  }
 
   async function toggleMonitoring(e: React.MouseEvent, p: Program) {
     e.preventDefault();
@@ -99,9 +132,11 @@ export default function ProgramsPage() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
                   <Globe className="h-4 w-4" />
                 </div>
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <div className="font-medium">{p.apex_domain}</div>
-                  <div className="text-xs text-muted-foreground">{p.program_id}</div>
+                  <div className="truncate text-xs text-muted-foreground">
+                    {scanSummary(p) || p.program_id}
+                  </div>
                 </div>
                 {p.enabled === false && (
                   <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">

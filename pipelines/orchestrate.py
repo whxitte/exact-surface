@@ -266,7 +266,7 @@ async def run_program(
         )
 
     scope = build_program_scope(program, auth)
-    return await run_full_pipeline(
+    result = await run_full_pipeline(
         mongo=mongo,
         engine=engine,
         scope=scope,
@@ -277,3 +277,10 @@ async def run_program(
         scan_id=scan_id,
         enabled_modules=tuple(program.get("enabled_modules", [])),
     )
+    # Once the first full run finishes, the scheduler switches this program from
+    # bootstrap to per-phase cadence. Set only on the first completion.
+    if program.get("initial_scan_completed_at") is None:
+        await ProgramRepo.from_mongo(mongo).mark_initial_scan_completed(
+            tenant.tenant_id, program_id, datetime.now(UTC)
+        )
+    return result

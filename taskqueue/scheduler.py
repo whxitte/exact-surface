@@ -26,10 +26,19 @@ from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
 from db.schedule import ScheduleRepo
-from taskqueue.cadence import DEFAULT_CADENCE_SECONDS, is_due
+from taskqueue.cadence import effective_cadence, is_due
 from taskqueue.jobs import Job, Priority
 
 Enqueuer = Callable[[Job], Awaitable[None]]
+
+#: The bootstrap full run is enqueued under this pseudo-pipeline name; the arq
+#: enqueuer routes it to ``run_program_task`` (the ordered 14-stage pipeline).
+FULL_PIPELINE = "full"
+
+#: If a bootstrap full job is enqueued but never lands (worker died, redis flushed),
+#: re-arm it after this long. While queued arq dedups it; while running
+#: ``find_active_full`` blocks a duplicate — so this only fires for genuinely lost jobs.
+BOOTSTRAP_RETRY_SECONDS = 30 * 60
 
 
 def _auth_current(auth: dict | None) -> bool:
@@ -49,12 +58,21 @@ class Scheduler:
         self._mongo = mongo
         self._enqueue = enqueuer
         self._settings = settings or get_settings()
-        self._cadence = cadence or DEFAULT_CADENCE_SECONDS
+        #: optional explicit cadence (tests); None → resolve per program from
+        #: built-in defaults + tenant defaults + program overrides.
+        self._cadence_override = cadence
         self._max_per_tenant = (
             max_per_tenant
             if max_per_tenant is not None
             else self._settings.scheduler_max_jobs_per_tenant
         )
+
+    async def _tenant_defaults(self) -> dict[str, dict]:
+        """tenant_id -> its account-level cadence overrides (empty if none)."""
+        out: dict[str, dict] = {}
+        for t in await self._mongo.collection("tenants").find({}).to_list(None):
+            out[t["tenant_id"]] = t.get("cadence_overrides") or {}
+        return out
 
     async def _ready_programs(self) -> list[dict]:
         """Programs eligible to scan: enabled, verified, and currently authorized."""
@@ -69,19 +87,62 @@ class Scheduler:
         return ready
 
     async def plan(self, now: datetime | None = None) -> list[Job]:
-        """Return the jobs that are due now, fairness-capped and priority-sorted."""
+        """Return the jobs that are due now, fairness-capped and priority-sorted.
+
+        Two regimes per program:
+
+        * **Bootstrap** — a program that has never completed a full run gets ONE
+          ordered full-pipeline job (not a per-phase fan-out), so a new domain's
+          first pass runs ingest→…→scan in order. Nothing else is enqueued for it
+          until that completes.
+        * **Steady state** — thereafter each phase recurs on its own effective
+          cadence (built-in ← tenant defaults ← program overrides).
+        """
         now = now or datetime.now(UTC)
         schedule = ScheduleRepo.from_mongo(self._mongo)
+        audit = ScanRunRepo.from_mongo(self._mongo)
+        tenant_defaults = await self._tenant_defaults()
         per_tenant: dict[str, int] = {}
         jobs: list[Job] = []
 
+        def _capped(tid: str) -> bool:
+            return per_tenant.get(tid, 0) >= self._max_per_tenant
+
         for prog in await self._ready_programs():
             tid, pid = prog["tenant_id"], prog["program_id"]
-            for pipeline, interval in self._cadence.items():
+
+            # -- bootstrap: first full run before any per-phase cadence ----------
+            if prog.get("initial_scan_completed_at") is None:
+                if _capped(tid):
+                    continue
+                active = await audit.find_active_full(
+                    tid, pid, now=now, stale_seconds=self._settings.scan_run_stale_seconds
+                )
+                if active is not None:
+                    continue  # a full run is already queued/running — let it finish
+                last_full = await schedule.last_run(tid, pid, FULL_PIPELINE)
+                if is_due(last_full, now, BOOTSTRAP_RETRY_SECONDS):
+                    jobs.append(
+                        Job(
+                            tenant_id=tid,
+                            program_id=pid,
+                            pipeline=FULL_PIPELINE,
+                            priority=Priority.NEW_ASSET,
+                            reason="initial-full",
+                        )
+                    )
+                    per_tenant[tid] = per_tenant.get(tid, 0) + 1
+                continue  # never fan out per-phase for an un-bootstrapped program
+
+            # -- steady state: per-phase cadence --------------------------------
+            cadence = self._cadence_override or effective_cadence(
+                prog.get("cadence_overrides"), tenant_defaults.get(tid)
+            )
+            for pipeline, interval in cadence.items():
                 last = await schedule.last_run(tid, pid, pipeline)
                 if not is_due(last, now, interval):
                     continue
-                if per_tenant.get(tid, 0) >= self._max_per_tenant:
+                if _capped(tid):
                     continue
                 jobs.append(
                     Job(

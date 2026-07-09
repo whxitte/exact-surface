@@ -14,6 +14,9 @@ from core.config import get_settings
 from taskqueue.jobs import Job
 
 PIPELINE_TASK = "run_pipeline_task"
+PROGRAM_TASK = "run_program_task"
+#: pseudo-pipeline name the scheduler uses for the ordered full run.
+FULL_PIPELINE = "full"
 
 
 async def create_pool() -> Any:  # pragma: no cover - needs a live redis
@@ -27,6 +30,18 @@ def make_enqueuer(pool: Any):
     """Return an async ``(Job) -> None`` enqueuer backed by an arq pool."""
 
     async def enqueue(job: Job) -> None:  # pragma: no cover - needs a live redis
+        if job.pipeline == FULL_PIPELINE:
+            # bootstrap: run the ordered full pipeline via run_program_task
+            await pool.enqueue_job(
+                PROGRAM_TASK,
+                job.tenant_id,
+                job.program_id,
+                None,  # actor_id
+                job.scan_id or None,
+                _job_id=job.dedup_key(),
+                _defer_by=0,
+            )
+            return
         await pool.enqueue_job(
             PIPELINE_TASK,
             job.tenant_id,

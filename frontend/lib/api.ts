@@ -128,6 +128,29 @@ export interface Secret {
   source_locator: string;
   severity: string;
 }
+export interface SchedulePhase {
+  pipeline: string;
+  interval_seconds: number;
+  last_run_at?: string | null;
+  next_due_at?: string | null;
+  source: "program" | "tenant" | "default";
+}
+export interface Schedule {
+  program_id: string;
+  initial_scan_completed_at?: string | null;
+  last_full_run?: {
+    scan_id: string;
+    status: string;
+    started_at?: string | null;
+    finished_at?: string | null;
+  } | null;
+  phases: SchedulePhase[];
+}
+export interface ScheduleDefaults {
+  cadence_overrides: Record<string, number>;
+  pipelines: { pipeline: string; label: string; default_seconds: number }[];
+  min_interval_seconds?: number;
+}
 export interface Integration {
   name: string;
   label: string;
@@ -191,6 +214,12 @@ export const api = {
       method: "POST",
       body: JSON.stringify(enabled),
     }),
+  getSchedule: (id: string) => request<Schedule>(`/programs/${id}/schedule`),
+  setSchedule: (id: string, overrides: Record<string, number>) =>
+    request<Schedule>(`/programs/${id}/schedule`, json({ overrides })),
+  getScheduleDefaults: () => request<ScheduleDefaults>("/schedule/defaults"),
+  setScheduleDefaults: (overrides: Record<string, number>) =>
+    request<ScheduleDefaults>("/schedule/defaults", json({ overrides })),
 
   listFindings: (id: string, q: Record<string, string> = {}) => {
     const qs = new URLSearchParams(q).toString();

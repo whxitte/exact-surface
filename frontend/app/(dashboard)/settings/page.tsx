@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { NotificationsSettings } from "@/components/notifications-settings";
 import { IntegrationsSettings } from "@/components/integrations-settings";
+import { ScheduleDefaultsSettings } from "@/components/schedule-defaults-settings";
 
 export default function SettingsPage() {
   const [me, setMe] = useState<{ tenant_id: string; role: string } | null>(null);
@@ -92,6 +93,8 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ScheduleDefaultsSettings />
 
       <IntegrationsSettings />
 

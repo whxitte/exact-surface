@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from core.models import Program
@@ -56,6 +57,14 @@ class ProgramRepo:
 
     async def set_enabled_modules(self, tenant_id, program_id, modules: list[str]) -> None:
         await self._update(tenant_id, program_id, {"enabled_modules": modules})
+
+    async def set_cadence_overrides(self, tenant_id, program_id, overrides: dict[str, int]) -> None:
+        await self._update(tenant_id, program_id, {"cadence_overrides": overrides})
+
+    async def mark_initial_scan_completed(self, tenant_id, program_id, when: datetime) -> None:
+        """Record the first full-run completion timestamp (callers guard so it is
+        only set once — it stays the *first* completion, not the latest)."""
+        await self._update(tenant_id, program_id, {"initial_scan_completed_at": when})
 
     async def delete(self, tenant_id: str, program_id: str) -> None:
         await self._c.delete_one({"tenant_id": tenant_id, "program_id": program_id})

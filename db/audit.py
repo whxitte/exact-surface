@@ -48,6 +48,23 @@ class ScanRunRepo:
             flt["program_id"] = program_id
         return await self._c.find(flt).limit(limit).to_list(limit)
 
+    async def latest_full(self, tenant_id: str, program_id: str) -> dict | None:
+        """The most recently started full run for a program (any status), for the
+        'last scan' display. Reads the small per-program set and picks the newest."""
+        docs = await self._c.find(
+            {"tenant_id": tenant_id, "program_id": program_id, "pipeline": "full"}
+        ).to_list(None)
+        if not docs:
+            return None
+        return max(
+            docs,
+            key=lambda d: (
+                _as_aware(d.get("started_at"))
+                or _as_aware(d.get("created_at"))
+                or datetime.min.replace(tzinfo=UTC)
+            ),
+        )
+
     async def find_active_full(
         self,
         tenant_id: str,

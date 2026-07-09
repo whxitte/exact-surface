@@ -39,7 +39,14 @@ from db.deltas import DeltaRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
 from db.programs import ProgramRepo, delete_program_and_data
+from db.schedule import ScheduleRepo
 from db.secrets import SecretRepo
+from db.tenants import TenantRepo
+from taskqueue.cadence import (
+    effective_cadence,
+    next_due,
+    sanitize_overrides,
+)
 
 router = APIRouter(prefix="/programs", tags=["programs"])
 
@@ -112,6 +119,83 @@ async def set_asset_monitoring(
     if not ok:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "asset not found")
     return {"fingerprint": fingerprint, "monitored": enabled}
+
+
+# -- schedule (cadence + last/next scan) -------------------------------------
+def _iso(value: Any) -> str | None:
+    return value.isoformat() if hasattr(value, "isoformat") else value
+
+
+async def _schedule_view(mongo: Any, program: dict) -> dict:
+    """Per-phase cadence with each phase's last-run + next-due, plus the last full
+    run's start/finish. Powers the domains screen's 'last/next scan' breakdown."""
+    tid, pid = program["tenant_id"], program["program_id"]
+    prog_over = sanitize_overrides(program.get("cadence_overrides"))
+    tenant = await TenantRepo.from_mongo(mongo).get(tid)
+    tenant_over = sanitize_overrides((tenant or {}).get("cadence_overrides"))
+    eff = effective_cadence(prog_over, tenant_over)
+
+    schedule = ScheduleRepo.from_mongo(mongo)
+    phases = []
+    for pipeline, interval in eff.items():
+        last = await schedule.last_run(tid, pid, pipeline)
+        source = (
+            "program"
+            if pipeline in prog_over
+            else "tenant"
+            if pipeline in tenant_over
+            else "default"
+        )
+        phases.append(
+            {
+                "pipeline": pipeline,
+                "interval_seconds": interval,
+                "last_run_at": _iso(last),
+                "next_due_at": _iso(next_due(last, interval)),
+                "source": source,
+            }
+        )
+    phases.sort(key=lambda p: p["interval_seconds"])
+
+    last_full = await ScanRunRepo.from_mongo(mongo).latest_full(tid, pid)
+    return {
+        "program_id": pid,
+        "initial_scan_completed_at": _iso(program.get("initial_scan_completed_at")),
+        "last_full_run": (
+            {
+                "scan_id": last_full.get("scan_id"),
+                "status": last_full.get("status"),
+                "started_at": _iso(last_full.get("started_at")),
+                "finished_at": _iso(last_full.get("finished_at")),
+            }
+            if last_full
+            else None
+        ),
+        "phases": phases,
+    }
+
+
+@router.get("/{program_id}/schedule", tags=["programs"])
+async def get_schedule(
+    program: dict = Depends(require_program), mongo: Any = Depends(get_mongo_dep)
+) -> dict:
+    return await _schedule_view(mongo, program)
+
+
+@router.post("/{program_id}/schedule", tags=["programs"])
+async def set_schedule(
+    body: dict,
+    program: dict = Depends(require_program),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Set this program's per-pipeline cadence overrides (seconds). Unknown pipelines
+    and sub-floor intervals are dropped/clamped server-side (politeness)."""
+    overrides = sanitize_overrides(body.get("overrides") if isinstance(body, dict) else None)
+    await ProgramRepo.from_mongo(mongo).set_cadence_overrides(
+        program["tenant_id"], program["program_id"], overrides
+    )
+    program = {**program, "cadence_overrides": overrides}
+    return await _schedule_view(mongo, program)
 
 
 # -- domain verification -----------------------------------------------------

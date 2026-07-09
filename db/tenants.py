@@ -23,3 +23,8 @@ class TenantRepo:
         doc = _to_bson(tenant.model_dump(mode="python"))
         await self._c.update_one({"tenant_id": doc["tenant_id"]}, {"$set": doc}, upsert=True)
         return doc
+
+    async def set_cadence_overrides(self, tenant_id: str, overrides: dict[str, int]) -> None:
+        await self._c.update_one(
+            {"tenant_id": tenant_id}, {"$set": {"cadence_overrides": overrides}}
+        )

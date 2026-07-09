@@ -137,8 +137,12 @@ def test_scan_refused_while_one_already_running():
     _run(
         ScanRunRepo(fake.collection("scan_runs")).save(
             ScanRun(
-                tenant_id=tenant_id, scan_id="inflight", program_id=pid, pipeline="full",
-                status=ScanStatus.RUNNING, started_at=datetime.now(UTC),
+                tenant_id=tenant_id,
+                scan_id="inflight",
+                program_id=pid,
+                pipeline="full",
+                status=ScanStatus.RUNNING,
+                started_at=datetime.now(UTC),
             )
         )
     )
@@ -159,8 +163,13 @@ def test_scan_run_logs_endpoint_tenant_scoped():
     ]
     _run(
         ScanRunRepo(fake.collection("scan_runs")).save(
-            ScanRun(tenant_id=tenant_id, scan_id="s1", program_id=pid, pipeline="full",
-                    status=ScanStatus.RUNNING)
+            ScanRun(
+                tenant_id=tenant_id,
+                scan_id="s1",
+                program_id=pid,
+                pipeline="full",
+                status=ScanStatus.RUNNING,
+            )
         )
     )
 
@@ -174,9 +183,10 @@ def test_scan_run_logs_endpoint_tenant_scoped():
         assert r.status_code == 200
         assert r.json()["lines"] == ["13:20:18 INFO    [crawl] katana crawling acme.com"]
         # a scan id that isn't this program's run → 404 (can't read another's logs)
-        assert client.get(
-            f"/programs/{pid}/scan-runs/nope/logs", headers=_auth(token)
-        ).status_code == 404
+        assert (
+            client.get(f"/programs/{pid}/scan-runs/nope/logs", headers=_auth(token)).status_code
+            == 404
+        )
     finally:
         activity_bus.set_bus(None)
 
@@ -344,16 +354,22 @@ def test_integrations_set_list_and_clear():
         "/integrations/github_token", headers=_auth(token), json={"value": "ghp_secret123456"}
     )
     assert r.status_code == 204
-    gh = next(i for i in client.get("/integrations", headers=_auth(token)).json()
-              if i["name"] == "github_token")
+    gh = next(
+        i
+        for i in client.get("/integrations", headers=_auth(token)).json()
+        if i["name"] == "github_token"
+    )
     assert gh["configured"] is True and "ghp_secret123456" not in gh["masked"]
 
     # unknown key rejected; clear removes it
     bad = client.put("/integrations/nope", headers=_auth(token), json={"value": "x"})
     assert bad.status_code == 404
     assert client.delete("/integrations/github_token", headers=_auth(token)).status_code == 204
-    gh = next(i for i in client.get("/integrations", headers=_auth(token)).json()
-              if i["name"] == "github_token")
+    gh = next(
+        i
+        for i in client.get("/integrations", headers=_auth(token)).json()
+        if i["name"] == "github_token"
+    )
     assert gh["configured"] is False
 
 
@@ -365,9 +381,10 @@ def test_program_delete_and_monitoring_toggle():
     ]
 
     # monitoring toggle flips Program.enabled
-    assert client.post(
-        f"/programs/{pid}/monitoring?enabled=false", headers=_auth(token)
-    ).status_code == 200
+    assert (
+        client.post(f"/programs/{pid}/monitoring?enabled=false", headers=_auth(token)).status_code
+        == 200
+    )
     assert client.get(f"/programs/{pid}", headers=_auth(token)).json()["enabled"] is False
     client.post(f"/programs/{pid}/monitoring?enabled=true", headers=_auth(token))
     assert client.get(f"/programs/{pid}", headers=_auth(token)).json()["enabled"] is True
@@ -375,3 +392,36 @@ def test_program_delete_and_monitoring_toggle():
     # delete removes it entirely → 404 afterwards
     assert client.delete(f"/programs/{pid}", headers=_auth(token)).status_code == 204
     assert client.get(f"/programs/{pid}", headers=_auth(token)).status_code == 404
+
+
+def test_schedule_endpoints_program_and_tenant_defaults():
+    client, _, _ = build()
+    token = _signup(client)["access_token"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+
+    # program schedule: every configurable phase present with a next-due breakdown
+    sch = client.get(f"/programs/{pid}/schedule", headers=_auth(token)).json()
+    phases = {p["pipeline"]: p for p in sch["phases"]}
+    assert "ingest" in phases and phases["ingest"]["source"] == "default"
+    assert sch["last_full_run"] is None  # never scanned yet
+
+    # tenant default: slow ingest to 12h → program inherits it as source "tenant"
+    client.post("/schedule/defaults", headers=_auth(token), json={"overrides": {"ingest": 43200}})
+    phases = {
+        p["pipeline"]: p
+        for p in client.get(f"/programs/{pid}/schedule", headers=_auth(token)).json()["phases"]
+    }
+    assert phases["ingest"]["interval_seconds"] == 43200 and phases["ingest"]["source"] == "tenant"
+
+    # program override wins over the tenant default; sub-floor values are clamped
+    client.post(
+        f"/programs/{pid}/schedule", headers=_auth(token), json={"overrides": {"ingest": 5}}
+    )
+    phases = {
+        p["pipeline"]: p
+        for p in client.get(f"/programs/{pid}/schedule", headers=_auth(token)).json()["phases"]
+    }
+    assert phases["ingest"]["source"] == "program"
+    assert phases["ingest"]["interval_seconds"] == 300  # floored to MIN_INTERVAL_SECONDS
