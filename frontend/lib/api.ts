@@ -79,6 +79,7 @@ export interface Asset {
   resolved_ips: string[];
   ip_class?: string | null;
   is_ephemeral: boolean;
+  monitored?: boolean;
   first_seen?: string;
 }
 export interface Stats {
@@ -161,6 +162,17 @@ export const api = {
   createProgram: (apex_domain: string) =>
     request<Program>("/programs", json({ apex_domain })),
   getProgram: (id: string) => request<Program>(`/programs/${id}`),
+  deleteProgram: (id: string) => request<void>(`/programs/${id}`, { method: "DELETE" }),
+  setMonitoring: (id: string, enabled: boolean) =>
+    request<{ program_id: string; enabled: boolean }>(
+      `/programs/${id}/monitoring?enabled=${enabled}`,
+      { method: "POST" },
+    ),
+  setAssetMonitoring: (id: string, fingerprint: string, enabled: boolean) =>
+    request<{ fingerprint: string; monitored: boolean }>(
+      `/programs/${id}/assets/${fingerprint}/monitoring?enabled=${enabled}`,
+      { method: "POST" },
+    ),
   requestVerify: (id: string, method: string) =>
     request<Verification>(`/programs/${id}/verify/request?method=${method}`, { method: "POST" }),
   checkVerify: (id: string) =>

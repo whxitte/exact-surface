@@ -71,6 +71,7 @@ async def run_crawl(
     # Active crawl of hosts whose scope permits HTTP probing — capped so a domain
     # with dozens of subdomains cannot exceed the run's time budget.
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
+    assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
     crawl_hosts = [
         asset["hostname"]
         for asset in assets

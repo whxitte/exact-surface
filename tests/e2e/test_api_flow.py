@@ -355,3 +355,23 @@ def test_integrations_set_list_and_clear():
     gh = next(i for i in client.get("/integrations", headers=_auth(token)).json()
               if i["name"] == "github_token")
     assert gh["configured"] is False
+
+
+def test_program_delete_and_monitoring_toggle():
+    client, fake, _ = build()
+    token = _signup(client)["access_token"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+
+    # monitoring toggle flips Program.enabled
+    assert client.post(
+        f"/programs/{pid}/monitoring?enabled=false", headers=_auth(token)
+    ).status_code == 200
+    assert client.get(f"/programs/{pid}", headers=_auth(token)).json()["enabled"] is False
+    client.post(f"/programs/{pid}/monitoring?enabled=true", headers=_auth(token))
+    assert client.get(f"/programs/{pid}", headers=_auth(token)).json()["enabled"] is True
+
+    # delete removes it entirely → 404 afterwards
+    assert client.delete(f"/programs/{pid}", headers=_auth(token)).status_code == 204
+    assert client.get(f"/programs/{pid}", headers=_auth(token)).status_code == 404

@@ -174,6 +174,9 @@ class Asset(StatefulModel):
     ip_class: str | None = None  # last-classified (core.scope.IpClass value)
     source: str = "unknown"  # discovering module, e.g. "subfinder"
     is_ephemeral: bool = False  # preview/staging env (§module 19)
+    #: User can mute an individual asset — unmonitored hosts are skipped by crawl /
+    #: content-discovery / port-scan. Preserved across re-scans (see AssetRepo).
+    monitored: bool = True
 
 
 class Endpoint(StatefulModel):

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
-  Globe, CheckCircle2, ShieldCheck, Play, Copy, RefreshCw, KeyRound, Server, ShieldAlert, Clock,
-  FileText, FileCode, FileBarChart, FileType,
+  Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
+  Clock, Eye, EyeOff, FileText, FileCode, FileBarChart, FileType,
 } from "lucide-react";
 import {
   api, downloadReport,
@@ -84,6 +84,26 @@ export default function ProgramDetail() {
       setMsg((e as Error).message || "Could not update modules.");
     }
   }
+  async function toggleMonitoring() {
+    if (!program) return;
+    try {
+      await api.setMonitoring(id, !program.enabled);
+      loadProgram();
+    } catch (e) {
+      setMsg((e as Error).message || "Could not update monitoring.");
+    }
+  }
+  async function toggleAssetMonitoring(a: Asset) {
+    const next = a.monitored === false;
+    try {
+      await api.setAssetMonitoring(id, a.fingerprint, next);
+      setAssets((prev) =>
+        prev.map((x) => (x.fingerprint === a.fingerprint ? { ...x, monitored: next } : x)),
+      );
+    } catch (e) {
+      setMsg((e as Error).message || "Could not update asset.");
+    }
+  }
   async function scan() {
     setScanBusy(true);
     try {
@@ -130,6 +150,27 @@ export default function ProgramDetail() {
           <span className="flex items-center gap-1.5 text-sm text-primary">
             <CheckCircle2 className="h-4 w-4" /> Verified
           </span>
+        )}
+        {program && (
+          <button
+            onClick={toggleMonitoring}
+            className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs transition-colors ${
+              program.enabled === false
+                ? "border-border text-muted-foreground hover:text-foreground"
+                : "border-primary/40 text-primary"
+            }`}
+            title={program.enabled === false ? "Monitoring paused — click to resume" : "Monitoring active — click to pause"}
+          >
+            {program.enabled === false ? (
+              <>
+                <Pause className="h-3.5 w-3.5" /> Paused
+              </>
+            ) : (
+              <>
+                <Play className="h-3.5 w-3.5" /> Monitoring
+              </>
+            )}
+          </button>
         )}
       </div>
 
@@ -292,25 +333,42 @@ export default function ProgramDetail() {
       {tab === "assets" && (
         <div className="space-y-2">
           {assets.length === 0 && <Empty label="No assets discovered yet." />}
-          {assets.map((a) => (
-            <Card key={a.fingerprint}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{a.hostname}</div>
-                  <div className="truncate font-mono text-xs text-muted-foreground">
-                    {a.resolved_ips.join(", ") || "unresolved"}
+          {assets.map((a) => {
+            const muted = a.monitored === false;
+            return (
+              <Card key={a.fingerprint} className={muted ? "opacity-60" : undefined}>
+                <CardContent className="flex items-center gap-4 p-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{a.hostname}</div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {a.resolved_ips.join(", ") || "unresolved"}
+                    </div>
                   </div>
-                </div>
-                {a.is_ephemeral && (
-                  <span className="rounded-full bg-severity-medium/15 px-2 py-0.5 text-xs text-severity-medium">
-                    ephemeral
-                  </span>
-                )}
-                {a.ip_class && <span className="text-xs text-muted-foreground">{a.ip_class}</span>}
-                <span className="text-xs text-muted-foreground">{timeAgo(a.first_seen)}</span>
-              </CardContent>
-            </Card>
-          ))}
+                  {a.is_ephemeral && (
+                    <span className="rounded-full bg-severity-medium/15 px-2 py-0.5 text-xs text-severity-medium">
+                      ephemeral
+                    </span>
+                  )}
+                  {a.ip_class && (
+                    <span className="text-xs text-muted-foreground">{a.ip_class}</span>
+                  )}
+                  <span className="text-xs text-muted-foreground">{timeAgo(a.first_seen)}</span>
+                  <button
+                    onClick={() => toggleAssetMonitoring(a)}
+                    title={muted ? "Muted — click to monitor" : "Monitored — click to mute"}
+                    className={`flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors ${
+                      muted
+                        ? "text-muted-foreground hover:text-foreground"
+                        : "text-primary hover:text-primary/80"
+                    }`}
+                  >
+                    {muted ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {muted ? "Muted" : "Monitored"}
+                  </button>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

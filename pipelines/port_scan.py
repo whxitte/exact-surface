@@ -32,6 +32,7 @@ async def run_port_scan(
     nmap=None,
 ) -> dict:
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
+    assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
 
     scannable = [
         a["hostname"]

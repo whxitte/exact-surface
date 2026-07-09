@@ -38,7 +38,7 @@ from db.authorizations import AuthorizationRepo
 from db.deltas import DeltaRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
-from db.programs import ProgramRepo
+from db.programs import ProgramRepo, delete_program_and_data
 from db.secrets import SecretRepo
 
 router = APIRouter(prefix="/programs", tags=["programs"])
@@ -75,12 +75,43 @@ async def get_program(program: dict = Depends(require_program)) -> dict:
 
 
 @router.delete("/{program_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def disable_program(
+async def delete_program(
     program: dict = Depends(require_program), mongo: Any = Depends(get_mongo_dep)
 ) -> None:
+    """Permanently remove a program and all of its discovered data (assets,
+    endpoints, findings, scan history, …). To merely pause it without losing
+    history, use the monitoring toggle instead."""
+    await delete_program_and_data(mongo, program["tenant_id"], program["program_id"])
+
+
+@router.post("/{program_id}/monitoring", tags=["programs"])
+async def set_monitoring(
+    enabled: bool = Query(...),
+    program: dict = Depends(require_program),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Enable/disable continuous monitoring for a program. Disabled → the scheduler
+    skips it (no subdomain/asset discovery, crawl, or scans) but keeps existing data."""
     await ProgramRepo.from_mongo(mongo).set_enabled(
-        program["tenant_id"], program["program_id"], False
+        program["tenant_id"], program["program_id"], enabled
     )
+    return {"program_id": program["program_id"], "enabled": enabled}
+
+
+@router.post("/{program_id}/assets/{fingerprint}/monitoring", tags=["programs"])
+async def set_asset_monitoring(
+    fingerprint: str,
+    enabled: bool = Query(...),
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Mute/unmute a single discovered asset. Unmonitored assets are skipped by
+    crawl, content-discovery, and port-scan on subsequent runs."""
+    ok = await AssetRepo.from_mongo(mongo).set_monitored(principal.tenant_id, fingerprint, enabled)
+    if not ok:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "asset not found")
+    return {"fingerprint": fingerprint, "monitored": enabled}
 
 
 # -- domain verification -----------------------------------------------------
@@ -218,9 +249,7 @@ async def trigger_scan(
     # Refuse a duplicate scan while one is already in flight (backend-enforced —
     # not just a disabled button; a direct API call is blocked too). A stale run
     # (worker died) does not count as active, so scanning is never blocked forever.
-    active = await audit.find_active_full(
-        tid, pid, stale_seconds=settings.scan_run_stale_seconds
-    )
+    active = await audit.find_active_full(tid, pid, stale_seconds=settings.scan_run_stale_seconds)
     if active is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,

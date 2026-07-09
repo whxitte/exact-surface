@@ -35,6 +35,7 @@ async def run_content_discovery(
 ) -> dict:
     tid = tenant.tenant_id
     assets = await AssetRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
+    assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
     endpoints = await EndpointRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
 
     # tech per host, taken from the host's root endpoint if we probed one

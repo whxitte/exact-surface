@@ -56,3 +56,28 @@ class ProgramRepo:
 
     async def set_enabled_modules(self, tenant_id, program_id, modules: list[str]) -> None:
         await self._update(tenant_id, program_id, {"enabled_modules": modules})
+
+    async def delete(self, tenant_id: str, program_id: str) -> None:
+        await self._c.delete_one({"tenant_id": tenant_id, "program_id": program_id})
+
+
+#: Collections that hold per-program data, purged when a program is deleted.
+PROGRAM_DATA_COLLECTIONS: tuple[str, ...] = (
+    "assets",
+    "endpoints",
+    "ports",
+    "findings",
+    "leaks",
+    "deltas",
+    "scan_runs",
+    "authorizations",
+)
+
+
+async def delete_program_and_data(mongo: Any, tenant_id: str, program_id: str) -> None:
+    """Hard-delete a program and every record scoped to it. Tenant-scoped so one
+    tenant can never purge another's data."""
+    flt = {"tenant_id": tenant_id, "program_id": program_id}
+    for name in PROGRAM_DATA_COLLECTIONS:
+        await mongo.collection(name).delete_many(flt)
+    await ProgramRepo.from_mongo(mongo).delete(tenant_id, program_id)

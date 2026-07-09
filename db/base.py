@@ -48,6 +48,10 @@ def _to_bson(value: Any) -> Any:
 
 class Repository:
     COLLECTION: str = ""
+    #: Fields the user controls, not the scanner: written once on insert, then never
+    #: overwritten by a later observation (so a manual toggle survives every re-scan).
+    #: Flip them explicitly via :meth:`set_flag`.
+    PRESERVE_FIELDS: frozenset[str] = frozenset()
 
     def __init__(self, collection: Any) -> None:
         self._c = collection
@@ -62,8 +66,9 @@ class Repository:
 
         set_on_insert: dict[str, Any] = {}
         set_fields: dict[str, Any] = {}
+        preserve = IMMUTABLE_FIELDS | self.PRESERVE_FIELDS
         for key, val in doc.items():
-            (set_on_insert if key in IMMUTABLE_FIELDS else set_fields)[key] = val
+            (set_on_insert if key in preserve else set_fields)[key] = val
 
         set_on_insert.setdefault("first_seen", now)
         set_on_insert.setdefault("created_at", now)
@@ -108,6 +113,15 @@ class Repository:
         if program_id is not None:
             flt["program_id"] = program_id
         return await self._c.count_documents(flt)
+
+    async def set_flag(self, tenant_id: str, fingerprint: str, field: str, value: Any) -> bool:
+        """Set a single user-controlled field on one record. Returns True if it
+        matched a document. Used for :attr:`PRESERVE_FIELDS` toggles."""
+        res = await self._c.update_one(
+            {"tenant_id": tenant_id, "fingerprint": fingerprint},
+            {"$set": {field: value, "updated_at": datetime.now(UTC)}},
+        )
+        return bool(getattr(res, "modified", 0) or getattr(res, "modified_count", 0))
 
     async def clear_is_new(self, tenant_id: str, fingerprints: list[str]) -> None:
         """Consumer marks records as seen so they never re-alert as 'new'."""
