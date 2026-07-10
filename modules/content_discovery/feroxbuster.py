@@ -40,7 +40,10 @@ async def discover(
         wordlist = wordlist_path(wordlist)
     rows = await runner(
         "feroxbuster",
-        ["-u", url, "-w", wordlist, "--json", "-k", "--no-recursion"],
+        # `--json` REQUIRES one of --output/--debug-log/--silent, else feroxbuster
+        # exits 2 with a clap error. `--silent` emits the JSONL to stdout with logging
+        # off — exactly what we parse. (-k insecure, -n no recursion.)
+        ["-u", url, "-w", wordlist, "--json", "--silent", "-k", "-n"],
         timeout=timeout,
     )
     results: list[dict] = []

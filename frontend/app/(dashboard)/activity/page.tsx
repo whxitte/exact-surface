@@ -254,11 +254,15 @@ export default function ActivityPage() {
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  // A run stuck "running" for >20 min is almost certainly orphaned (worker died).
+  // "Stalled" = no activity, not just long-running. A healthy full scan can run
+  // ~90 min (two nuclei batches over many hosts); the worker heartbeats updated_at
+  // every ~45s while a stage is live, so we key off last-activity, not total age.
   function effStatus(r: ScanRun): string {
-    if (r.status !== "running" || !r.started_at) return r.status;
-    const ageMin = (Date.now() - new Date(r.started_at).getTime()) / 60000;
-    return ageMin > 20 ? "stalled" : "running";
+    if (r.status !== "running") return r.status;
+    const last = r.updated_at || r.started_at;
+    if (!last) return "running";
+    const idleMin = (Date.now() - new Date(last).getTime()) / 60000;
+    return idleMin > 8 ? "stalled" : "running";
   }
   const running = runs.filter((r) => effStatus(r) === "running").length;
 

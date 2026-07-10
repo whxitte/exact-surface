@@ -57,6 +57,36 @@ def _auth_is_current(auth: dict | None) -> bool:
     return bool(auth and auth.get("apex_verified") and not auth.get("revoked"))
 
 
+#: how often to re-save a running ScanRun so its ``updated_at`` reflects liveness.
+STAGE_HEARTBEAT_SECONDS = 45
+
+
+async def _run_stage_with_heartbeat(coro, *, budget: float, run, audit) -> dict:
+    """Await a stage coroutine with a hard *budget*, re-saving *run* every
+    ``STAGE_HEARTBEAT_SECONDS`` so ``updated_at`` reflects that work is ongoing — a
+    single stage (nuclei) can run for an hour, and without a heartbeat the UI would
+    label an actively-working scan "stalled". Raises ``TimeoutError`` past the budget,
+    propagates the stage's own exception, and re-raises an outer ``CancelledError``."""
+    task = asyncio.ensure_future(coro)
+    elapsed = 0.0
+    try:
+        while True:
+            remaining = budget - elapsed
+            if remaining <= 0:
+                task.cancel()
+                raise TimeoutError
+            wait = min(STAGE_HEARTBEAT_SECONDS, remaining)
+            done, _ = await asyncio.wait({task}, timeout=wait)
+            if task in done:
+                return task.result()
+            elapsed += wait
+            run.updated_at = datetime.now(UTC)
+            await audit.save(run)  # heartbeat
+    except asyncio.CancelledError:
+        task.cancel()
+        raise
+
+
 #: optional modules — off by default, toggled per program via ``enabled_modules``.
 #: Each has a stage in the pipeline that renders as a (gray) SKIPPED node when the
 #: module is disabled, and runs its tool when enabled.
@@ -220,7 +250,9 @@ async def run_full_pipeline(
                 stage_budget = phase_timeout + STAGE_MARGIN_SECONDS
                 logger.info("stage {} started (limit {:.0f}s)", name, phase_timeout)
                 try:
-                    res = await asyncio.wait_for(factory(phase_timeout), stage_budget)
+                    res = await _run_stage_with_heartbeat(
+                        factory(phase_timeout), budget=stage_budget, run=run, audit=audit
+                    )
                 except asyncio.CancelledError:
                     # Outer cancellation (the whole arq job is being killed) — persist
                     # FAILED (not stuck RUNNING) and abort the run.

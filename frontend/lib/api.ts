@@ -136,6 +136,7 @@ export interface ScanRun {
   created_at?: string;
   started_at?: string;
   finished_at?: string;
+  updated_at?: string; // last heartbeat/save — liveness signal
   error?: string;
   note?: string; // why skipped (single-pipeline runs)
   stats?: Record<string, number>;

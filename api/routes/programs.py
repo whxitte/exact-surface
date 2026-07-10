@@ -222,16 +222,18 @@ async def attack_surface(
         "secrets": await SecretRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
         "leaks": await LeakRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
     }
-    # scan points = completed full runs (the natural "surface snapshot" moments);
-    # reference = the latest full run's start (items not seen since = resolved).
+    # scan points = COMPLETED full runs (the natural "surface snapshot" moments).
+    # reference = the latest COMPLETED full run's START — an item not re-observed
+    # since then is resolved. Crucially we ignore an in-progress run: otherwise, mid
+    # scan, everything not yet re-touched would look "resolved" and the tiles would
+    # collapse to near-zero until the scan finished (the "0 then populates" bug).
     runs = await ScanRunRepo.from_mongo(mongo).list(tid, pid, limit=1000)
-    full = [r for r in runs if r.get("pipeline") == "full"]
-    scan_points = [
-        _aware(r.get("finished_at")) for r in full if r.get("finished_at") is not None
+    completed_full = [
+        r for r in runs if r.get("pipeline") == "full" and r.get("finished_at") is not None
     ]
-    scan_points = [p for p in scan_points if p is not None]
-    starts = [_aware(r.get("started_at")) for r in full]
-    reference = max((s for s in starts if s is not None), default=None)
+    scan_points = [p for p in (_aware(r.get("finished_at")) for r in completed_full) if p]
+    starts = [p for p in (_aware(r.get("started_at")) for r in completed_full) if p]
+    reference = max(starts, default=None)
     return compute_attack_surface(
         items_by_type=items_by_type, scan_points=scan_points, reference=reference
     )
