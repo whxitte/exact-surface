@@ -34,6 +34,18 @@ async def run_content_discovery(
     wordlist_for=select_wordlist,
 ) -> dict:
     tid = tenant.tenant_id
+    # Real content discovery needs wordlists installed; without them feroxbuster
+    # silently finds nothing. Report that honestly (only when using the real tool).
+    if discover is ferox_discover:
+        from modules.content_discovery.wordlist_selector import wordlist_base, wordlists_installed
+
+        if not wordlists_installed():
+            logger.warning("content-discovery: no wordlists in {} — skipping", wordlist_base())
+            return {
+                "hosts": 0, "paths": 0, "new": 0,
+                "skipped": True, "note": "content-discovery wordlists not installed",
+            }
+
     assets = await AssetRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
     assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
     endpoints = await EndpointRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)

@@ -142,19 +142,28 @@ async def run_full_pipeline(
     # Each factory takes its per-stage timeout `t`. Tool stages forward it as their
     # tool budget; DB-only stages ignore it (bounded only by the wait_for ceiling).
     stage_defs: list[tuple[str, Any]] = [
-        ("ingest", lambda t: run_ingest(**common, timeout=t, apex=apex,
-                                        **inj("subfinder", "crtsh", "resolve"))),
+        (
+            "ingest",
+            lambda t: run_ingest(
+                **common, timeout=t, apex=apex, **inj("subfinder", "crtsh", "resolve")
+            ),
+        ),
         ("probe", lambda t: run_probe(**common, timeout=t, **inj("probe"))),
         ("tls", optional("tls", lambda t: run_tls_scan(**common, timeout=t, **inj("tlsinspect")))),
-        ("crawl", lambda t: run_crawl(**common, timeout=t, apex=apex,
-                                      **inj("gau", "wayback", "katana"))),
-        ("content_discovery",
-         lambda t: run_content_discovery(**common, timeout=t, **inj("discover"))),
+        (
+            "crawl",
+            lambda t: run_crawl(**common, timeout=t, apex=apex, **inj("gau", "wayback", "katana")),
+        ),
+        (
+            "content_discovery",
+            lambda t: run_content_discovery(**common, timeout=t, **inj("discover")),
+        ),
         ("port_scan", lambda t: run_port_scan(**common, timeout=t, **inj("naabu"))),
         (
             "service_scan",
-            optional("service_scan",
-                     lambda t: run_service_scan(**common, timeout=t, **inj("nmap"))),
+            optional(
+                "service_scan", lambda t: run_service_scan(**common, timeout=t, **inj("nmap"))
+            ),
         ),
         ("scan", lambda t: run_scan(**common, timeout=t, **inj("scan"))),
         (
@@ -267,11 +276,23 @@ async def run_program(
     program_id: str,
     timeout: float,
     scan_id: str | None = None,
+    force: bool = False,
 ) -> dict:
-    """Load program + authorization, enforce authorization, then run the pipeline."""
+    """Load program + authorization, enforce authorization, then run the pipeline.
+
+    ``force`` = an explicit user-triggered scan, which runs even if monitoring is
+    paused. Automated runs (scheduler bootstrap) leave it False, so a paused program
+    is skipped — including a job that was already queued in Redis before the pause
+    or a restart (the scheduler filters paused programs, but the queue may not)."""
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
         raise AuthorizationRequired(f"no program {program_id} for tenant {tenant.tenant_id}")
+
+    if not force and not program.get("enabled", True):
+        logger.info(
+            "program {} is paused (monitoring off) — skipping scheduled full run", program_id
+        )
+        return {"skipped": True, "note": "monitoring paused"}
 
     auth = await AuthorizationRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not _auth_is_current(auth):

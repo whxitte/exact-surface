@@ -81,6 +81,17 @@ RUN ARCH="$(dpkg --print-architecture)" \
          echo "WARN: feroxbuster unavailable for $ARCH; content discovery will use ffuf only"; \
        fi
 
+# Content-discovery wordlists (SecLists). Without these feroxbuster is handed a bare
+# filename, fails instantly, and content discovery silently finds nothing. Referenced
+# by name in modules/content_discovery/wordlist_selector.py; keep in sync.
+RUN mkdir -p /opt/wordlists \
+    && base="https://raw.githubusercontent.com/danielmiessler/SecLists/master/Discovery/Web-Content" \
+    && for w in raft-medium-directories.txt raft-medium-files.txt common.txt; do \
+         curl -fsSL "$base/$w" -o "/opt/wordlists/$w" \
+           && echo "wordlist $w installed" \
+           || echo "WARN: wordlist $w unavailable"; \
+       done
+
 COPY --from=gotools /tools/ /tools/
 
 WORKDIR /app

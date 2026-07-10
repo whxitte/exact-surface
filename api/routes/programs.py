@@ -446,7 +446,8 @@ async def trigger_scan(
 
         pool = await create_pool()
         try:
-            await pool.enqueue_job("run_program_task", tid, pid, scan_id=scan_id)
+            # force=True: an explicit user scan runs even if monitoring is paused.
+            await pool.enqueue_job("run_program_task", tid, pid, scan_id=scan_id, force=True)
             enqueued = True
         finally:
             await pool.aclose()

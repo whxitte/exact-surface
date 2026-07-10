@@ -16,6 +16,7 @@ from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
 from db.audit import ScanRunRepo
+from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
 from pipelines.ingest import run_ingest
 from pipelines.orchestrate import build_program_scope, run_full_pipeline, run_program
@@ -383,3 +384,57 @@ async def test_build_program_scope_extracts_dedicated_cidrs():
     scope = build_program_scope(program, auth)
     assert scope.authorized_dedicated_cidrs == ("45.55.0.0/16",)
     assert "legacy.customer.com" in scope.excluded_hosts
+
+
+async def test_paused_program_skips_automated_full_run():
+    # A paused (enabled=False) program must NOT run on the automated bootstrap path.
+    mongo = FakeMongo()
+    await ProgramRepo.from_mongo(mongo).save(
+        Program(
+            tenant_id="t1",
+            program_id="p1",
+            apex_domain="customer.com",
+            verified=True,
+            enabled=False,
+        )
+    )
+    await AuthorizationRepo.from_mongo(mongo).save(
+        Authorization(tenant_id="t1", program_id="p1", authorized_by="u", apex_verified=True)
+    )
+    res = await run_program(mongo=mongo, engine=ENGINE, tenant=TENANT, program_id="p1", timeout=10)
+    assert res.get("skipped") and res.get("note") == "monitoring paused"
+    # no ScanRun was created (the run never started)
+    assert await mongo.collection("scan_runs").find_one({"program_id": "p1"}) is None
+
+
+async def test_paused_program_still_runs_when_forced():
+    # An explicit user scan (force=True) runs even if monitoring is paused.
+    mongo = FakeMongo()
+    await ProgramRepo.from_mongo(mongo).save(
+        Program(
+            tenant_id="t1",
+            program_id="p1",
+            apex_domain="customer.com",
+            verified=True,
+            enabled=False,
+        )
+    )
+    await AuthorizationRepo.from_mongo(mongo).save(
+        Authorization(tenant_id="t1", program_id="p1", authorized_by="u", apex_verified=True)
+    )
+
+    # stub the heavy pipeline so we only assert force bypasses the pause gate
+    import pipelines.orchestrate as orch
+
+    async def _stub(**_kw):
+        return {"ran": True}
+
+    orig = orch.run_full_pipeline
+    orch.run_full_pipeline = _stub
+    try:
+        res = await run_program(
+            mongo=mongo, engine=ENGINE, tenant=TENANT, program_id="p1", timeout=10, force=True
+        )
+    finally:
+        orch.run_full_pipeline = orig
+    assert res == {"ran": True}  # bypassed the pause and ran the pipeline

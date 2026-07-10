@@ -46,6 +46,15 @@ async def run_pipeline(
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
         raise AuthorizationRequired(f"no program {program_id} for tenant {tenant.tenant_id}")
+    # Respect the pause at EXECUTION time, not just at scheduling: a job may have
+    # been enqueued (and persisted in Redis) before the program was paused, or
+    # before a restart. All jobs reaching dispatch are automated (scheduler /
+    # cascade), so a paused program simply no-ops.
+    if not program.get("enabled", True):
+        from core.logging import logger
+
+        logger.info("{} is paused (monitoring off) — skipping {}", program_id, pipeline)
+        return {"skipped": True, "note": "monitoring paused"}
     auth = await AuthorizationRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not _auth_current(auth):
         raise AuthorizationRequired(f"no current authorization for program {program_id}")

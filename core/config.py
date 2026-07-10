@@ -75,6 +75,12 @@ class Settings(BaseSettings):
     brave_api_key: SecretStr | None = Field(default=None)
     serpapi_key: SecretStr | None = Field(default=None)
 
+    # -- content discovery -----------------------------------------------
+    wordlist_dir: str = Field(
+        default="/opt/wordlists",
+        description="Directory holding feroxbuster wordlists (installed in the image).",
+    )
+
     # -- worker / queue --------------------------------------------------
     worker_concurrency: int = Field(default=4)
     tool_default_timeout: float = Field(default=300.0)

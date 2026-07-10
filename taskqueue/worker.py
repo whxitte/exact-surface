@@ -68,11 +68,14 @@ async def run_program_task(
     program_id: str,
     actor_id: str | None = None,
     scan_id: str | None = None,
+    force: bool = False,
 ) -> dict:
     """arq task: run the FULL pipeline for a program (used by the API scan trigger).
 
     ``scan_id`` (passed by the API) reuses the QUEUED ScanRun created at enqueue so
-    the button click shows immediately and no duplicate row is created.
+    the button click shows immediately and no duplicate row is created. ``force`` is
+    set for an explicit user scan so it runs even if monitoring is paused; the
+    scheduler's bootstrap leaves it False so a paused program is skipped.
     """
     from core.scope import default_engine
     from core.tenant import TenantContext
@@ -86,6 +89,7 @@ async def run_program_task(
         program_id=program_id,
         timeout=settings.tool_default_timeout,
         scan_id=scan_id,
+        force=force,
     )
 
 
