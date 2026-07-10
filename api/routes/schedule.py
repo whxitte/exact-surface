@@ -13,6 +13,12 @@ from fastapi import APIRouter, Depends
 from api.deps import Principal, get_mongo_dep, get_principal
 from db.tenants import TenantRepo
 from taskqueue.cadence import DEFAULT_CADENCE_SECONDS, MIN_INTERVAL_SECONDS, sanitize_overrides
+from taskqueue.timeouts import (
+    DEFAULT_TIMEOUTS_SECONDS,
+    MAX_TIMEOUT_SECONDS,
+    MIN_TIMEOUT_SECONDS,
+    sanitize_timeout_overrides,
+)
 
 router = APIRouter(prefix="/schedule", tags=["schedule"])
 
@@ -65,3 +71,38 @@ async def set_defaults(
     overrides = sanitize_overrides(body.get("overrides") if isinstance(body, dict) else None)
     await TenantRepo.from_mongo(mongo).set_cadence_overrides(principal.tenant_id, overrides)
     return {"cadence_overrides": overrides, "pipelines": _catalog()}
+
+
+def _timeout_catalog() -> list[dict]:
+    items = [
+        {"stage": s, "label": _PIPELINE_LABELS.get(s, s), "default_seconds": secs}
+        for s, secs in DEFAULT_TIMEOUTS_SECONDS.items()
+    ]
+    items.sort(key=lambda i: i["default_seconds"])
+    return items
+
+
+@router.get("/timeout-defaults")
+async def get_timeout_defaults(
+    principal: Principal = Depends(get_principal), mongo: Any = Depends(get_mongo_dep)
+) -> dict:
+    tenant = await TenantRepo.from_mongo(mongo).get(principal.tenant_id)
+    return {
+        "timeout_overrides": sanitize_timeout_overrides((tenant or {}).get("timeout_overrides")),
+        "stages": _timeout_catalog(),
+        "min_seconds": MIN_TIMEOUT_SECONDS,
+        "max_seconds": MAX_TIMEOUT_SECONDS,
+    }
+
+
+@router.post("/timeout-defaults")
+async def set_timeout_defaults(
+    body: dict,
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    overrides = sanitize_timeout_overrides(
+        body.get("overrides") if isinstance(body, dict) else None
+    )
+    await TenantRepo.from_mongo(mongo).set_timeout_overrides(principal.tenant_id, overrides)
+    return {"timeout_overrides": overrides, "stages": _timeout_catalog()}

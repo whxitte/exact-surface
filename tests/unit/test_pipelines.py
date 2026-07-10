@@ -311,13 +311,13 @@ async def test_full_pipeline_marks_failing_stage_and_leaves_later_stages_queued(
 
 async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
     import asyncio
-    from types import SimpleNamespace
 
-    import pipelines.orchestrate as orch
+    import taskqueue.timeouts as tmo
 
-    # tiny per-stage ceiling so a slow stage trips it instantly
-    orig = orch.get_settings
-    orch.get_settings = lambda: SimpleNamespace(stage_timeout=0.02)
+    # tiny per-stage ceiling so a slow stage trips it instantly: drop the margin and
+    # set the probe phase's configured timeout to 20ms via the `timeouts` arg.
+    orig_margin = tmo.STAGE_MARGIN_SECONDS
+    tmo.STAGE_MARGIN_SECONDS = 0
     try:
 
         async def slow_probe(_hosts, _t):
@@ -335,10 +335,11 @@ async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
                 program_id="p1",
                 apex="customer.com",
                 timeout=10,
+                timeouts={"probe": 0.02},
                 **injected,
             )
     finally:
-        orch.get_settings = orig
+        tmo.STAGE_MARGIN_SECONDS = orig_margin
 
     run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
     assert run["status"] == "failed" and run["error"] == "probe: timed out"

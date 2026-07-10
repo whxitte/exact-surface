@@ -425,3 +425,38 @@ def test_schedule_endpoints_program_and_tenant_defaults():
     }
     assert phases["ingest"]["source"] == "program"
     assert phases["ingest"]["interval_seconds"] == 300  # floored to MIN_INTERVAL_SECONDS
+
+
+def test_timeout_config_program_and_tenant_defaults():
+    client, _, _ = build()
+    token = _signup(client)["access_token"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+
+    # program timeouts: every stage present, scan defaults to 3600s from built-ins
+    stages = {
+        s["stage"]: s
+        for s in client.get(f"/programs/{pid}/timeouts", headers=_auth(token)).json()["stages"]
+    }
+    assert stages["scan"]["timeout_seconds"] == 3600 and stages["scan"]["source"] == "default"
+
+    # tenant default lowers scan to 30m → program inherits it (source "tenant")
+    client.post(
+        "/schedule/timeout-defaults", headers=_auth(token), json={"overrides": {"scan": 1800}}
+    )
+    stages = {
+        s["stage"]: s
+        for s in client.get(f"/programs/{pid}/timeouts", headers=_auth(token)).json()["stages"]
+    }
+    assert stages["scan"]["timeout_seconds"] == 1800 and stages["scan"]["source"] == "tenant"
+
+    # program override wins; absurd values are clamped to MAX
+    client.post(
+        f"/programs/{pid}/timeouts", headers=_auth(token), json={"overrides": {"scan": 999999999}}
+    )
+    stages = {
+        s["stage"]: s
+        for s in client.get(f"/programs/{pid}/timeouts", headers=_auth(token)).json()["stages"]
+    }
+    assert stages["scan"]["source"] == "program" and stages["scan"]["timeout_seconds"] == 6 * 3600

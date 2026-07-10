@@ -28,3 +28,8 @@ class TenantRepo:
         await self._c.update_one(
             {"tenant_id": tenant_id}, {"$set": {"cadence_overrides": overrides}}
         )
+
+    async def set_timeout_overrides(self, tenant_id: str, overrides: dict[str, int]) -> None:
+        await self._c.update_one(
+            {"tenant_id": tenant_id}, {"$set": {"timeout_overrides": overrides}}
+        )

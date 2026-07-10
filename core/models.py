@@ -64,6 +64,9 @@ class Tenant(BaseModel):
     #: account-wide per-pipeline cadence defaults (seconds); a program's own
     #: cadence_overrides win over these. See taskqueue.cadence.effective_cadence.
     cadence_overrides: dict[str, int] = Field(default_factory=dict)
+    #: account-wide per-stage timeout defaults (seconds); a program's own
+    #: timeout_overrides win. See taskqueue.timeouts.effective_timeouts.
+    timeout_overrides: dict[str, int] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -140,6 +143,9 @@ class Program(TenantScopedModel):
     #: per-pipeline cadence overrides (seconds) for THIS program; falls back to the
     #: tenant defaults, then the built-ins. See taskqueue.cadence.effective_cadence.
     cadence_overrides: dict[str, int] = Field(default_factory=dict)
+    #: per-stage max-runtime overrides (seconds); same precedence as cadence.
+    #: See taskqueue.timeouts.effective_timeouts.
+    timeout_overrides: dict[str, int] = Field(default_factory=dict)
     #: set once the first full pipeline run completes — until then the scheduler
     #: bootstraps a single ordered full run instead of fanning out per-phase.
     initial_scan_completed_at: datetime | None = None

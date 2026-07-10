@@ -13,7 +13,6 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from core.config import get_settings
 from core.errors import AuthorizationRequired
 from core.logging import bind_context, logger
 from core.models import ScanRun, ScanStage, ScanStatus
@@ -96,6 +95,7 @@ async def run_full_pipeline(
     timeout: float,
     scan_id: str | None = None,
     enabled_modules: tuple[str, ...] = (),
+    timeouts: dict[str, int] | None = None,
     **injected: Any,
 ) -> dict:
     """Run the full outside-in pipeline: discover → probe → (tls) → crawl → content
@@ -109,14 +109,19 @@ async def run_full_pipeline(
     scan_id = scan_id or uuid.uuid4().hex
     audit = ScanRunRepo.from_mongo(mongo)
 
+    # per-stage max runtime (built-ins ← tenant ← program); the tool budget for
+    # tool stages + the wait_for ceiling for every stage. See taskqueue.timeouts.
+    from taskqueue.timeouts import DEFAULT_TIMEOUTS_SECONDS, STAGE_MARGIN_SECONDS
+
+    timeouts = timeouts or dict(DEFAULT_TIMEOUTS_SECONDS)
+
     common = dict(
         mongo=mongo,
         engine=engine,
         scope=scope,
         tenant=tenant,
         program_id=program_id,
-        timeout=timeout,
-    )
+    )  # each stage adds its own per-phase timeout
     core = dict(mongo=mongo, tenant=tenant, program_id=program_id)  # DB-only stages
 
     def inj(*keys: str) -> dict:
@@ -124,7 +129,7 @@ async def run_full_pipeline(
 
     enabled = set(enabled_modules)
 
-    async def _disabled() -> dict:
+    async def _disabled(_t: float = 0) -> dict:
         return {"skipped": True, "disabled": True, "note": "not enabled — turn on in settings"}
 
     def optional(module: str, real):
@@ -134,21 +139,27 @@ async def run_full_pipeline(
 
     # (name, coroutine factory) in execution order — the complete attacker chain.
     # OPTIONAL_MODULES stages (tls/service_scan/dork) self-skip when not enabled.
+    # Each factory takes its per-stage timeout `t`. Tool stages forward it as their
+    # tool budget; DB-only stages ignore it (bounded only by the wait_for ceiling).
     stage_defs: list[tuple[str, Any]] = [
-        ("ingest", lambda: run_ingest(**common, apex=apex, **inj("subfinder", "crtsh", "resolve"))),
-        ("probe", lambda: run_probe(**common, **inj("probe"))),
-        ("tls", optional("tls", lambda: run_tls_scan(**common, **inj("tlsinspect")))),
-        ("crawl", lambda: run_crawl(**common, apex=apex, **inj("gau", "wayback", "katana"))),
-        ("content_discovery", lambda: run_content_discovery(**common, **inj("discover"))),
-        ("port_scan", lambda: run_port_scan(**common, **inj("naabu"))),
+        ("ingest", lambda t: run_ingest(**common, timeout=t, apex=apex,
+                                        **inj("subfinder", "crtsh", "resolve"))),
+        ("probe", lambda t: run_probe(**common, timeout=t, **inj("probe"))),
+        ("tls", optional("tls", lambda t: run_tls_scan(**common, timeout=t, **inj("tlsinspect")))),
+        ("crawl", lambda t: run_crawl(**common, timeout=t, apex=apex,
+                                      **inj("gau", "wayback", "katana"))),
+        ("content_discovery",
+         lambda t: run_content_discovery(**common, timeout=t, **inj("discover"))),
+        ("port_scan", lambda t: run_port_scan(**common, timeout=t, **inj("naabu"))),
         (
             "service_scan",
-            optional("service_scan", lambda: run_service_scan(**common, **inj("nmap"))),
+            optional("service_scan",
+                     lambda t: run_service_scan(**common, timeout=t, **inj("nmap"))),
         ),
-        ("scan", lambda: run_scan(**common, **inj("scan"))),
+        ("scan", lambda t: run_scan(**common, timeout=t, **inj("scan"))),
         (
             "secrets",
-            lambda: run_secret_scan(
+            lambda t: run_secret_scan(
                 mongo=mongo,
                 engine=engine,
                 scope=scope,
@@ -157,21 +168,21 @@ async def run_full_pipeline(
                 **inj("fetch"),
             ),
         ),
-        ("cve_watch", lambda: run_cve_watch(**core, **inj("recent", "kev"))),
-        ("github_osint", lambda: run_github_leak_scan(**core, domain=apex, **inj("search"))),
+        ("cve_watch", lambda t: run_cve_watch(**core, **inj("recent", "kev"))),
+        ("github_osint", lambda t: run_github_leak_scan(**core, domain=apex, **inj("search"))),
         (
             "dork",
             optional(
                 "dork",
-                lambda: run_dork(
+                lambda t: run_dork(
                     **core,
                     domain=apex,
                     **({"search": injected["dork_search"]} if "dork_search" in injected else {}),
                 ),
             ),
         ),
-        ("correlate", lambda: run_correlate(**core)),
-        ("notify", lambda: run_notify(**core, **inj("senders"))),
+        ("correlate", lambda t: run_correlate(**core)),
+        ("notify", lambda t: run_notify(**core, **inj("senders"))),
     ]
 
     run = ScanRun(
@@ -185,7 +196,6 @@ async def run_full_pipeline(
     )
     await audit.save(run)
 
-    stage_budget = get_settings().stage_timeout
     results: dict[str, dict] = {}
     with bind_context(tenant_id=tenant.tenant_id, scan_id=scan_id, program_id=program_id):
         logger.info("full scan started: {} ({} stages)", apex, len(stage_defs))
@@ -194,11 +204,15 @@ async def run_full_pipeline(
                 stage_obj.status = ScanStatus.RUNNING
                 stage_obj.started_at = datetime.now(UTC)
                 await audit.save(run)  # flip to running so the poller sees the stage start
-                logger.info("stage {} started", name)
+                # per-stage tool budget + a margin before the hard ceiling, so a tool's
+                # own (graceful, partial-keeping) timeout fires before wait_for cancels.
+                phase_timeout = timeouts.get(name, timeout)
+                stage_budget = phase_timeout + STAGE_MARGIN_SECONDS
+                logger.info("stage {} started (limit {:.0f}s)", name, phase_timeout)
                 try:
                     # Hard per-stage ceiling: a stuck stage raises TimeoutError (caught
                     # below → clean FAILED) rather than hanging until arq hard-cancels.
-                    res = await asyncio.wait_for(factory(), stage_budget)
+                    res = await asyncio.wait_for(factory(phase_timeout), stage_budget)
                 except (Exception, asyncio.CancelledError) as exc:
                     now = datetime.now(UTC)
                     timed_out = isinstance(exc, (asyncio.TimeoutError, asyncio.CancelledError))
@@ -266,6 +280,14 @@ async def run_program(
         )
 
     scope = build_program_scope(program, auth)
+    # resolve per-stage timeouts: built-ins ← tenant defaults ← program overrides
+    from db.tenants import TenantRepo
+    from taskqueue.timeouts import effective_timeouts
+
+    tenant_doc = await TenantRepo.from_mongo(mongo).get(tenant.tenant_id)
+    timeouts = effective_timeouts(
+        program.get("timeout_overrides"), (tenant_doc or {}).get("timeout_overrides")
+    )
     result = await run_full_pipeline(
         mongo=mongo,
         engine=engine,
@@ -276,6 +298,7 @@ async def run_program(
         timeout=timeout,
         scan_id=scan_id,
         enabled_modules=tuple(program.get("enabled_modules", [])),
+        timeouts=timeouts,
     )
     # Once the first full run finishes, the scheduler switches this program from
     # bootstrap to per-phase cadence. Set only on the first completion.

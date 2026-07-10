@@ -38,6 +38,8 @@ from db.authorizations import AuthorizationRepo
 from db.deltas import DeltaRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
+from db.leaks import LeakRepo
+from db.ports import PortRepo
 from db.programs import ProgramRepo, delete_program_and_data
 from db.schedule import ScheduleRepo
 from db.secrets import SecretRepo
@@ -47,6 +49,7 @@ from taskqueue.cadence import (
     next_due,
     sanitize_overrides,
 )
+from taskqueue.timeouts import effective_timeouts, sanitize_timeout_overrides
 
 router = APIRouter(prefix="/programs", tags=["programs"])
 
@@ -196,6 +199,50 @@ async def set_schedule(
     )
     program = {**program, "cadence_overrides": overrides}
     return await _schedule_view(mongo, program)
+
+
+# -- per-phase time limits ---------------------------------------------------
+async def _timeouts_view(mongo: Any, program: dict) -> dict:
+    tid = program["tenant_id"]
+    prog_over = sanitize_timeout_overrides(program.get("timeout_overrides"))
+    tenant = await TenantRepo.from_mongo(mongo).get(tid)
+    tenant_over = sanitize_timeout_overrides((tenant or {}).get("timeout_overrides"))
+    eff = effective_timeouts(prog_over, tenant_over)
+    stages = [
+        {
+            "stage": stage,
+            "timeout_seconds": secs,
+            "source": (
+                "program" if stage in prog_over else "tenant" if stage in tenant_over else "default"
+            ),
+        }
+        for stage, secs in eff.items()
+    ]
+    return {"program_id": program["program_id"], "stages": stages}
+
+
+@router.get("/{program_id}/timeouts", tags=["programs"])
+async def get_timeouts(
+    program: dict = Depends(require_program), mongo: Any = Depends(get_mongo_dep)
+) -> dict:
+    return await _timeouts_view(mongo, program)
+
+
+@router.post("/{program_id}/timeouts", tags=["programs"])
+async def set_timeouts(
+    body: dict,
+    program: dict = Depends(require_program),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Set this program's per-stage max-runtime overrides (seconds). Out-of-range
+    values are clamped to [MIN, MAX] server-side."""
+    overrides = sanitize_timeout_overrides(
+        body.get("overrides") if isinstance(body, dict) else None
+    )
+    await ProgramRepo.from_mongo(mongo).set_timeout_overrides(
+        program["tenant_id"], program["program_id"], overrides
+    )
+    return await _timeouts_view(mongo, {**program, "timeout_overrides": overrides})
 
 
 # -- domain verification -----------------------------------------------------
@@ -416,6 +463,8 @@ router.add_api_route(
     "/{program_id}/endpoints", _reader(EndpointRepo), methods=["GET"], tags=["data"]
 )
 router.add_api_route("/{program_id}/secrets", _reader(SecretRepo), methods=["GET"], tags=["data"])
+router.add_api_route("/{program_id}/ports", _reader(PortRepo), methods=["GET"], tags=["data"])
+router.add_api_route("/{program_id}/leaks", _reader(LeakRepo), methods=["GET"], tags=["data"])
 router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
     "/{program_id}/scan-runs", _reader(ScanRunRepo), methods=["GET"], tags=["data"]

@@ -54,13 +54,23 @@ async def run_pipeline(
     apex = program["apex_domain"]
     # cascade: when a job carries specific hostnames, phases scope their work to them
     tset: set[str] | None = set(targets) or None
+    # per-phase timeout (built-ins ← tenant ← program) so a single-phase cadence /
+    # cascade run of e.g. `scan` gets the same configurable nuclei budget as a full run.
+    from db.tenants import TenantRepo
+    from taskqueue.timeouts import effective_timeouts
+
+    tenant_doc = await TenantRepo.from_mongo(mongo).get(tenant.tenant_id)
+    timeouts = effective_timeouts(
+        program.get("timeout_overrides"), (tenant_doc or {}).get("timeout_overrides")
+    )
+    phase_timeout = timeouts.get(pipeline, timeout)
     common = dict(
         mongo=mongo,
         engine=engine,
         scope=scope,
         tenant=tenant,
         program_id=program_id,
-        timeout=timeout,
+        timeout=phase_timeout,
     )
 
     async def _execute() -> dict:
