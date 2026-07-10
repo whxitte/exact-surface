@@ -154,3 +154,29 @@ async def test_stream_tool_handles_lines_over_64kb():
     )
     assert not timed_out and rc == 0
     assert out == [big, "small"] and seen == [big, "small"]
+
+
+async def test_dnsx_recon_parses_full_records():
+    from modules.recon.dnsx import recon_hosts
+
+    async def runner(binary, args, *, timeout, stdin=None):
+        return [
+            {"host": "APP.acme.com.", "a": ["1.2.3.4"], "cname": ["d.cloudfront.net"], "mx": []},
+            {"host": "app.acme.com", "aaaa": ["::1"], "ns": ["ns1.acme.com"]},
+        ]
+
+    out = await recon_hosts(["app.acme.com"], 10, runner=runner)
+    rec = out["app.acme.com"]  # host normalised, both rows merged
+    assert rec["a"] == ["1.2.3.4"] and rec["cname"] == ["d.cloudfront.net"]
+    assert rec["aaaa"] == ["::1"] and rec["ns"] == ["ns1.acme.com"]
+    assert "mx" not in rec  # empty record types are dropped
+
+
+async def test_dnsx_recon_tolerates_missing_binary():
+    from core.errors import ToolNotFound
+    from modules.recon.dnsx import recon_hosts
+
+    async def missing(*_a, **_k):
+        raise ToolNotFound("dnsx")
+
+    assert await recon_hosts(["a.com"], 10, runner=missing) == {}  # best-effort → {}

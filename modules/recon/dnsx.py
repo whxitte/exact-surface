@@ -8,9 +8,50 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from core.errors import ToolNotFound
 from modules.exec import run_tool_jsonl
 
 Runner = Callable[..., Awaitable[list[dict]]]
+
+#: DNS record types we enrich each asset with (dnsx -recon style).
+DNS_RECORD_KEYS: tuple[str, ...] = ("a", "aaaa", "cname", "ns", "mx", "txt")
+
+
+async def recon_hosts(
+    hosts: list[str], timeout: float, *, runner: Runner = run_tool_jsonl
+) -> dict[str, dict[str, list[str]]]:
+    """Full DNS records per host (A/AAAA/CNAME/NS/MX/TXT) for attack-surface mapping.
+
+    Best-effort enrichment: if dnsx isn't available it returns ``{}`` rather than
+    failing the run. Shape: ``{host: {"cname": [...], "mx": [...], ...}}`` (only
+    record types that have values are included)."""
+    hosts = [h for h in hosts if h]
+    if not hosts:
+        return {}
+    try:
+        rows = await runner(
+            "dnsx",
+            ["-silent", "-json", "-a", "-aaaa", "-cname", "-ns", "-mx", "-txt", "-resp"],
+            timeout=timeout,
+            stdin="\n".join(hosts),
+        )
+    except ToolNotFound:
+        return {}
+
+    out: dict[str, dict[str, set[str]]] = {}
+    for r in rows:
+        host = (r.get("host") or "").lower().rstrip(".")
+        if not host:
+            continue
+        rec = out.setdefault(host, {k: set() for k in DNS_RECORD_KEYS})
+        for key in DNS_RECORD_KEYS:
+            vals = r.get(key) or []
+            if isinstance(vals, str):
+                vals = [vals]
+            rec[key].update(str(v) for v in vals if v)
+    return {
+        host: {k: sorted(v) for k, v in rec.items() if v} for host, rec in out.items()
+    }
 
 
 async def resolve_hosts(

@@ -21,6 +21,7 @@ from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
 from modules.recon.crtsh import enumerate_subdomains as crtsh_enum
+from modules.recon.dnsx import recon_hosts as dnsx_recon
 from modules.recon.dnsx import resolve_hosts as dnsx_resolve
 from modules.recon.subfinder import enumerate_subdomains as subfinder_enum
 
@@ -37,6 +38,7 @@ async def run_ingest(
     subfinder=subfinder_enum,
     crtsh=crtsh_enum,
     resolve=dnsx_resolve,
+    dns_recon=dnsx_recon,
 ) -> dict:
     logger.info("discovering subdomains of {} (subfinder + crt.sh)", apex)
     subs = await subfinder(apex, timeout)
@@ -54,6 +56,11 @@ async def run_ingest(
     resolved = await resolve(in_scope, timeout)
     logger.info("dnsx resolved {}/{} in-scope host(s) to live IPs", len(resolved), len(in_scope))
 
+    # Full DNS records per host (CNAME/NS/MX/TXT + A/AAAA) — best-effort enrichment.
+    dns = await dns_recon(in_scope, timeout)
+    if dns:
+        logger.info("dnsx recon: {} host(s) enriched with full DNS records", len(dns))
+
     models = [
         Asset(
             tenant_id=tenant.tenant_id,
@@ -64,6 +71,7 @@ async def run_ingest(
             ip_class=(engine.classify_ip(resolved[host][0]).value if resolved.get(host) else None),
             source="ingest",
             is_ephemeral=is_ephemeral_host(host),
+            dns_records=dns.get(host, {}),
         )
         for host in in_scope
     ]

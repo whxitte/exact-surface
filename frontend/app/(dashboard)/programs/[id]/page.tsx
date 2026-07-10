@@ -433,6 +433,21 @@ export default function ProgramDetail() {
                       {a.resolved_ips.join(", ") || "unresolved"}
                       {ep?.title ? ` · ${ep.title}` : ""}
                     </div>
+                    {a.dns_records?.cname?.length ? (
+                      <div className="truncate font-mono text-[11px] text-severity-medium">
+                        CNAME → {a.dns_records.cname.join(", ")}
+                      </div>
+                    ) : null}
+                    {(() => {
+                      const extra = ["ns", "mx", "txt", "aaaa"]
+                        .filter((k) => a.dns_records?.[k]?.length)
+                        .map((k) => `${k.toUpperCase()} ${a.dns_records![k].length}`);
+                      return extra.length ? (
+                        <div className="truncate text-[11px] text-muted-foreground">
+                          {extra.join(" · ")}
+                        </div>
+                      ) : null;
+                    })()}
                   </div>
                   {ep?.tech?.slice(0, 3).map((t) => (
                     <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">

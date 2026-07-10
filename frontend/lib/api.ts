@@ -80,6 +80,7 @@ export interface Asset {
   ip_class?: string | null;
   is_ephemeral: boolean;
   monitored?: boolean;
+  dns_records?: Record<string, string[]>; // a/aaaa/cname/ns/mx/txt
   first_seen?: string;
 }
 export interface Endpoint {

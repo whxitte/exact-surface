@@ -189,6 +189,9 @@ class Asset(StatefulModel):
     ip_class: str | None = None  # last-classified (core.scope.IpClass value)
     source: str = "unknown"  # discovering module, e.g. "subfinder"
     is_ephemeral: bool = False  # preview/staging env (§module 19)
+    #: full DNS records (A/AAAA/CNAME/NS/MX/TXT) from dnsx recon — CNAMEs reveal
+    #: cloud services / takeover candidates. {record_type: [values]}.
+    dns_records: dict[str, list[str]] = Field(default_factory=dict)
     #: User can mute an individual asset — unmonitored hosts are skipped by crawl /
     #: content-discovery / port-scan. Preserved across re-scans (see AssetRepo).
     monitored: bool = True
