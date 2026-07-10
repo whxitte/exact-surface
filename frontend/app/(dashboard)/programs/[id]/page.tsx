@@ -13,6 +13,7 @@ import {
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { ScheduleCard } from "@/components/schedule-card";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { SeverityBadge } from "@/components/ui/badge";
@@ -236,13 +237,12 @@ export default function ProgramDetail() {
             <Button onClick={scan} disabled={scanBusy}>
               <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
             </Button>
-            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-              <input
-                type="checkbox"
+            <label className="flex cursor-pointer items-center gap-3 text-xs text-muted-foreground ml-2">
+              <Switch
                 checked={!!program.scan_shared_infra}
-                onChange={(e) => toggleSharedInfra(e.target.checked)}
+                onChange={toggleSharedInfra}
               />
-              Scan my cloud infra (ports/content/active on cloud IPs — §9b)
+              <span>Scan my cloud infra (ports/content/active on cloud IPs — §9b)</span>
             </label>
           </div>
         )
@@ -261,11 +261,10 @@ export default function ProgramDetail() {
                   ["dork", "Dorking", "search-engine exposures (needs Google CSE key)"],
                 ] as const
               ).map(([mod, label, hint]) => (
-                <label key={mod} className="flex cursor-pointer items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
+                <label key={mod} className="flex cursor-pointer items-center gap-3 text-sm">
+                  <Switch
                     checked={(program.enabled_modules || []).includes(mod)}
-                    onChange={(e) => toggleModule(mod, e.target.checked)}
+                    onChange={(val) => toggleModule(mod, val)}
                   />
                   <span>{label}</span>
                   <span className="text-xs text-muted-foreground">— {hint}</span>
