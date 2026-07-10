@@ -4,14 +4,31 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from core.logging import logger
 from modules.content_discovery.wordlist_selector import wordlist_path
-from modules.exec import run_tool_jsonl
+from modules.exec import iter_jsonl, run_tool
 
 Runner = Callable[..., Awaitable[list[dict]]]
 
 
+async def _default_runner(binary: str, args, *, timeout: float, stdin: str | None = None):
+    """Run feroxbuster and parse its JSONL. Unlike the generic ``run_tool_jsonl``,
+    this surfaces WHY a run produced nothing (exit code + stderr) — feroxbuster
+    exiting instantly with no output was invisible before."""
+    run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
+    rows = list(iter_jsonl(run.stdout))
+    if not rows and (run.returncode != 0 or not run.stdout.strip()):
+        diag = (run.stderr or run.stdout).strip().splitlines()
+        logger.warning(
+            "feroxbuster produced no results (exit {}): {}",
+            run.returncode,
+            diag[-1][:300] if diag else "no output on stdout/stderr",
+        )
+    return rows
+
+
 async def discover(
-    url: str, wordlist: str, timeout: float, *, runner: Runner = run_tool_jsonl
+    url: str, wordlist: str, timeout: float, *, runner: Runner = _default_runner
 ) -> list[dict]:
     """Return discovered ``{url, status, content_length}`` entries for *url*.
 
@@ -19,11 +36,11 @@ async def discover(
     an absolute path (a bare filename makes feroxbuster fail instantly with no
     output). Injected runners (tests) get the value untouched. content_discovery
     guards up-front that wordlists are installed."""
-    if runner is run_tool_jsonl:
+    if runner is _default_runner:
         wordlist = wordlist_path(wordlist)
     rows = await runner(
         "feroxbuster",
-        ["-u", url, "-w", wordlist, "--json", "-q", "-k", "--no-recursion"],
+        ["-u", url, "-w", wordlist, "--json", "-k", "--no-recursion"],
         timeout=timeout,
     )
     results: list[dict] = []

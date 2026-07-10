@@ -206,6 +206,7 @@ async def run_full_pipeline(
     await audit.save(run)
 
     results: dict[str, dict] = {}
+    failed: list[str] = []  # stages that errored/timed out (run continues past them)
     with bind_context(tenant_id=tenant.tenant_id, scan_id=scan_id, program_id=program_id):
         logger.info("full scan started: {} ({} stages)", apex, len(stage_defs))
         for stage_obj, (name, factory) in zip(run.stages, stage_defs, strict=True):
@@ -219,26 +220,35 @@ async def run_full_pipeline(
                 stage_budget = phase_timeout + STAGE_MARGIN_SECONDS
                 logger.info("stage {} started (limit {:.0f}s)", name, phase_timeout)
                 try:
-                    # Hard per-stage ceiling: a stuck stage raises TimeoutError (caught
-                    # below → clean FAILED) rather than hanging until arq hard-cancels.
                     res = await asyncio.wait_for(factory(phase_timeout), stage_budget)
-                except (Exception, asyncio.CancelledError) as exc:
+                except asyncio.CancelledError:
+                    # Outer cancellation (the whole arq job is being killed) — persist
+                    # FAILED (not stuck RUNNING) and abort the run.
                     now = datetime.now(UTC)
-                    timed_out = isinstance(exc, (asyncio.TimeoutError, asyncio.CancelledError))
                     stage_obj.status = ScanStatus.FAILED
                     stage_obj.finished_at = now
                     run.status = ScanStatus.FAILED
                     run.finished_at = now
-                    run.error = (
-                        f"{name}: timed out"
-                        if timed_out
-                        else f"{name}: {type(exc).__name__}: {exc}"
-                    )
-                    # shield: if this is an outer cancellation, still persist FAILED
-                    # rather than leaving the run stuck RUNNING.
+                    run.error = f"{name}: cancelled"
                     await asyncio.shield(audit.save(run))
-                    logger.error("pipeline failed for {} at stage {}: {}", program_id, name, exc)
+                    logger.error("run cancelled for {} at stage {}", program_id, name)
                     raise
+                except Exception as exc:  # noqa: BLE001
+                    # ISOLATE a per-stage failure/timeout: mark this stage FAILED but
+                    # keep going, so one flaky tool (e.g. a slow nmap) never sinks the
+                    # whole run and lose scan/secrets/notify after it.
+                    now = datetime.now(UTC)
+                    timed_out = isinstance(exc, asyncio.TimeoutError)
+                    stage_obj.status = ScanStatus.FAILED
+                    stage_obj.finished_at = now
+                    stage_obj.note = (
+                        "timed out" if timed_out else f"{type(exc).__name__}: {exc}"[:200]
+                    )
+                    failed.append(name)
+                    results[name] = {"failed": True, "note": stage_obj.note}
+                    await audit.save(run)
+                    logger.error("stage {} failed (continuing): {}", name, exc)
+                    continue
                 stage_obj.finished_at = datetime.now(UTC)
                 if res.get("skipped"):
                     stage_obj.status = ScanStatus.SKIPPED
@@ -249,20 +259,26 @@ async def run_full_pipeline(
                 results[name] = res
                 await audit.save(run)  # flip to done (+ stats/note) after the stage completes
 
-        run.status = ScanStatus.SUCCESS
+        # The run is SUCCESS even if a non-fatal stage failed — every other stage ran
+        # and its data was saved; the failed stage shows red in the stepper.
+        run.status = ScanStatus.FAILED if failed else ScanStatus.SUCCESS
         run.finished_at = datetime.now(UTC)
+        if failed:
+            run.error = "stage(s) failed: " + ", ".join(failed)
+
+        def _stat(stage: str, key: str) -> int:
+            return int((results.get(stage) or {}).get(key, 0) or 0)
+
         run.stats = {
-            "assets_new": results["ingest"]["new"],
+            "assets_new": _stat("ingest", "new"),
             "endpoints_new": (
-                results["probe"]["new"]
-                + results["crawl"]["new"]
-                + results["content_discovery"]["new"]
+                _stat("probe", "new") + _stat("crawl", "new") + _stat("content_discovery", "new")
             ),
-            "ports_new": results["port_scan"]["new"],
-            "findings_new": results["scan"]["new"],
-            "secrets_new": results["secrets"]["new"],
-            "cve_matches": results["cve_watch"]["new_alertable"],
-            "issues": results["correlate"]["count"],
+            "ports_new": _stat("port_scan", "new"),
+            "findings_new": _stat("scan", "new"),
+            "secrets_new": _stat("secrets", "new"),
+            "cve_matches": _stat("cve_watch", "new_alertable"),
+            "issues": _stat("correlate", "count"),
         }
         await audit.save(run)
         return {"scan_id": scan_id, **results}

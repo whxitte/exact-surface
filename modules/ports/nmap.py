@@ -22,10 +22,14 @@ async def service_scan(
     ports: list[int],
     timeout: float,
     *,
-    max_rate: int = 10,
+    max_rate: int = 100,
     runner: Runner = run_tool_stdout,
 ) -> list[dict]:
-    """Return ``{port, protocol, state, service, version}`` for the given ports on *ip*."""
+    """Return ``{port, protocol, state, service, version}`` for the given ports on *ip*.
+
+    ``--host-timeout`` makes nmap self-bound to *timeout* and return whatever it
+    identified so far rather than being hard-killed (which loses all output). The
+    old ``--max-rate 10`` throttled ``-sV`` so hard it couldn't finish in budget."""
     if not ports:
         return []
     port_arg = ",".join(str(p) for p in sorted(set(ports)))
@@ -37,13 +41,15 @@ async def service_scan(
             "--version-light",
             "--max-rate",
             str(max_rate),
+            "--host-timeout",
+            f"{int(timeout)}s",
             "-p",
             port_arg,
             "-oG",
             "-",
             ip,
         ],
-        timeout=timeout,
+        timeout=timeout + 10,  # let nmap's own host-timeout fire before we hard-kill
     )
     results: list[dict] = []
     for line in out.splitlines():

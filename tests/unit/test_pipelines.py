@@ -282,32 +282,34 @@ async def test_enabled_optional_module_runs():
     assert len(await ScanRunRepo.from_mongo(mongo).list("t1")) == 1
 
 
-async def test_full_pipeline_marks_failing_stage_and_leaves_later_stages_queued():
+async def test_full_pipeline_isolates_failing_stage_and_continues():
+    # A stage that raises marks itself FAILED but the run CONTINUES — one flaky tool
+    # must not sink the whole scan (losing secrets/notify after it).
     mongo = FakeMongo()
 
     async def boom_scan(_urls, _t, aggressive=False):
         raise RuntimeError("scanner exploded")
 
     injected = _injected([]) | {"scan": boom_scan}
-    with pytest.raises(RuntimeError, match="scanner exploded"):
-        await run_full_pipeline(
-            mongo=mongo,
-            engine=ENGINE,
-            scope=SCOPE,
-            tenant=TENANT,
-            program_id="p1",
-            apex="customer.com",
-            timeout=10,
-            **injected,
-        )
+    result = await run_full_pipeline(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=10,
+        **injected,
+    )
+    assert "scan_id" in result  # returned normally (no raise)
     run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
-    assert run["status"] == "failed" and run["error"].startswith("scan:")
+    assert run["status"] == "failed" and "scan" in run["error"]
     by_name = {s["name"]: s["status"] for s in run["stages"]}
     assert by_name["ingest"] == "success"
-    assert by_name["probe"] == "success"
-    assert by_name["crawl"] == "success"
     assert by_name["scan"] == "failed"
-    assert by_name["secrets"] == "queued"  # never reached
+    # stages AFTER the failed one still ran (not left queued)
+    assert by_name["secrets"] != "queued"
+    assert by_name["notify"] != "queued"
 
 
 async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
@@ -327,27 +329,29 @@ async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
 
         mongo = FakeMongo()
         injected = _injected([]) | {"probe": slow_probe}
-        with pytest.raises(asyncio.TimeoutError):
-            await run_full_pipeline(
-                mongo=mongo,
-                engine=ENGINE,
-                scope=SCOPE,
-                tenant=TENANT,
-                program_id="p1",
-                apex="customer.com",
-                timeout=10,
-                timeouts={"probe": 0.02},
-                **injected,
-            )
+        # a stuck stage times out cleanly (FAILED, not stuck RUNNING) and the run
+        # continues past it rather than aborting.
+        await run_full_pipeline(
+            mongo=mongo,
+            engine=ENGINE,
+            scope=SCOPE,
+            tenant=TENANT,
+            program_id="p1",
+            apex="customer.com",
+            timeout=10,
+            timeouts={"probe": 0.02},
+            **injected,
+        )
     finally:
         tmo.STAGE_MARGIN_SECONDS = orig_margin
 
     run = await mongo.collection("scan_runs").find_one({"program_id": "p1"})
-    assert run["status"] == "failed" and run["error"] == "probe: timed out"
-    by_name = {s["name"]: s["status"] for s in run["stages"]}
-    assert by_name["ingest"] == "success"  # ran before the stuck stage
-    assert by_name["probe"] == "failed"  # timed out → FAILED, not left RUNNING
-    assert by_name["crawl"] == "queued"  # never reached
+    assert run["status"] == "failed" and "probe" in run["error"]
+    by_name = {s["name"]: s for s in run["stages"]}
+    assert by_name["ingest"]["status"] == "success"  # ran before the stuck stage
+    assert by_name["probe"]["status"] == "failed"  # timed out → FAILED, not RUNNING
+    assert by_name["probe"]["note"] == "timed out"
+    assert by_name["notify"]["status"] != "queued"  # later stages still ran
 
 
 async def test_run_program_requires_authorization():
