@@ -39,6 +39,7 @@ export default function ProgramDetail() {
   const [scanBusy, setScanBusy] = useState(false);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [assetSort, setAssetSort] = useState<"name" | "status" | "monitored" | "recent">("status");
+  const [endpointSource, setEndpointSource] = useState<string>("all");
 
   const loadProgram = useCallback(() => {
     api.getProgram(id).then(setProgram).catch((e) => setMsg(e.message));
@@ -83,6 +84,14 @@ export default function ProgramDetail() {
       if (!list.includes(a.hostname)) list.push(a.hostname);
       hostsByIp.set(ip, list);
     }
+
+  const endpointSources = Array.from(
+    new Set(endpoints.map((e) => e.source || "other")),
+  ).sort();
+  const shownEndpoints =
+    endpointSource === "all"
+      ? endpoints
+      : endpoints.filter((e) => (e.source || "other") === endpointSource);
 
   const isAlive = (a: Asset) => endpointByHost.get(a.hostname)?.status_code != null;
   const sortedAssets = [...assets].sort((x, y) => {
@@ -486,8 +495,30 @@ export default function ProgramDetail() {
 
       {tab === "endpoints" && (
         <div className="space-y-2">
+          {endpoints.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {["all", ...endpointSources].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setEndpointSource(s)}
+                  className={`rounded-full border px-3 py-1 text-xs capitalize transition-colors ${
+                    endpointSource === s
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {s === "all" ? "all" : s}
+                  <span className="ml-1.5 opacity-60">
+                    {s === "all"
+                      ? endpoints.length
+                      : endpoints.filter((e) => (e.source || "other") === s).length}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
           {endpoints.length === 0 && <Empty label="No endpoints discovered yet — probe/crawl first." />}
-          {endpoints.map((ep) => (
+          {shownEndpoints.map((ep) => (
             <Card key={ep.fingerprint}>
               <CardContent className="flex items-center gap-3 p-3">
                 <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -501,8 +532,13 @@ export default function ProgramDetail() {
                 >
                   {ep.url}
                 </a>
-                {ep.tech?.slice(0, 3).map((t) => (
-                  <span key={t} className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
+                {ep.source && (
+                  <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize text-muted-foreground sm:inline">
+                    {ep.source}
+                  </span>
+                )}
+                {ep.tech?.slice(0, 2).map((t) => (
+                  <span key={t} className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground md:inline">
                     {t}
                   </span>
                 ))}

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Globe, ShieldAlert, Activity, Settings, LogOut, Radar } from "lucide-react";
+import {
+  LayoutDashboard, Globe, ShieldAlert, Activity, Settings, LogOut, Radar, Network,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { clearSession } from "@/lib/auth";
 
@@ -10,6 +12,7 @@ const nav = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/programs", label: "Programs", icon: Globe },
   { href: "/findings", label: "Findings", icon: ShieldAlert },
+  { href: "/dns", label: "DNS", icon: Network },
   { href: "/activity", label: "Activity", icon: Activity },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

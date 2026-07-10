@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, Save, ChevronDown, ChevronUp } from "lucide-react";
+import { CalendarClock, Save, ChevronDown, RotateCcw } from "lucide-react";
 import { api, type Schedule, type SchedulePhase } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -65,9 +65,24 @@ export function ScheduleCard({ programId }: { programId: string }) {
     }
   }
 
+  async function reset() {
+    setSaving(true);
+    setError("");
+    try {
+      const next = await api.setSchedule(programId, {}); // clear program overrides
+      setSched(next);
+      setEdits({});
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (!sched) return null;
   const full = sched.last_full_run;
   const dirty = Object.keys(edits).length > 0;
+  const hasCustom = sched.phases.some((p) => p.source === "program");
 
   return (
     <Card>
@@ -140,6 +155,9 @@ export function ScheduleCard({ programId }: { programId: string }) {
               <div className="flex items-center gap-3">
                 <Button onClick={save} disabled={!dirty || saving}>
                   <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save schedule"}
+                </Button>
+                <Button variant="outline" onClick={reset} disabled={saving || !hasCustom}>
+                  <RotateCcw className="h-4 w-4" /> Reset to defaults
                 </Button>
                 {error && <span className="text-sm text-severity-critical">{error}</span>}
               </div>

@@ -90,6 +90,7 @@ export interface Endpoint {
   status_code?: number | null;
   title?: string | null;
   tech: string[];
+  source?: string; // probe | crawl | feroxbuster
   first_seen?: string;
 }
 export interface Port {

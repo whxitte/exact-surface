@@ -205,6 +205,7 @@ class Endpoint(StatefulModel):
     status_code: int | None = None
     title: str | None = None
     tech: list[str] = Field(default_factory=list)
+    source: str = ""  # discovering module: probe | crawl | feroxbuster
     content_hash: str | None = None  # body/title hash for delta detection
 
 

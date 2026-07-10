@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarClock, Save } from "lucide-react";
+import { CalendarClock, Save, RotateCcw } from "lucide-react";
 import { api, type ScheduleDefaults } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,25 @@ export function ScheduleDefaultsSettings() {
       setSaving(false);
     }
   }
+
+  async function reset() {
+    setSaving(true);
+    setMsg("");
+    try {
+      const next = await api.setScheduleDefaults({}); // clears overrides → built-ins
+      setData((prev) => (prev ? { ...prev, cadence_overrides: {} } : prev));
+      const seed: Record<string, number> = {};
+      for (const p of next.pipelines) seed[p.pipeline] = p.default_seconds;
+      setValues(seed);
+      setMsg("Reset to defaults.");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasCustom = Object.keys(data?.cadence_overrides ?? {}).length > 0;
 
   if (!data) return null;
 
@@ -115,6 +134,9 @@ export function ScheduleDefaultsSettings() {
         <div className="flex items-center gap-3">
           <Button onClick={save} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save defaults"}
+          </Button>
+          <Button variant="outline" onClick={reset} disabled={saving || !hasCustom}>
+            <RotateCcw className="h-4 w-4" /> Reset to defaults
           </Button>
           {msg && <span className="text-sm text-muted-foreground">{msg}</span>}
         </div>

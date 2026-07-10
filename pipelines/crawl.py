@@ -110,6 +110,7 @@ async def run_crawl(
             fingerprint=endpoint_fingerprint(program_id, "GET", u),
             url=u,
             method="GET",
+            source="crawl",
         )
         for u in in_scope_urls
     ]

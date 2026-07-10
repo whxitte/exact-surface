@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Timer, Save } from "lucide-react";
+import { Timer, Save, RotateCcw } from "lucide-react";
 import { api, type TimeoutDefaults } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -53,6 +53,25 @@ export function TimeoutDefaultsSettings() {
       setSaving(false);
     }
   }
+
+  async function reset() {
+    setSaving(true);
+    setMsg("");
+    try {
+      const next = await api.setTimeoutDefaults({}); // clears overrides → built-ins
+      setData((prev) => (prev ? { ...prev, timeout_overrides: {} } : prev));
+      const seed: Record<string, number> = {};
+      for (const s of next.stages) seed[s.stage] = s.default_seconds;
+      setValues(seed);
+      setMsg("Reset to defaults.");
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "failed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasCustom = Object.keys(data?.timeout_overrides ?? {}).length > 0;
 
   if (!data) return null;
 
@@ -116,6 +135,9 @@ export function TimeoutDefaultsSettings() {
         <div className="flex items-center gap-3">
           <Button onClick={save} disabled={saving}>
             <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save time limits"}
+          </Button>
+          <Button variant="outline" onClick={reset} disabled={saving || !hasCustom}>
+            <RotateCcw className="h-4 w-4" /> Reset to defaults
           </Button>
           {msg && <span className="text-sm text-muted-foreground">{msg}</span>}
         </div>

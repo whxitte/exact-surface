@@ -122,6 +122,7 @@ async def run_content_discovery(
             url=hit["url"],
             method="GET",
             status_code=hit.get("status"),
+            source="feroxbuster",
         )
         for hits in per_host_hits
         for hit in hits

@@ -73,6 +73,7 @@ async def run_probe(
             status_code=r.get("status_code"),
             title=r.get("title"),
             tech=r.get("tech") or [],
+            source="probe",
             # Content identity = title + tech only. Status is tracked separately so a
             # status change and a content change are independent delta signals.
             content_hash=canonical_hash(r.get("title"), sorted(r.get("tech") or [])),
