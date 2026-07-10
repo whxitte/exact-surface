@@ -5,7 +5,7 @@ import { Timer, Save } from "lucide-react";
 import { api, type TimeoutDefaults } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 
 type Unit = "s" | "m" | "h";
@@ -87,17 +87,15 @@ export function TimeoutDefaultsSettings() {
                     </span>
                   )}
                 </span>
-                <Input
-                  type="number"
+                <NumberInput
                   min={1}
                   value={value}
-                  onChange={(e) =>
+                  onChange={(val) =>
                     setValues((v) => ({
                       ...v,
-                      [s.stage]: Math.max(1, Number(e.target.value)) * UNIT_SECS[unit],
+                      [s.stage]: Math.max(1, val) * UNIT_SECS[unit],
                     }))
                   }
-                  className="h-8 w-16"
                 />
                 <Select
                   value={unit}

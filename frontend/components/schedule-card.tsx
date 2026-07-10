@@ -5,7 +5,7 @@ import { CalendarClock, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { api, type Schedule, type SchedulePhase } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 import { cn, timeAgo, timeUntil } from "@/lib/utils";
 
@@ -182,12 +182,10 @@ function PhaseRow({
       </td>
       <td className="py-2">
         <div className="flex items-center gap-1">
-          <Input
-            type="number"
+          <NumberInput
             min={1}
             value={value}
-            onChange={(e) => onChange(Math.max(1, Number(e.target.value)) * UNIT_SECS[unit])}
-            className="h-8 w-16"
+            onChange={(val) => onChange(Math.max(1, val) * UNIT_SECS[unit])}
           />
           <Select
             value={unit}
