@@ -46,9 +46,14 @@ async def _default_runner(binary: str, args, *, timeout: float, stdin: str | Non
             )
 
     def on_stderr(line: str) -> None:
-        # nuclei -stats prints progress here (templates done, requests, matches, ETA)
+        # nuclei is very chatty on stderr: the ASCII banner, version lines, and a
+        # flood of "[INF] Skipped … unresponsive" per dead host. Surface only what's
+        # useful — the -stats progress JSON ({…}) and real warnings/errors — so the
+        # live-log panel isn't drowned in noise.
         line = line.strip()
-        if line:
+        if not line:
+            return
+        if line.startswith("{") or "[WRN]" in line or "[ERR]" in line or "[FTL]" in line:
             logger.info("nuclei: {}", line[:300])
 
     rc, _out, stderr, timed_out = await stream_tool(

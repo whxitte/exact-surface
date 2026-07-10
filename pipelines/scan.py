@@ -49,16 +49,28 @@ async def run_scan(
     ips_by_host = {a["hostname"]: a.get("resolved_ips", []) for a in assets}
     endpoints = await EndpointRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
 
+    # ONE representative URL per host, not every crawled endpoint. nuclei's templates
+    # carry their own paths (they append /admin, /.env, … to the base URL themselves),
+    # so feeding all N endpoints of a host just re-runs the same template set against
+    # the same host N times — massively slower for no extra coverage. Scanning the
+    # host root gives full per-subdomain coverage. (Prefer an https endpoint's scheme.)
+    scheme_by_host: dict[str, str] = {}
+    for ep in endpoints:
+        parts = urlsplit(ep["url"])
+        host = parts.hostname or ""
+        if not host or (targets and host not in targets):
+            continue
+        if host not in scheme_by_host or parts.scheme == "https":
+            scheme_by_host[host] = parts.scheme or "https"
+
     safe_urls: list[str] = []
     aggressive_urls: list[str] = []
-    for ep in endpoints:
-        host = urlsplit(ep["url"]).hostname or ""
-        if targets and host not in targets:  # cascade: only scan the new hosts
-            continue
+    for host, scheme in scheme_by_host.items():
         decision = engine.evaluate(host, ips_by_host.get(host, []), scope)
         if not decision.permits(Action.HTTP_PROBE):
             continue
-        (aggressive_urls if decision.permits(Action.ACTIVE_SCAN) else safe_urls).append(ep["url"])
+        url = f"{scheme}://{host}"
+        (aggressive_urls if decision.permits(Action.ACTIVE_SCAN) else safe_urls).append(url)
 
     if not safe_urls and not aggressive_urls:
         logger.info("scan {}: nothing to scan (no endpoints yet)", program_id)

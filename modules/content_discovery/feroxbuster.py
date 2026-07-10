@@ -36,16 +36,26 @@ async def discover(
     an absolute path (a bare filename makes feroxbuster fail instantly with no
     output). Injected runners (tests) get the value untouched. content_discovery
     guards up-front that wordlists are installed."""
-    if runner is _default_runner:
-        wordlist = wordlist_path(wordlist)
-    rows = await runner(
-        "feroxbuster",
+    args = [
+        "-u",
+        url,
+        "-w",
+        wordlist,
         # `--json` REQUIRES one of --output/--debug-log/--silent, else feroxbuster
         # exits 2 with a clap error. `--silent` emits the JSONL to stdout with logging
         # off — exactly what we parse. (-k insecure, -n no recursion.)
-        ["-u", url, "-w", wordlist, "--json", "--silent", "-k", "-n"],
-        timeout=timeout,
-    )
+        "--json",
+        "--silent",
+        "-k",
+        "-n",
+    ]
+    if runner is _default_runner:
+        wordlist = wordlist_path(wordlist)
+        args[3] = wordlist  # resolved absolute path (index of the -w value)
+        # self-bound so a big wordlist returns partial results at the budget rather
+        # than being hard-killed (which loses everything).
+        args += ["--time-limit", f"{max(int(timeout), 1)}s"]
+    rows = await runner("feroxbuster", args, timeout=timeout + 15)
     results: list[dict] = []
     for r in rows:
         if r.get("type") == "response" and r.get("url"):

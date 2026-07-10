@@ -8,7 +8,9 @@ Endpoints for the scan pipeline to pick up.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
+from urllib.parse import urlsplit
 
 from core.errors import ToolNotFound
 from core.hashing import endpoint_fingerprint
@@ -20,6 +22,11 @@ from db.assets import AssetRepo
 from db.endpoints import EndpointRepo
 from modules.content_discovery.feroxbuster import discover as ferox_discover
 from modules.content_discovery.wordlist_selector import select_wordlist
+
+#: feroxbuster is slow per host (a big wordlist = minutes); run many hosts at once
+#: and bound each so the stage stays well inside its budget.
+CONCURRENCY = 10
+PER_HOST_TIMEOUT = 120.0
 
 
 async def run_content_discovery(
@@ -42,8 +49,11 @@ async def run_content_discovery(
         if not wordlists_installed():
             logger.warning("content-discovery: no wordlists in {} — skipping", wordlist_base())
             return {
-                "hosts": 0, "paths": 0, "new": 0,
-                "skipped": True, "note": "content-discovery wordlists not installed",
+                "hosts": 0,
+                "paths": 0,
+                "new": 0,
+                "skipped": True,
+                "note": "content-discovery wordlists not installed",
             }
 
     assets = await AssetRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
@@ -53,49 +63,18 @@ async def run_content_discovery(
     # tech per host, taken from the host's root endpoint if we probed one
     tech_by_host: dict[str, list[str]] = {}
     for ep in endpoints:
-        from urllib.parse import urlsplit
-
         host = urlsplit(ep["url"]).hostname or ""
         if ep.get("tech") and host not in tech_by_host:
             tech_by_host[host] = ep["tech"]
 
-    found_models: list[Endpoint] = []
-    scanned = 0
-    for asset in assets:
-        host = asset["hostname"]
-        if not engine.evaluate(host, asset.get("resolved_ips", []), scope).permits(
+    scannable = [
+        a["hostname"]
+        for a in assets
+        if engine.evaluate(a["hostname"], a.get("resolved_ips", []), scope).permits(
             Action.CONTENT_DISCOVERY
-        ):
-            continue
-        scanned += 1
-        logger.info("content-discovery on {} with feroxbuster", host)
-        wordlist = wordlist_for(tech_by_host.get(host, []))
-        try:
-            hits = await discover(f"https://{host}", wordlist, timeout)
-        except ToolNotFound:
-            logger.warning("feroxbuster not found, trying fallback to ffuf for {}", host)
-            try:
-                from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
-
-                hits = await ffuf_fuzz(f"https://{host}/FUZZ", wordlist, timeout)
-            except ToolNotFound:
-                logger.error(
-                    "ffuf fallback also failed (not found); skipping content-discovery for {}", host
-                )
-                hits = []
-        for hit in hits:
-            found_models.append(
-                Endpoint(
-                    tenant_id=tid,
-                    program_id=program_id,
-                    fingerprint=endpoint_fingerprint(program_id, "GET", hit["url"]),
-                    url=hit["url"],
-                    method="GET",
-                    status_code=hit.get("status"),
-                )
-            )
-
-    if scanned == 0:
+        )
+    ]
+    if not scannable:
         logger.info("content-discovery {}: no confirmed-dedicated hosts to scan", program_id)
         return {
             "hosts": 0,
@@ -105,6 +84,51 @@ async def run_content_discovery(
             "note": "no confirmed-dedicated hosts — bruteforce withheld on shared infra (§9b)",
         }
 
+    per_host = min(timeout, PER_HOST_TIMEOUT)
+    logger.info(
+        "content-discovery: feroxbuster on {} host(s) (≤{:.0f}s each, {} at a time)",
+        len(scannable),
+        per_host,
+        CONCURRENCY,
+    )
+    sem = asyncio.Semaphore(CONCURRENCY)
+
+    async def _scan_host(host: str) -> list[dict]:
+        # Each host isolated + bounded: a slow/failing feroxbuster yields nothing for
+        # that host but never sinks the (concurrent) stage.
+        wordlist = wordlist_for(tech_by_host.get(host, []))
+        async with sem:
+            try:
+                return await discover(f"https://{host}", wordlist, per_host)
+            except ToolNotFound:
+                try:
+                    from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
+
+                    return await ffuf_fuzz(f"https://{host}/FUZZ", wordlist, per_host)
+                except ToolNotFound:
+                    logger.error("content-discovery: neither feroxbuster nor ffuf found")
+                    return []
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("content-discovery: feroxbuster failed for {}: {}", host, exc)
+                return []
+
+    per_host_hits = await asyncio.gather(*(_scan_host(h) for h in scannable))
+
+    found_models = [
+        Endpoint(
+            tenant_id=tid,
+            program_id=program_id,
+            fingerprint=endpoint_fingerprint(program_id, "GET", hit["url"]),
+            url=hit["url"],
+            method="GET",
+            status_code=hit.get("status"),
+        )
+        for hits in per_host_hits
+        for hit in hits
+    ]
+
     total, new = await EndpointRepo.from_mongo(mongo).upsert_many(found_models)
-    logger.info("content-discovery {}: {} hosts, {} paths, {} new", program_id, scanned, total, new)
-    return {"hosts": scanned, "paths": total, "new": new}
+    logger.info(
+        "content-discovery {}: {} hosts, {} paths, {} new", program_id, len(scannable), total, new
+    )
+    return {"hosts": len(scannable), "paths": total, "new": new}
