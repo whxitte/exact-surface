@@ -1,13 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CalendarClock, Save } from "lucide-react";
+import { CalendarClock, Save, ChevronDown, ChevronUp } from "lucide-react";
 import { api, type Schedule, type SchedulePhase } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { timeAgo, timeUntil } from "@/lib/utils";
+import { cn, timeAgo, timeUntil } from "@/lib/utils";
 
 const LABELS: Record<string, string> = {
   ingest: "Subdomain enumeration",
@@ -36,6 +36,7 @@ export function ScheduleCard({ programId }: { programId: string }) {
   const [edits, setEdits] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
 
   const load = useCallback(() => {
     api.getSchedule(programId).then(setSched).catch((e) => setError(e.message));
@@ -70,60 +71,80 @@ export function ScheduleCard({ programId }: { programId: string }) {
 
   return (
     <Card>
-      <CardContent className="space-y-4 p-5">
-        <div className="flex items-center gap-2">
-          <CalendarClock className="h-4 w-4 text-primary" />
-          <h2 className="text-sm font-semibold">Scan schedule</h2>
-        </div>
-
-        {/* last full run */}
-        <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-          <Stat label="Last full scan started" value={full ? timeAgo(full.started_at) : "never"} />
-          <Stat
-            label="Last full scan finished"
-            value={
-              full
-                ? full.finished_at
-                  ? timeAgo(full.finished_at)
-                  : `running (${full.status})`
-                : "—"
-            }
-          />
-          <Stat
-            label="Initial scan"
-            value={sched.initial_scan_completed_at ? "complete" : "pending / first run"}
+      <CardContent className="p-5">
+        <div
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex items-center justify-between cursor-pointer select-none"
+        >
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-primary" />
+            <h2 className="text-sm font-semibold">Scan schedule</h2>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-muted-foreground hover:text-foreground transition-transform duration-300",
+              isOpen && "rotate-180"
+            )}
           />
         </div>
 
-        {/* per-phase breakdown */}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="py-2 font-medium">Phase</th>
-                <th className="py-2 font-medium">Every</th>
-                <th className="py-2 font-medium">Last run</th>
-                <th className="py-2 font-medium">Next scan</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sched.phases.map((p) => (
-                <PhaseRow
-                  key={p.pipeline}
-                  phase={p}
-                  seconds={edits[p.pipeline] ?? p.interval_seconds}
-                  onChange={(s) => setPhaseSeconds(p.pipeline, s)}
+        <div
+          className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+          style={{ gridTemplateRows: isOpen ? "1fr" : "0fr" }}
+        >
+          <div className="overflow-hidden">
+            <div className="space-y-4 pt-4">
+              {/* last full run */}
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                <Stat label="Last full scan started" value={full ? timeAgo(full.started_at) : "never"} />
+                <Stat
+                  label="Last full scan finished"
+                  value={
+                    full
+                      ? full.finished_at
+                        ? timeAgo(full.finished_at)
+                        : `running (${full.status})`
+                      : "—"
+                  }
                 />
-              ))}
-            </tbody>
-          </table>
-        </div>
+                <Stat
+                  label="Initial scan"
+                  value={sched.initial_scan_completed_at ? "complete" : "pending / first run"}
+                />
+              </div>
 
-        <div className="flex items-center gap-3">
-          <Button onClick={save} disabled={!dirty || saving}>
-            <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save schedule"}
-          </Button>
-          {error && <span className="text-sm text-severity-critical">{error}</span>}
+              {/* per-phase breakdown */}
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[520px] text-sm">
+                  <thead>
+                    <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                      <th className="py-2 font-medium">Phase</th>
+                      <th className="py-2 font-medium">Every</th>
+                      <th className="py-2 font-medium">Last run</th>
+                      <th className="py-2 font-medium">Next scan</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sched.phases.map((p) => (
+                      <PhaseRow
+                        key={p.pipeline}
+                        phase={p}
+                        seconds={edits[p.pipeline] ?? p.interval_seconds}
+                        onChange={(s) => setPhaseSeconds(p.pipeline, s)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <Button onClick={save} disabled={!dirty || saving}>
+                  <Save className="h-4 w-4" /> {saving ? "Saving…" : "Save schedule"}
+                </Button>
+                {error && <span className="text-sm text-severity-critical">{error}</span>}
+              </div>
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
