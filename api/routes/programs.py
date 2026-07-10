@@ -201,6 +201,42 @@ async def set_schedule(
     return await _schedule_view(mongo, program)
 
 
+# -- attack-surface change analytics -----------------------------------------
+@router.get("/{program_id}/attack-surface", tags=["data"])
+async def attack_surface(
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """How the program's attack surface is changing over time — current active
+    counts, what opened/closed since the last scan, a surface-size trend series,
+    and a recent change log. Derived from state-aware first_seen/last_seen."""
+    from core.attack_surface import _aware, compute_attack_surface
+
+    tid, pid = principal.tenant_id, program["program_id"]
+    items_by_type = {
+        "assets": await AssetRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
+        "endpoints": await EndpointRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
+        "ports": await PortRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
+        "findings": await FindingRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
+        "secrets": await SecretRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
+        "leaks": await LeakRepo.from_mongo(mongo).list(tid, pid, limit=100_000),
+    }
+    # scan points = completed full runs (the natural "surface snapshot" moments);
+    # reference = the latest full run's start (items not seen since = resolved).
+    runs = await ScanRunRepo.from_mongo(mongo).list(tid, pid, limit=1000)
+    full = [r for r in runs if r.get("pipeline") == "full"]
+    scan_points = [
+        _aware(r.get("finished_at")) for r in full if r.get("finished_at") is not None
+    ]
+    scan_points = [p for p in scan_points if p is not None]
+    starts = [_aware(r.get("started_at")) for r in full]
+    reference = max((s for s in starts if s is not None), default=None)
+    return compute_attack_surface(
+        items_by_type=items_by_type, scan_points=scan_points, reference=reference
+    )
+
+
 # -- per-phase time limits ---------------------------------------------------
 async def _timeouts_view(mongo: Any, program: dict) -> dict:
     tid = program["tenant_id"]

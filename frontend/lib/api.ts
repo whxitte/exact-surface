@@ -195,6 +195,59 @@ export interface TimeoutDefaults {
   min_seconds?: number;
   max_seconds?: number;
 }
+export interface SurfaceCount {
+  total: number;
+  [severity: string]: number;
+}
+export interface SurfaceChange {
+  opened: number;
+  resolved: number;
+}
+export interface SurfaceSeriesPoint {
+  at: string;
+  total: number;
+  assets: number;
+  endpoints: number;
+  ports: number;
+  findings: number;
+  secrets: number;
+  leaks: number;
+}
+export interface SurfaceEvent {
+  kind: "opened" | "resolved";
+  type: string;
+  label: string;
+  at: string;
+  severity: string | null;
+}
+export interface AttackSurface {
+  generated_at: string;
+  latest_scan_at: string | null;
+  previous_scan_at: string | null;
+  scan_count: number;
+  current: {
+    total: number;
+    assets: SurfaceCount;
+    endpoints: SurfaceCount;
+    ports: SurfaceCount;
+    findings: SurfaceCount;
+    secrets: SurfaceCount;
+    leaks: SurfaceCount;
+  };
+  change: {
+    opened: number;
+    resolved: number;
+    net: number;
+    assets: SurfaceChange;
+    endpoints: SurfaceChange;
+    ports: SurfaceChange;
+    findings: SurfaceChange;
+    secrets: SurfaceChange;
+    leaks: SurfaceChange;
+  };
+  series: SurfaceSeriesPoint[];
+  recent: SurfaceEvent[];
+}
 export interface Integration {
   name: string;
   label: string;
@@ -275,6 +328,7 @@ export const api = {
     const qs = new URLSearchParams(q).toString();
     return request<Finding[]>(`/programs/${id}/findings${qs ? `?${qs}` : ""}`);
   },
+  getAttackSurface: (id: string) => request<AttackSurface>(`/programs/${id}/attack-surface`),
   listAssets: (id: string) => request<Asset[]>(`/programs/${id}/assets`),
   listEndpoints: (id: string) => request<Endpoint[]>(`/programs/${id}/endpoints`),
   listPorts: (id: string) => request<Port[]>(`/programs/${id}/ports`),

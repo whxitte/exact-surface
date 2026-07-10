@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
-  Clock, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
+  Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
 } from "lucide-react";
 import {
   api, downloadReport,
@@ -14,25 +14,25 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ScheduleCard } from "@/components/schedule-card";
+import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
 import { timeAgo } from "@/lib/utils";
 
-type Tab = "findings" | "assets" | "endpoints" | "ports" | "secrets" | "timeline";
+type Tab = "surface" | "findings" | "assets" | "endpoints" | "ports" | "secrets";
 
 export default function ProgramDetail() {
   const { id } = useParams<{ id: string }>();
   const [program, setProgram] = useState<Program | null>(null);
   const [verify, setVerify] = useState<Verification | null>(null);
   const [msg, setMsg] = useState("");
-  const [tab, setTab] = useState<Tab>("findings");
+  const [tab, setTab] = useState<Tab>("surface");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [secrets, setSecrets] = useState<Secret[]>([]);
-  const [deltas, setDeltas] = useState<Record<string, unknown>[]>([]);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [reportBusy, setReportBusy] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
@@ -50,7 +50,6 @@ export default function ProgramDetail() {
     api.listEndpoints(id).then(setEndpoints).catch(() => {});
     api.listPorts(id).then(setPorts).catch(() => {});
     api.listSecrets(id).then(setSecrets).catch(() => {});
-    api.listDeltas(id).then(setDeltas).catch(() => {});
   }, [program, id]);
 
   // Derive per-asset live status/tech from its root endpoint (probe output), so the
@@ -310,12 +309,12 @@ export default function ProgramDetail() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
         {([
+          ["surface", Activity, null],
           ["findings", ShieldAlert, findings.length],
           ["assets", Server, assets.length],
           ["endpoints", Link2, endpoints.length],
           ["ports", Network, ports.length],
           ["secrets", KeyRound, secrets.length],
-          ["timeline", Clock, deltas.length],
         ] as const).map(([key, Icon, count]) => (
           <button
             key={key}
@@ -327,10 +326,14 @@ export default function ProgramDetail() {
             }`}
           >
             <Icon className="h-4 w-4" /> {key}
-            <span className="rounded-full bg-muted px-1.5 text-xs">{count}</span>
+            {count != null && (
+              <span className="rounded-full bg-muted px-1.5 text-xs">{count}</span>
+            )}
           </button>
         ))}
       </div>
+
+      {tab === "surface" && <AttackSurfaceView programId={id} />}
 
       {tab === "findings" && (
         <div className="space-y-2">
@@ -485,26 +488,6 @@ export default function ProgramDetail() {
                   </div>
                 </div>
                 <span className="font-mono text-sm">{String(s.masked)}</span>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
-
-      {tab === "timeline" && (
-        <div className="space-y-2">
-          {deltas.length === 0 && <Empty label="No changes recorded yet." />}
-          {deltas.map((d, i) => (
-            <Card key={i}>
-              <CardContent className="flex items-center gap-4 p-4">
-                <Clock className="h-4 w-4 text-muted-foreground" />
-                <div className="flex-1">
-                  <span className="font-medium">{String(d.kind)}</span>{" "}
-                  <span className="text-sm text-muted-foreground">
-                    {String(d.before ?? "")} → {String(d.after ?? "")}
-                  </span>
-                </div>
-                <span className="text-xs text-muted-foreground">{timeAgo(String(d.observed_at))}</span>
               </CardContent>
             </Card>
           ))}

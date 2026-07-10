@@ -460,3 +460,24 @@ def test_timeout_config_program_and_tenant_defaults():
         for s in client.get(f"/programs/{pid}/timeouts", headers=_auth(token)).json()["stages"]
     }
     assert stages["scan"]["source"] == "program" and stages["scan"]["timeout_seconds"] == 6 * 3600
+
+
+def test_attack_surface_endpoint_shape():
+    from core.models import Asset
+    from db.assets import AssetRepo
+
+    client, fake, _ = build()
+    tok = _signup(client)
+    token, tenant_id = tok["access_token"], tok["tenant_id"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+    _run(
+        AssetRepo(fake.collection("assets")).upsert(
+            Asset(tenant_id=tenant_id, program_id=pid, fingerprint="a1", hostname="a.acme.com")
+        )
+    )
+    surf = client.get(f"/programs/{pid}/attack-surface", headers=_auth(token)).json()
+    assert surf["current"]["assets"]["total"] == 1 and surf["current"]["total"] == 1
+    assert "series" in surf and "recent" in surf
+    assert surf["change"]["assets"]["opened"] == 1  # brand-new asset, no scans yet
