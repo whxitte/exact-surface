@@ -82,6 +82,35 @@ export interface Asset {
   monitored?: boolean;
   first_seen?: string;
 }
+export interface Endpoint {
+  fingerprint: string;
+  url: string;
+  method: string;
+  status_code?: number | null;
+  title?: string | null;
+  tech: string[];
+  first_seen?: string;
+}
+export interface Port {
+  fingerprint: string;
+  ip: string;
+  port: number;
+  protocol: string;
+  service?: string | null;
+  product?: string | null;
+  version?: string | null;
+  first_seen?: string;
+}
+export interface Leak {
+  fingerprint: string;
+  kind: string;
+  masked: string;
+  source: string;
+  repo?: string | null;
+  url?: string | null;
+  severity: string;
+  first_seen?: string;
+}
 export interface Stats {
   programs: number;
   assets: number;
@@ -150,6 +179,21 @@ export interface ScheduleDefaults {
   cadence_overrides: Record<string, number>;
   pipelines: { pipeline: string; label: string; default_seconds: number }[];
   min_interval_seconds?: number;
+}
+export interface TimeoutStage {
+  stage: string;
+  timeout_seconds: number;
+  source: "program" | "tenant" | "default";
+}
+export interface TimeoutConfig {
+  program_id: string;
+  stages: TimeoutStage[];
+}
+export interface TimeoutDefaults {
+  timeout_overrides: Record<string, number>;
+  stages: { stage: string; label: string; default_seconds: number }[];
+  min_seconds?: number;
+  max_seconds?: number;
 }
 export interface Integration {
   name: string;
@@ -220,12 +264,21 @@ export const api = {
   getScheduleDefaults: () => request<ScheduleDefaults>("/schedule/defaults"),
   setScheduleDefaults: (overrides: Record<string, number>) =>
     request<ScheduleDefaults>("/schedule/defaults", json({ overrides })),
+  getTimeouts: (id: string) => request<TimeoutConfig>(`/programs/${id}/timeouts`),
+  setTimeouts: (id: string, overrides: Record<string, number>) =>
+    request<TimeoutConfig>(`/programs/${id}/timeouts`, json({ overrides })),
+  getTimeoutDefaults: () => request<TimeoutDefaults>("/schedule/timeout-defaults"),
+  setTimeoutDefaults: (overrides: Record<string, number>) =>
+    request<TimeoutDefaults>("/schedule/timeout-defaults", json({ overrides })),
 
   listFindings: (id: string, q: Record<string, string> = {}) => {
     const qs = new URLSearchParams(q).toString();
     return request<Finding[]>(`/programs/${id}/findings${qs ? `?${qs}` : ""}`);
   },
   listAssets: (id: string) => request<Asset[]>(`/programs/${id}/assets`),
+  listEndpoints: (id: string) => request<Endpoint[]>(`/programs/${id}/endpoints`),
+  listPorts: (id: string) => request<Port[]>(`/programs/${id}/ports`),
+  listLeaks: (id: string) => request<Leak[]>(`/programs/${id}/leaks`),
   listSecrets: (id: string) => request<Secret[]>(`/programs/${id}/secrets`),
   listDeltas: (id: string) => request<Record<string, unknown>[]>(`/programs/${id}/deltas`),
 

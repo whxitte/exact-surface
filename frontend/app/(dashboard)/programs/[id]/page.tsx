@@ -4,11 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
-  Clock, Eye, EyeOff, FileText, FileCode, FileBarChart, FileType,
+  Clock, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
 } from "lucide-react";
 import {
   api, downloadReport,
-  type Asset, type Finding, type Program, type Secret, type Verification,
+  type Asset, type Endpoint, type Finding, type Port, type Program, type Secret,
+  type Verification,
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
 import { timeAgo } from "@/lib/utils";
 
-type Tab = "findings" | "assets" | "secrets" | "timeline";
+type Tab = "findings" | "assets" | "endpoints" | "ports" | "secrets" | "timeline";
 
 export default function ProgramDetail() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +29,8 @@ export default function ProgramDetail() {
   const [tab, setTab] = useState<Tab>("findings");
   const [findings, setFindings] = useState<Finding[]>([]);
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
+  const [ports, setPorts] = useState<Port[]>([]);
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [deltas, setDeltas] = useState<Record<string, unknown>[]>([]);
   const [selected, setSelected] = useState<Finding | null>(null);
@@ -44,9 +47,25 @@ export default function ProgramDetail() {
     if (!program) return;
     api.listFindings(id).then(setFindings).catch(() => {});
     api.listAssets(id).then(setAssets).catch(() => {});
+    api.listEndpoints(id).then(setEndpoints).catch(() => {});
+    api.listPorts(id).then(setPorts).catch(() => {});
     api.listSecrets(id).then(setSecrets).catch(() => {});
     api.listDeltas(id).then(setDeltas).catch(() => {});
   }, [program, id]);
+
+  // Derive per-asset live status/tech from its root endpoint (probe output), so the
+  // assets view shows what an attacker sees: alive?, HTTP status, technologies.
+  const endpointByHost = new Map<string, Endpoint>();
+  for (const ep of endpoints) {
+    try {
+      const host = new URL(ep.url).hostname;
+      const cur = endpointByHost.get(host);
+      // prefer the shortest path (closest to the root) as the representative endpoint
+      if (!cur || ep.url.length < cur.url.length) endpointByHost.set(host, ep);
+    } catch {
+      /* ignore unparseable urls */
+    }
+  }
 
   async function requestChallenge() {
     setMsg("");
@@ -293,6 +312,8 @@ export default function ProgramDetail() {
         {([
           ["findings", ShieldAlert, findings.length],
           ["assets", Server, assets.length],
+          ["endpoints", Link2, endpoints.length],
+          ["ports", Network, ports.length],
           ["secrets", KeyRound, secrets.length],
           ["timeline", Clock, deltas.length],
         ] as const).map(([key, Icon, count]) => (
@@ -339,24 +360,38 @@ export default function ProgramDetail() {
           {assets.length === 0 && <Empty label="No assets discovered yet." />}
           {assets.map((a) => {
             const muted = a.monitored === false;
+            const ep = endpointByHost.get(a.hostname);
+            const alive = ep?.status_code != null;
             return (
               <Card key={a.fingerprint} className={muted ? "opacity-60" : undefined}>
-                <CardContent className="flex items-center gap-4 p-4">
+                <CardContent className="flex items-center gap-3 p-4">
+                  <span
+                    className={`h-2 w-2 shrink-0 rounded-full ${alive ? "bg-severity-low" : "bg-muted-foreground/40"}`}
+                    title={alive ? "Alive (HTTP responded)" : "No HTTP response"}
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="truncate font-medium">{a.hostname}</div>
                     <div className="truncate font-mono text-xs text-muted-foreground">
                       {a.resolved_ips.join(", ") || "unresolved"}
+                      {ep?.title ? ` · ${ep.title}` : ""}
                     </div>
                   </div>
+                  {ep?.tech?.slice(0, 3).map((t) => (
+                    <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      {t}
+                    </span>
+                  ))}
+                  {ep?.status_code != null && (
+                    <span className="font-mono text-xs text-muted-foreground">{ep.status_code}</span>
+                  )}
                   {a.is_ephemeral && (
                     <span className="rounded-full bg-severity-medium/15 px-2 py-0.5 text-xs text-severity-medium">
                       ephemeral
                     </span>
                   )}
                   {a.ip_class && (
-                    <span className="text-xs text-muted-foreground">{a.ip_class}</span>
+                    <span className="hidden text-xs text-muted-foreground sm:inline">{a.ip_class}</span>
                   )}
-                  <span className="text-xs text-muted-foreground">{timeAgo(a.first_seen)}</span>
                   <button
                     onClick={() => toggleAssetMonitoring(a)}
                     title={muted ? "Muted — click to monitor" : "Monitored — click to mute"}
@@ -367,12 +402,72 @@ export default function ProgramDetail() {
                     }`}
                   >
                     {muted ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    {muted ? "Muted" : "Monitored"}
+                    <span className="hidden sm:inline">{muted ? "Muted" : "Monitored"}</span>
                   </button>
                 </CardContent>
               </Card>
             );
           })}
+        </div>
+      )}
+
+      {tab === "endpoints" && (
+        <div className="space-y-2">
+          {endpoints.length === 0 && <Empty label="No endpoints discovered yet — probe/crawl first." />}
+          {endpoints.map((ep) => (
+            <Card key={ep.fingerprint}>
+              <CardContent className="flex items-center gap-3 p-3">
+                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+                  {ep.method}
+                </span>
+                <a
+                  href={ep.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate font-mono text-xs text-primary hover:underline"
+                >
+                  {ep.url}
+                </a>
+                {ep.tech?.slice(0, 3).map((t) => (
+                  <span key={t} className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground sm:inline">
+                    {t}
+                  </span>
+                ))}
+                {ep.status_code != null && (
+                  <span className="font-mono text-xs text-muted-foreground">{ep.status_code}</span>
+                )}
+                <span className="hidden text-xs text-muted-foreground md:inline">
+                  {timeAgo(ep.first_seen)}
+                </span>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "ports" && (
+        <div className="space-y-2">
+          {ports.length === 0 && (
+            <Empty label="No open ports — port scanning runs on confirmed-dedicated infra only (§9b)." />
+          )}
+          {ports.map((p) => (
+            <Card key={p.fingerprint}>
+              <CardContent className="flex items-center gap-3 p-3">
+                <span className="font-mono text-sm">
+                  {p.ip}
+                  <span className="text-primary">:{p.port}</span>
+                  <span className="text-muted-foreground">/{p.protocol}</span>
+                </span>
+                <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                  {p.service || "—"}
+                  {p.product ? ` · ${p.product}${p.version ? ` ${p.version}` : ""}` : ""}
+                </div>
+                <span className="hidden text-xs text-muted-foreground md:inline">
+                  {timeAgo(p.first_seen)}
+                </span>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       )}
 
