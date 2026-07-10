@@ -37,9 +37,17 @@ export default function ProgramDetail() {
   const [selected, setSelected] = useState<Finding | null>(null);
   const [reportBusy, setReportBusy] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
+  const [assetSort, setAssetSort] = useState<"name" | "status" | "monitored" | "recent">("status");
 
   const loadProgram = useCallback(() => {
     api.getProgram(id).then(setProgram).catch((e) => setMsg(e.message));
+    // reflect whether scanning is already authorized (persisted) so the button
+    // shows state instead of being endlessly re-clickable.
+    api
+      .getAuthorization(id)
+      .then((a) => setAuthorized(!!a?.apex_verified && !a?.revoked))
+      .catch(() => setAuthorized(false));
   }, [id]);
 
   useEffect(loadProgram, [loadProgram]);
@@ -67,6 +75,25 @@ export default function ProgramDetail() {
     }
   }
 
+  // ip -> hostname(s), so the ports tab can show which subdomain a port belongs to.
+  const hostsByIp = new Map<string, string[]>();
+  for (const a of assets)
+    for (const ip of a.resolved_ips || []) {
+      const list = hostsByIp.get(ip) || [];
+      if (!list.includes(a.hostname)) list.push(a.hostname);
+      hostsByIp.set(ip, list);
+    }
+
+  const isAlive = (a: Asset) => endpointByHost.get(a.hostname)?.status_code != null;
+  const sortedAssets = [...assets].sort((x, y) => {
+    if (assetSort === "status") return Number(isAlive(y)) - Number(isAlive(x));
+    if (assetSort === "monitored")
+      return Number(y.monitored !== false) - Number(x.monitored !== false);
+    if (assetSort === "recent")
+      return Date.parse(y.first_seen || "") - Date.parse(x.first_seen || "");
+    return x.hostname.localeCompare(y.hostname);
+  });
+
   async function requestChallenge() {
     setMsg("");
     setVerify(await api.requestVerify(id, "dns_txt"));
@@ -79,7 +106,8 @@ export default function ProgramDetail() {
   }
   async function authorize() {
     await api.createAuthorization(id);
-    setMsg("Authorization recorded. You can scan now.");
+    setAuthorized(true);
+    setMsg("Scanning authorized — you (the owner) have consented to active scanning of this domain.");
   }
   async function toggleSharedInfra(value: boolean) {
     try {
@@ -230,11 +258,24 @@ export default function ProgramDetail() {
         </Card>
       ) : (
         program && (
-          <div className="flex gap-3">
-            <Button onClick={authorize} variant="secondary">
-              <ShieldCheck className="h-4 w-4" /> Authorize scanning
-            </Button>
-            <Button onClick={scan} disabled={scanBusy}>
+          <div className="flex flex-wrap items-center gap-3">
+            {authorized ? (
+              <span
+                className="flex items-center gap-1.5 rounded-md border border-primary/40 px-3 py-1.5 text-sm text-primary"
+                title="You have consented to active scanning of this domain. Required before scans run."
+              >
+                <ShieldCheck className="h-4 w-4" /> Scanning authorized
+              </span>
+            ) : (
+              <Button
+                onClick={authorize}
+                variant="secondary"
+                title="Consent to active scanning of this domain — required once before any scan runs."
+              >
+                <ShieldCheck className="h-4 w-4" /> Authorize scanning
+              </Button>
+            )}
+            <Button onClick={scan} disabled={scanBusy || authorized === false}>
               <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
             </Button>
             <label className="flex cursor-pointer items-center gap-3 text-xs text-muted-foreground ml-2">
@@ -359,8 +400,23 @@ export default function ProgramDetail() {
 
       {tab === "assets" && (
         <div className="space-y-2">
+          {assets.length > 0 && (
+            <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+              <span>Sort by</span>
+              <select
+                value={assetSort}
+                onChange={(e) => setAssetSort(e.target.value as typeof assetSort)}
+                className="h-8 rounded-md border border-border bg-background px-2"
+              >
+                <option value="status">Alive first</option>
+                <option value="monitored">Monitored first</option>
+                <option value="recent">Newest</option>
+                <option value="name">Name</option>
+              </select>
+            </div>
+          )}
           {assets.length === 0 && <Empty label="No assets discovered yet." />}
-          {assets.map((a) => {
+          {sortedAssets.map((a) => {
             const muted = a.monitored === false;
             const ep = endpointByHost.get(a.hostname);
             const alive = ep?.status_code != null;
@@ -452,24 +508,37 @@ export default function ProgramDetail() {
           {ports.length === 0 && (
             <Empty label="No open ports — port scanning runs on confirmed-dedicated infra only (§9b)." />
           )}
-          {ports.map((p) => (
-            <Card key={p.fingerprint}>
-              <CardContent className="flex items-center gap-3 p-3">
-                <span className="font-mono text-sm">
-                  {p.ip}
-                  <span className="text-primary">:{p.port}</span>
-                  <span className="text-muted-foreground">/{p.protocol}</span>
-                </span>
-                <div className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                  {p.service || "—"}
-                  {p.product ? ` · ${p.product}${p.version ? ` ${p.version}` : ""}` : ""}
-                </div>
-                <span className="hidden text-xs text-muted-foreground md:inline">
-                  {timeAgo(p.first_seen)}
-                </span>
-              </CardContent>
-            </Card>
-          ))}
+          {ports.map((p) => {
+            const hosts = hostsByIp.get(p.ip) || [];
+            return (
+              <Card key={p.fingerprint}>
+                <CardContent className="flex items-center gap-3 p-3">
+                  <span className="font-mono text-sm">
+                    {p.ip}
+                    <span className="text-primary">:{p.port}</span>
+                    <span className="text-muted-foreground">/{p.protocol}</span>
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    {hosts.length > 0 && (
+                      <div className="truncate text-xs">
+                        {hosts[0]}
+                        {hosts.length > 1 && (
+                          <span className="text-muted-foreground"> +{hosts.length - 1} more</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="truncate text-xs text-muted-foreground">
+                      {p.service || "—"}
+                      {p.product ? ` · ${p.product}${p.version ? ` ${p.version}` : ""}` : ""}
+                    </div>
+                  </div>
+                  <span className="hidden text-xs text-muted-foreground md:inline">
+                    {timeAgo(p.first_seen)}
+                  </span>
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 

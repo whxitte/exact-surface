@@ -299,6 +299,10 @@ export const api = {
     request<{ verified: boolean; detail: string }>(`/programs/${id}/verify/check`, { method: "POST" }),
   createAuthorization: (id: string) =>
     request<unknown>(`/programs/${id}/authorization`, json({})),
+  getAuthorization: (id: string) =>
+    request<{ apex_verified: boolean; revoked?: boolean; authorized_by?: string }>(
+      `/programs/${id}/authorization`,
+    ),
   triggerScan: (id: string) =>
     request<{ status: string; detail?: string }>(`/programs/${id}/scan`, { method: "POST" }),
   setScanSharedInfra: (id: string, value: boolean) =>

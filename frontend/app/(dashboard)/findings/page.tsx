@@ -16,7 +16,14 @@ interface Row extends Finding {
 export default function FindingsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState<string>("all");
+  const [program, setProgram] = useState<string>("all");
   const [loading, setLoading] = useState(true);
+
+  const programs = useMemo(() => {
+    const seen = new Map<string, string>();
+    rows.forEach((r) => seen.set(r.program_id, r.apex));
+    return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [rows]);
 
   useEffect(() => {
     (async () => {
@@ -36,8 +43,13 @@ export default function FindingsPage() {
   }, []);
 
   const shown = useMemo(
-    () => (filter === "all" ? rows : rows.filter((r) => r.severity === filter)),
-    [rows, filter],
+    () =>
+      rows.filter(
+        (r) =>
+          (filter === "all" || r.severity === filter) &&
+          (program === "all" || r.program_id === program),
+      ),
+    [rows, filter, program],
   );
 
   return (
@@ -47,7 +59,7 @@ export default function FindingsPage() {
         <p className="text-sm text-muted-foreground">Everything an attacker could act on, ranked.</p>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {["all", ...SEVERITIES].map((s) => (
           <button
             key={s}
@@ -62,6 +74,20 @@ export default function FindingsPage() {
             {s}
           </button>
         ))}
+        {programs.length > 1 && (
+          <select
+            value={program}
+            onChange={(e) => setProgram(e.target.value)}
+            className="ml-auto h-8 rounded-md border border-border bg-background px-2 text-xs"
+          >
+            <option value="all">All programs</option>
+            {programs.map(([id, apex]) => (
+              <option key={id} value={id}>
+                {apex}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {loading ? (
