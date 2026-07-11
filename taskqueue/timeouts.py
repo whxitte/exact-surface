@@ -20,6 +20,7 @@ DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "ingest": 5 * MINUTE,
     "probe": 5 * MINUTE,
     "tls": 5 * MINUTE,
+    "takeover": 5 * MINUTE,
     "crawl": 10 * MINUTE,
     "content_discovery": 10 * MINUTE,
     "port_scan": 10 * MINUTE,

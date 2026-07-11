@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Network, Search, Cloud, Server, Mail } from "lucide-react";
+import { Network, Search, Cloud, Server, AlertTriangle } from "lucide-react";
 import { api, type Asset } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -68,7 +68,7 @@ export default function DnsPage() {
 
   const withCname = scoped.filter((r) => r.asset.dns_records?.cname?.length).length;
   const nameservers = new Set(scoped.flatMap((r) => r.asset.dns_records?.ns || [])).size;
-  const mail = new Set(scoped.flatMap((r) => r.asset.dns_records?.mx || [])).size;
+  const takeovers = scoped.filter((r) => r.asset.takeover_risk).length;
 
   // Group hosts by CNAME target — reveals the cloud services behind the domain.
   const cnameGroups = useMemo(() => {
@@ -98,7 +98,7 @@ export default function DnsPage() {
         <StatTile icon={Network} label="Hosts with records" value={scoped.length} />
         <StatTile icon={Cloud} label="Hosts with CNAME" value={withCname} accent />
         <StatTile icon={Server} label="Unique nameservers" value={nameservers} />
-        <StatTile icon={Mail} label="Mail endpoints (MX)" value={mail} />
+        <StatTile icon={AlertTriangle} label="Takeover risks" value={takeovers} danger />
       </div>
 
       {/* controls */}
@@ -185,6 +185,11 @@ export default function DnsPage() {
                   {program === "all" && (
                     <span className="text-xs text-muted-foreground">· {r.apex}</span>
                   )}
+                  {r.asset.takeover_risk && (
+                    <span className="flex items-center gap-1 rounded-full bg-severity-high/15 px-2 py-0.5 text-[10px] font-medium text-severity-high">
+                      <AlertTriangle className="h-3 w-3" /> takeover risk · {r.asset.takeover_risk}
+                    </span>
+                  )}
                 </div>
                 <div className="grid gap-1.5 sm:grid-cols-2">
                   {TYPES.filter((t) => r.asset.dns_records?.[t]?.length).map((t) => (
@@ -219,20 +224,29 @@ function StatTile({
   label,
   value,
   accent,
+  danger,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value: number;
   accent?: boolean;
+  danger?: boolean;
 }) {
+  const iconCls = danger
+    ? "text-severity-high"
+    : accent
+      ? "text-severity-medium"
+      : "text-primary";
   return (
-    <Card>
+    <Card className={danger && value > 0 ? "border-severity-high/40" : undefined}>
       <CardContent className="p-4">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className={cn("h-3.5 w-3.5", accent ? "text-severity-medium" : "text-primary")} />
+          <Icon className={cn("h-3.5 w-3.5", iconCls)} />
           {label}
         </div>
-        <div className="mt-1 text-2xl font-semibold">{value}</div>
+        <div className={cn("mt-1 text-2xl font-semibold", danger && value > 0 && "text-severity-high")}>
+          {value}
+        </div>
       </CardContent>
     </Card>
   );

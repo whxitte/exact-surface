@@ -26,6 +26,7 @@ router = APIRouter(prefix="/schedule", tags=["schedule"])
 _PIPELINE_LABELS = {
     "ingest": "Subdomain enumeration",
     "probe": "HTTP probe",
+    "takeover": "Subdomain takeover check",
     "crawl": "Crawl",
     "content_discovery": "Content discovery",
     "port_scan": "Port scan",

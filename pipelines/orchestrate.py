@@ -34,6 +34,7 @@ from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
 from pipelines.service_scan import run_service_scan
+from pipelines.takeover import run_takeover
 from pipelines.tls import run_tls_scan
 
 
@@ -100,6 +101,7 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "ingest",
     "probe",
     "tls",  # optional
+    "takeover",
     "crawl",
     "content_discovery",
     "port_scan",
@@ -180,6 +182,7 @@ async def run_full_pipeline(
         ),
         ("probe", lambda t: run_probe(**common, timeout=t, **inj("probe"))),
         ("tls", optional("tls", lambda t: run_tls_scan(**common, timeout=t, **inj("tlsinspect")))),
+        ("takeover", lambda t: run_takeover(**common, timeout=t)),
         (
             "crawl",
             lambda t: run_crawl(**common, timeout=t, apex=apex, **inj("gau", "wayback", "katana")),

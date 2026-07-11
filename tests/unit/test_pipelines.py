@@ -224,6 +224,7 @@ async def test_full_pipeline_records_per_stage_progress():
         "ingest",
         "probe",
         "tls",
+        "takeover",
         "crawl",
         "content_discovery",
         "port_scan",

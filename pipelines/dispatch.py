@@ -26,6 +26,7 @@ from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
+from pipelines.takeover import run_takeover
 
 
 def _auth_current(auth: dict | None) -> bool:
@@ -95,6 +96,8 @@ async def run_pipeline(
             return await run_content_discovery(**common)
         if pipeline == "port_scan":
             return await run_port_scan(**common, targets=tset)
+        if pipeline == "takeover":
+            return await run_takeover(**common)
         if pipeline == "secrets":
             return await run_secret_scan(
                 mongo=mongo,

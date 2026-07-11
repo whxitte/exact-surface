@@ -81,6 +81,7 @@ export interface Asset {
   is_ephemeral: boolean;
   monitored?: boolean;
   dns_records?: Record<string, string[]>; // a/aaaa/cname/ns/mx/txt
+  takeover_risk?: string | null; // service name if takeover-vulnerable
   first_seen?: string;
 }
 export interface Endpoint {

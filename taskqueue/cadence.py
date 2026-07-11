@@ -21,6 +21,7 @@ DEFAULT_CADENCE_SECONDS: dict[str, int] = {
     "ingest": 6 * HOUR,  # re-enumerate subdomains
     "scan": 12 * HOUR,  # full nuclei re-scan
     "crawl": 24 * HOUR,
+    "takeover": 24 * HOUR,  # re-check dangling CNAMEs daily
     "port_scan": 24 * HOUR,
     "content_discovery": 24 * HOUR,
     "secrets": 24 * HOUR,

@@ -192,6 +192,9 @@ class Asset(StatefulModel):
     #: full DNS records (A/AAAA/CNAME/NS/MX/TXT) from dnsx recon — CNAMEs reveal
     #: cloud services / takeover candidates. {record_type: [values]}.
     dns_records: dict[str, list[str]] = Field(default_factory=dict)
+    #: service name if this host is a likely subdomain-takeover target (dangling
+    #: CNAME), else None. Set by the takeover stage; re-evaluated each scan.
+    takeover_risk: str | None = None
     #: User can mute an individual asset — unmonitored hosts are skipped by crawl /
     #: content-discovery / port-scan. Preserved across re-scans (see AssetRepo).
     monitored: bool = True

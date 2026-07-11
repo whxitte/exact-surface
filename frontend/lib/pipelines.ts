@@ -18,6 +18,10 @@ export const PIPELINE_INFO: Record<string, { label: string; desc: string }> = {
     label: "TLS",
     desc: "Inspect certificate chains + expiry on alive hosts (tlsx).",
   },
+  takeover: {
+    label: "Takeover",
+    desc: "Check dangling CNAMEs for subdomain-takeover risk.",
+  },
   service_scan: {
     label: "Services",
     desc: "Identify service/version on open ports (nmap -sV).",
