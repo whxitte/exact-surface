@@ -9,6 +9,7 @@ same exclusions — detection only, never exploitation.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Awaitable, Callable
 
@@ -21,11 +22,32 @@ Runner = Callable[..., Awaitable[list[dict]]]
 SAFE_EXCLUDE_TAGS = ("dos", "intrusive", "fuzz")
 
 
-async def _default_runner(binary: str, args, *, timeout: float, stdin: str | None = None):
+def _normalize(r: dict) -> dict:
+    """nuclei JSONL row → our finding shape."""
+    info = r.get("info") or {}
+    return {
+        "template_id": r.get("template-id") or r.get("templateID") or "unknown",
+        "name": info.get("name", ""),
+        "severity": (info.get("severity") or "info").lower(),
+        "matched_at": r.get("matched-at") or r.get("host") or "",
+        "description": info.get("description", "") or "",
+        "reference": info.get("reference") or [],
+        "raw": r,
+    }
+
+
+async def _default_runner(
+    binary: str, args, *, timeout: float, stdin: str | None = None, on_finding=None
+):
     """Run nuclei with LIVE output: each finding + its periodic ``-stats`` progress
     are logged as they happen (so you can see it working in the worker logs), and on
-    timeout whatever it found so far is kept rather than discarded."""
+    timeout whatever it found so far is kept rather than discarded.
+
+    ``on_finding`` (async) is called for each finding the instant nuclei emits it, so
+    the caller can persist it immediately — findings show up in the UI in real time
+    instead of only after the whole batch completes."""
     rows: list[dict] = []
+    pending: list[asyncio.Task] = []
 
     def on_stdout(line: str) -> None:
         line = line.strip()
@@ -44,6 +66,8 @@ async def _default_runner(binary: str, args, *, timeout: float, stdin: str | Non
                 info.get("name") or obj.get("template-id") or "?",
                 obj.get("matched-at") or obj.get("host") or "",
             )
+            if on_finding is not None:  # persist this finding right now, don't wait
+                pending.append(asyncio.ensure_future(on_finding(_normalize(obj))))
 
     def on_stderr(line: str) -> None:
         # nuclei is very chatty on stderr: the ASCII banner, version lines, and a
@@ -59,6 +83,8 @@ async def _default_runner(binary: str, args, *, timeout: float, stdin: str | Non
     rc, _out, stderr, timed_out = await stream_tool(
         binary, args, timeout=timeout, stdin=stdin, on_stdout=on_stdout, on_stderr=on_stderr
     )
+    if pending:  # make sure every streamed finding finished persisting
+        await asyncio.gather(*pending, return_exceptions=True)
     if timed_out:
         logger.warning(
             "nuclei hit the {:.0f}s budget — keeping {} finding(s) found so far", timeout, len(rows)
@@ -76,12 +102,14 @@ async def scan(
     *,
     aggressive: bool = False,
     runner: Runner = _default_runner,
+    on_finding=None,
 ) -> list[dict]:
     """Scan *urls* and return normalised findings.
 
     Non-aggressive runs restrict to passive/safe template tags; aggressive runs
-    allow the broader set but still exclude the harmful tags above.
-    """
+    allow the broader set but still exclude the harmful tags above. ``on_finding``
+    (async) is invoked per finding as nuclei emits it, for real-time persistence
+    (only wired for the real runner; injected test runners get the batch return)."""
     urls = [u for u in urls if u]
     if not urls:
         return []
@@ -104,19 +132,10 @@ async def scan(
         # HTTP-layer-only targets: passive-leaning tags, no active exploitation attempts.
         args += ["-tags", "exposure,misconfig,tech,ssl,cve,default-login"]
 
-    rows = await runner("nuclei", args, timeout=timeout, stdin="\n".join(urls))
-    findings: list[dict] = []
-    for r in rows:
-        info = r.get("info") or {}
-        findings.append(
-            {
-                "template_id": r.get("template-id") or r.get("templateID") or "unknown",
-                "name": info.get("name", ""),
-                "severity": (info.get("severity") or "info").lower(),
-                "matched_at": r.get("matched-at") or r.get("host") or "",
-                "description": info.get("description", "") or "",
-                "reference": info.get("reference") or [],
-                "raw": r,
-            }
+    if runner is _default_runner:
+        rows = await runner(
+            "nuclei", args, timeout=timeout, stdin="\n".join(urls), on_finding=on_finding
         )
-    return findings
+    else:  # injected runner (tests) — plain signature, no real-time hook
+        rows = await runner("nuclei", args, timeout=timeout, stdin="\n".join(urls))
+    return [_normalize(r) for r in rows]

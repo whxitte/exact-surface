@@ -94,17 +94,16 @@ async def run_scan(
         len(aggressive_urls),
         nuclei_timeout,
     )
-    raw: list[dict] = []
-    if safe_urls:
-        raw += await scan(safe_urls, nuclei_timeout, aggressive=False)
-    if aggressive_urls:
-        raw += await scan(aggressive_urls, nuclei_timeout, aggressive=True)
+    findings_repo = FindingRepo.from_mongo(mongo)
 
-    models = [
-        Finding(
+    def _fp(f: dict) -> str:
+        return finding_fingerprint(program_id, f["template_id"], f["matched_at"])
+
+    def _model(f: dict) -> Finding:
+        return Finding(
             tenant_id=tenant.tenant_id,
             program_id=program_id,
-            fingerprint=finding_fingerprint(program_id, f["template_id"], f["matched_at"]),
+            fingerprint=_fp(f),
             check_id=f["template_id"],
             module="nuclei",
             location=f["matched_at"],
@@ -114,27 +113,52 @@ async def run_scan(
             references=f.get("reference") or [],
             raw=f.get("raw") or {},
         )
-        for f in raw
-    ]
-    res = await FindingRepo.from_mongo(mongo).upsert_all(models)
-    new_findings = [
-        {"name": m.name, "severity": m.severity.value, "location": m.location}
-        for m, x in zip(models, res, strict=True)
-        if x.inserted
-    ]
+
+    # Real-time persistence: write each finding to the DB the instant nuclei emits it,
+    # so it shows in the UI immediately instead of only after the whole batch. New
+    # ones are tracked here (so the notify cascade still fires) and their fingerprints
+    # recorded so the end-of-run upsert doesn't re-process them.
+    streamed_fps: set[str] = set()
+    new_findings: list[dict] = []
+
+    async def on_finding(f: dict) -> None:
+        model = _model(f)
+        result = await findings_repo.upsert(model)
+        streamed_fps.add(model.fingerprint)
+        if result.inserted:
+            new_findings.append(
+                {"name": model.name, "severity": model.severity.value, "location": model.location}
+            )
+
+    raw: list[dict] = []
+    if safe_urls:
+        raw += await scan(safe_urls, nuclei_timeout, aggressive=False, on_finding=on_finding)
+    if aggressive_urls:
+        raw += await scan(aggressive_urls, nuclei_timeout, aggressive=True, on_finding=on_finding)
+
+    # Persist anything NOT already streamed (e.g. an injected runner in tests, or a
+    # finding whose real-time write failed) — idempotent, so nothing is double-counted.
+    leftover = [_model(f) for f in raw if _fp(f) not in streamed_fps]
+    if leftover:
+        res = await findings_repo.upsert_all(leftover)
+        new_findings += [
+            {"name": m.name, "severity": m.severity.value, "location": m.location}
+            for m, x in zip(leftover, res, strict=True)
+            if x.inserted
+        ]
 
     logger.info(
         "scan {}: {} safe + {} aggressive urls, {} findings, {} new",
         program_id,
         len(safe_urls),
         len(aggressive_urls),
-        len(models),
+        len(raw),
         len(new_findings),
     )
     return {
         "scanned_safe": len(safe_urls),
         "scanned_aggressive": len(aggressive_urls),
-        "findings": len(models),
+        "findings": len(raw),
         "new": len(new_findings),
         "new_findings": new_findings,
     }

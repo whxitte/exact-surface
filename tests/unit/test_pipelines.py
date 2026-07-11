@@ -58,7 +58,7 @@ async def fake_probe(hosts, _timeout):
 
 
 def make_fake_scan(capture):
-    async def fake_scan(urls, _timeout, aggressive=False):
+    async def fake_scan(urls, _timeout, aggressive=False, on_finding=None):
         capture.append({"urls": list(urls), "aggressive": aggressive})
         return [
             {

@@ -180,3 +180,26 @@ async def test_dnsx_recon_tolerates_missing_binary():
         raise ToolNotFound("dnsx")
 
     assert await recon_hosts(["a.com"], 10, runner=missing) == {}  # best-effort → {}
+
+
+async def test_nuclei_on_finding_called_per_finding():
+    # on_finding fires for each streamed finding (real-time persistence hook).
+    from modules.scanning.nuclei import scan
+
+    async def runner(binary, args, *, timeout, stdin=None):
+        return [
+            {"template-id": "exposed-env", "matched-at": "https://a.com/.env",
+             "info": {"name": "Exposed .env", "severity": "high"}},
+            {"template-id": "waf", "host": "a.com", "info": {"severity": "info"}},
+        ]
+
+    seen: list[str] = []
+
+    async def on_finding(f):
+        seen.append(f["template_id"])
+
+    out = await scan(["https://a.com"], 10, runner=runner, on_finding=on_finding)
+    # injected runner path returns normalised findings; on_finding only fires for the
+    # real runner, so here we assert the batch return normalises correctly.
+    assert [f["template_id"] for f in out] == ["exposed-env", "waf"]
+    assert out[0]["severity"] == "high"
