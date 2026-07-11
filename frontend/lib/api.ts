@@ -251,6 +251,13 @@ export interface AttackSurface {
   series: SurfaceSeriesPoint[];
   recent: SurfaceEvent[];
 }
+export interface Delta {
+  kind: string; // status_change | title_change | tech_change | cert_change | new_port | new_asset
+  before?: string | null;
+  after?: string | null;
+  observed_at?: string;
+  asset_fingerprint?: string;
+}
 export interface Integration {
   name: string;
   label: string;
@@ -341,7 +348,7 @@ export const api = {
   listPorts: (id: string) => request<Port[]>(`/programs/${id}/ports`),
   listLeaks: (id: string) => request<Leak[]>(`/programs/${id}/leaks`),
   listSecrets: (id: string) => request<Secret[]>(`/programs/${id}/secrets`),
-  listDeltas: (id: string) => request<Record<string, unknown>[]>(`/programs/${id}/deltas`),
+  listDeltas: (id: string) => request<Delta[]>(`/programs/${id}/deltas`),
 
   listChannels: () => request<Channel[]>("/notifications"),
   createChannel: (body: {

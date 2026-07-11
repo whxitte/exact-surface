@@ -28,13 +28,15 @@ export default function DnsPage() {
   const [program, setProgram] = useState("all");
   const [type, setType] = useState<string>("all");
   const [q, setQ] = useState("");
+  const [programs, setPrograms] = useState<[string, string][]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const programs = await api.listPrograms();
+        const ps = await api.listPrograms();
+        setPrograms(ps.map((p) => [p.program_id, p.apex_domain]));
         const all: Row[] = [];
-        for (const p of programs) {
+        for (const p of ps) {
           const assets = await api.listAssets(p.program_id);
           assets.forEach((a) => {
             if (a.dns_records && Object.keys(a.dns_records).length)
@@ -48,12 +50,6 @@ export default function DnsPage() {
       }
     })();
   }, []);
-
-  const programs = useMemo(() => {
-    const m = new Map<string, string>();
-    rows.forEach((r) => m.set(r.program_id, r.apex));
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [rows]);
 
   const scoped = useMemo(
     () => (program === "all" ? rows : rows.filter((r) => r.program_id === program)),
@@ -130,20 +126,18 @@ export default function DnsPage() {
             className="h-8 w-48 rounded-md border border-border bg-background pl-7 pr-2 text-xs"
           />
         </div>
-        {programs.length > 1 && (
-          <select
-            value={program}
-            onChange={(e) => setProgram(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-xs"
-          >
-            <option value="all">All programs</option>
-            {programs.map(([id, apex]) => (
-              <option key={id} value={id}>
-                {apex}
-              </option>
-            ))}
-          </select>
-        )}
+        <select
+          value={program}
+          onChange={(e) => setProgram(e.target.value)}
+          className="h-8 rounded-md border border-border bg-background px-2 text-xs"
+        >
+          <option value="all">All programs</option>
+          {programs.map(([id, apex]) => (
+            <option key={id} value={id}>
+              {apex}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* CNAME spotlight */}
