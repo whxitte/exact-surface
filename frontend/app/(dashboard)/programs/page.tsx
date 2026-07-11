@@ -126,7 +126,7 @@ export default function ProgramsPage() {
           </p>
         )}
         {programs.map((p) => (
-          <Link key={p.program_id} href={`/programs/${p.program_id}`}>
+          <Link key={p.program_id} href={`/programs/${p.program_id}`} className="block">
             <Card className="transition-colors hover:border-primary/40">
               <CardContent className="flex items-center gap-4 p-4">
                 <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">

@@ -22,6 +22,11 @@ from api.schemas import (
     VerifyCheckResponse,
     VerifyRequestResponse,
 )
+from core.alert_policy import (
+    DEFAULT_ALERT_POLICY,
+    effective_alert_policy,
+    sanitize_alert_policy,
+)
 from core.config import get_settings
 from core.models import (
     Authorization,
@@ -31,6 +36,7 @@ from core.models import (
     ScanStatus,
     VerificationMethod,
 )
+from core.severity import Severity
 from core.verification import dns_instructions, http_instructions
 from db.assets import AssetRepo
 from db.audit import ScanRunRepo
@@ -282,6 +288,43 @@ async def set_timeouts(
         program["tenant_id"], program["program_id"], overrides
     )
     return await _timeouts_view(mongo, {**program, "timeout_overrides": overrides})
+
+
+async def _alert_policy_view(mongo: Any, program: dict) -> dict:
+    """This program's own overrides + the effective (defaults←tenant←program) policy
+    that notify actually enforces, plus the field catalog for the settings UI."""
+    tenant = await TenantRepo.from_mongo(mongo).get(program["tenant_id"])
+    prog_ov = program.get("alert_policy")
+    tenant_def = (tenant or {}).get("alert_policy")
+    return {
+        "alert_policy": sanitize_alert_policy(prog_ov),
+        "effective": effective_alert_policy(prog_ov, tenant_def),
+        "defaults": DEFAULT_ALERT_POLICY,
+        "tenant_defaults": sanitize_alert_policy(tenant_def),
+        "severities": [s.value for s in Severity],
+    }
+
+
+@router.get("/{program_id}/alert-policy", tags=["programs"])
+async def get_alert_policy(
+    program: dict = Depends(require_program), mongo: Any = Depends(get_mongo_dep)
+) -> dict:
+    return await _alert_policy_view(mongo, program)
+
+
+@router.post("/{program_id}/alert-policy", tags=["programs"])
+async def set_alert_policy(
+    body: dict,
+    program: dict = Depends(require_program),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Set this program's alert-policy overrides. Unknown keys / bad values are dropped
+    and the port filter is normalised server-side."""
+    policy = sanitize_alert_policy(body.get("policy") if isinstance(body, dict) else None)
+    await ProgramRepo.from_mongo(mongo).set_alert_policy(
+        program["tenant_id"], program["program_id"], policy
+    )
+    return await _alert_policy_view(mongo, {**program, "alert_policy": policy})
 
 
 # -- domain verification -----------------------------------------------------

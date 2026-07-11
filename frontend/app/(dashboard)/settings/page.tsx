@@ -10,6 +10,7 @@ import { NotificationsSettings } from "@/components/notifications-settings";
 import { IntegrationsSettings } from "@/components/integrations-settings";
 import { ScheduleDefaultsSettings } from "@/components/schedule-defaults-settings";
 import { TimeoutDefaultsSettings } from "@/components/timeout-defaults-settings";
+import { AlertPolicySettings } from "@/components/alert-policy-settings";
 
 export default function SettingsPage() {
   const [me, setMe] = useState<{ tenant_id: string; role: string } | null>(null);
@@ -94,6 +95,8 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <AlertPolicySettings />
 
       <ScheduleDefaultsSettings />
 

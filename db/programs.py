@@ -64,6 +64,9 @@ class ProgramRepo:
     async def set_timeout_overrides(self, tenant_id, program_id, overrides: dict[str, int]) -> None:
         await self._update(tenant_id, program_id, {"timeout_overrides": overrides})
 
+    async def set_alert_policy(self, tenant_id, program_id, policy: dict) -> None:
+        await self._update(tenant_id, program_id, {"alert_policy": policy})
+
     async def mark_initial_scan_completed(self, tenant_id, program_id, when: datetime) -> None:
         """Record the first full-run completion timestamp (callers guard so it is
         only set once — it stays the *first* completion, not the latest)."""

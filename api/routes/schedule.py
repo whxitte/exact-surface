@@ -11,6 +11,8 @@ from typing import Any
 from fastapi import APIRouter, Depends
 
 from api.deps import Principal, get_mongo_dep, get_principal
+from core.alert_policy import DEFAULT_ALERT_POLICY, sanitize_alert_policy
+from core.severity import Severity
 from db.tenants import TenantRepo
 from taskqueue.cadence import DEFAULT_CADENCE_SECONDS, MIN_INTERVAL_SECONDS, sanitize_overrides
 from taskqueue.timeouts import (
@@ -107,3 +109,31 @@ async def set_timeout_defaults(
     )
     await TenantRepo.from_mongo(mongo).set_timeout_overrides(principal.tenant_id, overrides)
     return {"timeout_overrides": overrides, "stages": _timeout_catalog()}
+
+
+def _alert_meta() -> dict:
+    return {"defaults": DEFAULT_ALERT_POLICY, "severities": [s.value for s in Severity]}
+
+
+@router.get("/alert-policy")
+async def get_alert_policy_defaults(
+    principal: Principal = Depends(get_principal), mongo: Any = Depends(get_mongo_dep)
+) -> dict:
+    """Account-wide alert-policy defaults a program falls back to (partial overrides
+    over the built-ins)."""
+    tenant = await TenantRepo.from_mongo(mongo).get(principal.tenant_id)
+    return {
+        "alert_policy": sanitize_alert_policy((tenant or {}).get("alert_policy")),
+        **_alert_meta(),
+    }
+
+
+@router.post("/alert-policy")
+async def set_alert_policy_defaults(
+    body: dict,
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    policy = sanitize_alert_policy(body.get("policy") if isinstance(body, dict) else None)
+    await TenantRepo.from_mongo(mongo).set_alert_policy(principal.tenant_id, policy)
+    return {"alert_policy": policy, **_alert_meta()}

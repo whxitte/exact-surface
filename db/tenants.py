@@ -33,3 +33,6 @@ class TenantRepo:
         await self._c.update_one(
             {"tenant_id": tenant_id}, {"$set": {"timeout_overrides": overrides}}
         )
+
+    async def set_alert_policy(self, tenant_id: str, policy: dict) -> None:
+        await self._c.update_one({"tenant_id": tenant_id}, {"$set": {"alert_policy": policy}})

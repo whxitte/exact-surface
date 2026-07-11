@@ -536,3 +536,35 @@ def test_cves_and_correlation_endpoints():
     assert corr["count"] >= 1
     hosts = {i["host"]: i for i in corr["issues"]}
     assert "app.acme.com" in hosts and hosts["app.acme.com"]["risk_score"] > 0
+
+
+def test_alert_policy_endpoints():
+    client, _, _ = build()
+    tok = _signup(client)
+    token = tok["access_token"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+
+    # defaults present out of the box
+    got = client.get(f"/programs/{pid}/alert-policy", headers=_auth(token)).json()
+    assert got["alert_policy"] == {}  # no overrides yet
+    assert got["effective"]["finding_min_severity"] == "medium"
+    assert "critical" in got["severities"]
+
+    # set an override; the port filter is normalised server-side
+    saved = client.post(
+        f"/programs/{pid}/alert-policy",
+        headers=_auth(token),
+        json={"policy": {"finding_min_severity": "high", "port_filter": "22, 80,x,1-100"}},
+    ).json()
+    assert saved["alert_policy"]["finding_min_severity"] == "high"
+    assert saved["alert_policy"]["port_filter"] == "22,80,1-100"
+    assert saved["effective"]["finding_min_severity"] == "high"
+
+    # account-wide defaults round-trip too
+    client.post(
+        "/schedule/alert-policy", headers=_auth(token), json={"policy": {"alert_leaks": False}}
+    )
+    defs = client.get("/schedule/alert-policy", headers=_auth(token)).json()
+    assert defs["alert_policy"]["alert_leaks"] is False

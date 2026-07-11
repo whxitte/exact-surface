@@ -67,6 +67,9 @@ class Tenant(BaseModel):
     #: account-wide per-stage timeout defaults (seconds); a program's own
     #: timeout_overrides win. See taskqueue.timeouts.effective_timeouts.
     timeout_overrides: dict[str, int] = Field(default_factory=dict)
+    #: account-wide alert-policy defaults; a program's own alert_policy wins.
+    #: See core.alert_policy.effective_alert_policy.
+    alert_policy: dict = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=_utcnow)
     updated_at: datetime = Field(default_factory=_utcnow)
 
@@ -146,6 +149,9 @@ class Program(TenantScopedModel):
     #: per-stage max-runtime overrides (seconds); same precedence as cadence.
     #: See taskqueue.timeouts.effective_timeouts.
     timeout_overrides: dict[str, int] = Field(default_factory=dict)
+    #: partial alert-policy overrides for THIS program; falls back to tenant defaults,
+    #: then the built-ins. See core.alert_policy.effective_alert_policy.
+    alert_policy: dict = Field(default_factory=dict)
     #: set once the first full pipeline run completes — until then the scheduler
     #: bootstraps a single ordered full run instead of fanning out per-phase.
     initial_scan_completed_at: datetime | None = None

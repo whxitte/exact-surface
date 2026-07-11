@@ -101,3 +101,54 @@ def alert_from_cve(doc: dict, program: str) -> Alert:
 
 def cve_is_alertable(doc: dict) -> bool:
     return doc.get("confidence") == "high" or bool(doc.get("on_kev"))
+
+
+#: ports where merely being open is noteworthy (remote admin, databases, caches) — an
+#: alert for one of these rates HIGH; any other newly-open port is MEDIUM.
+_SENSITIVE_PORTS = {
+    21,
+    22,
+    23,
+    25,
+    135,
+    139,
+    445,
+    1433,
+    1521,
+    3306,
+    3389,
+    5432,
+    5900,
+    6379,
+    9200,
+    11211,
+    27017,
+}
+
+
+def alert_from_asset(doc: dict, program: str) -> Alert:
+    """A newly-discovered subdomain (change event, not a vulnerability)."""
+    return Alert(
+        title=f"New subdomain: {doc.get('hostname', '')}",
+        severity=Severity.INFO,
+        program=program,
+        location=doc.get("hostname", ""),
+        module="ingest",
+        detail="appeared after the baseline scan",
+    )
+
+
+def alert_from_port(doc: dict, program: str) -> Alert:
+    """A newly-observed open port (change event)."""
+    port = int(doc.get("port", 0) or 0)
+    svc = doc.get("service") or ""
+    product = doc.get("product") or ""
+    banner = f"{svc}{f' ({product})' if product else ''}".strip()
+    return Alert(
+        title=f"New open port {port}/{doc.get('protocol', 'tcp')}",
+        severity=Severity.HIGH if port in _SENSITIVE_PORTS else Severity.MEDIUM,
+        program=program,
+        location=f"{doc.get('ip', '')}:{port}",
+        module="naabu",
+        detail=banner or "no banner",
+    )

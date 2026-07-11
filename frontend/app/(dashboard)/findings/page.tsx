@@ -97,7 +97,7 @@ export default function FindingsPage() {
       ) : (
         <div className="space-y-2">
           {shown.map((f) => (
-            <Link key={`${f.program_id}-${f.fingerprint}`} href={`/programs/${f.program_id}`}>
+            <Link key={`${f.program_id}-${f.fingerprint}`} href={`/programs/${f.program_id}`} className="block">
               <Card className="transition-colors hover:border-primary/40">
                 <CardContent className="flex items-center gap-4 p-4">
                   <SeverityBadge severity={f.severity} />
