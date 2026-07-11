@@ -76,6 +76,7 @@ export interface Finding {
   references?: string[];
   cvss?: number | null;
   raw?: Record<string, unknown>; // full tool output (nuclei request/response/curl/tags)
+  gone?: boolean; // no longer reported by its module's latest run (resolved)
 }
 export interface Asset {
   fingerprint: string;
@@ -182,6 +183,7 @@ export interface Cve {
   severity: string;
   first_seen?: string;
   last_seen?: string; // last scan that re-confirmed the match
+  gone?: boolean; // no longer matched by the latest cve-watch run (resolved)
 }
 export interface CorrelatedIssue {
   host: string;

@@ -527,25 +527,38 @@ async def trigger_scan(
 
 
 # -- reads -------------------------------------------------------------------
-#: An item is "gone" if it wasn't re-observed in the latest scan sweep of its own kind:
-#: the freshest last_seen in the collection marks that sweep, so anything whose last_seen
-#: trails it by more than this grace was skipped (host down / port closed / path removed).
-#: The grace absorbs a sweep that spans time; it sits well under every phase cadence (≥2h).
+#: An item is "gone" if a *later* sweep of its own producing phase re-observed peers but
+#: skipped it. We approximate that sweep by the freshest last_seen among items sharing the
+#: same source (`group_by`): grouping matters because endpoints come from phases on
+#: different cadences — probe (2h) only re-touches root URLs while deep paths come from
+#: content_discovery (24h), so comparing a feroxbuster path against a probe timestamp would
+#: wrongly mark every live deep path gone. Same-source comparison also self-heals flaky
+#: runs: if a phase fails and re-observes nothing, no peer gets a fresher timestamp, so
+#: nothing flips to gone. The grace absorbs a sweep that spans wall-clock time.
 _GONE_GRACE_SECONDS = 3600
 
 
-def _annotate_gone(docs: list[dict]) -> list[dict]:
-    seens = [d["last_seen"] for d in docs if d.get("last_seen")]
-    ref = max(seens) if seens else None
+def _annotate_gone(docs: list[dict], *, group_by: str | None = None) -> list[dict]:
+    # freshest last_seen per source group — that marks the group's latest sweep.
+    refs: dict[Any, Any] = {}
     for d in docs:
         ls = d.get("last_seen")
+        if ls is None:
+            continue
+        key = d.get(group_by) if group_by else None
+        cur = refs.get(key)
+        if cur is None or ls > cur:
+            refs[key] = ls
+    for d in docs:
+        ls = d.get("last_seen")
+        ref = refs.get(d.get(group_by) if group_by else None)
         d["gone"] = bool(
             ref is not None and ls is not None and (ref - ls).total_seconds() > _GONE_GRACE_SECONDS
         )
     return docs
 
 
-def _reader(repo_cls, *, liveness: bool = False):
+def _reader(repo_cls, *, liveness: bool = False, group_by: str | None = None):
     async def read(
         program: dict = Depends(require_program),
         principal: Principal = Depends(get_principal),
@@ -555,7 +568,7 @@ def _reader(repo_cls, *, liveness: bool = False):
             principal.tenant_id, program["program_id"], limit=1000
         )
         if liveness:
-            _annotate_gone(docs)  # tag each with `gone` before dates get serialised
+            _annotate_gone(docs, group_by=group_by)  # tag `gone` before dates serialise
         return [clean_doc(d) for d in docs]
 
     return read
@@ -565,14 +578,19 @@ router.add_api_route(
     "/{program_id}/assets", _reader(AssetRepo, liveness=True), methods=["GET"], tags=["data"]
 )
 router.add_api_route(
-    "/{program_id}/endpoints", _reader(EndpointRepo, liveness=True), methods=["GET"], tags=["data"]
+    "/{program_id}/endpoints",
+    _reader(EndpointRepo, liveness=True, group_by="source"),
+    methods=["GET"],
+    tags=["data"],
 )
 router.add_api_route("/{program_id}/secrets", _reader(SecretRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
     "/{program_id}/ports", _reader(PortRepo, liveness=True), methods=["GET"], tags=["data"]
 )
 router.add_api_route("/{program_id}/leaks", _reader(LeakRepo), methods=["GET"], tags=["data"])
-router.add_api_route("/{program_id}/cves", _reader(CveMatchRepo), methods=["GET"], tags=["data"])
+router.add_api_route(
+    "/{program_id}/cves", _reader(CveMatchRepo, liveness=True), methods=["GET"], tags=["data"]
+)
 router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
     "/{program_id}/scan-runs", _reader(ScanRunRepo), methods=["GET"], tags=["data"]
@@ -612,6 +630,9 @@ async def list_findings(
     docs = await FindingRepo.from_mongo(mongo).list(
         principal.tenant_id, program["program_id"], is_new=is_new, limit=1000
     )
+    # A finding is "gone" (resolved) if a later re-run of its own module stopped
+    # reporting it — grouped by module so nuclei/dork/takeover judge independently.
+    _annotate_gone(docs, group_by="module")
     if severity:
         docs = [d for d in docs if d.get("severity") == severity]
     if state:

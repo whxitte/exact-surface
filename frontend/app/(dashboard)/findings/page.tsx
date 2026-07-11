@@ -129,7 +129,7 @@ function FindingCard({ f, open, onToggle }: { f: Row; open: boolean; onToggle: (
   const extracted = f.locator || ((raw["extracted-results"] as string[] | undefined) || []).join(", ");
 
   return (
-    <Card className="overflow-hidden">
+    <Card className={cn("overflow-hidden", f.gone && "opacity-60")}>
       <button
         onClick={onToggle}
         className="flex w-full items-center gap-3 p-4 text-left transition-colors hover:bg-muted/30"
@@ -141,16 +141,22 @@ function FindingCard({ f, open, onToggle }: { f: Row; open: boolean; onToggle: (
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span className="truncate font-medium">{f.name}</span>
-            <span
-              className={cn(
-                "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] uppercase",
-                confirmed
-                  ? "bg-severity-high/15 text-severity-high"
-                  : "bg-muted text-muted-foreground",
-              )}
-            >
-              {confirmed ? "confirmed" : "unconfirmed"}
-            </span>
+            {f.gone ? (
+              <span className="shrink-0 rounded-full bg-severity-low/15 px-1.5 py-0.5 text-[10px] uppercase text-severity-low">
+                resolved
+              </span>
+            ) : (
+              <span
+                className={cn(
+                  "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] uppercase",
+                  confirmed
+                    ? "bg-severity-high/15 text-severity-high"
+                    : "bg-muted text-muted-foreground",
+                )}
+              >
+                {confirmed ? "confirmed" : "unconfirmed"}
+              </span>
+            )}
           </div>
           <div className="truncate font-mono text-xs text-muted-foreground">{f.location}</div>
         </div>

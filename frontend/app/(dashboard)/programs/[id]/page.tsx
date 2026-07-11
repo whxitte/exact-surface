@@ -50,6 +50,8 @@ export default function ProgramDetail() {
   const [showSeen, setShowSeen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
   const [showGoneEndpoints, setShowGoneEndpoints] = useState(false);
+  const [findingSort, setFindingSort] = useState<"severity" | "newest" | "oldest">("severity");
+  const [prioritySort, setPrioritySort] = useState<"risk" | "severity" | "host">("risk");
   const [endpointSource, setEndpointSource] = useState<string>("all");
 
   const loadProgram = useCallback(() => {
@@ -216,9 +218,16 @@ export default function ProgramDetail() {
     }
   }
 
-  const sortedFindings = [...findings].sort(
-    (a, b) => severityRank(a.severity) - severityRank(b.severity),
-  );
+  const sortedFindings = [...findings].sort((a, b) => {
+    if (findingSort === "newest") return Date.parse(b.first_seen || "") - Date.parse(a.first_seen || "");
+    if (findingSort === "oldest") return Date.parse(a.first_seen || "") - Date.parse(b.first_seen || "");
+    return severityRank(a.severity) - severityRank(b.severity);
+  });
+  const sortedIssues = [...(correlation?.issues || [])].sort((a, b) => {
+    if (prioritySort === "host") return a.host.localeCompare(b.host);
+    if (prioritySort === "severity") return severityRank(a.highest_severity) - severityRank(b.highest_severity);
+    return b.risk_score - a.risk_score; // default: risk
+  });
 
   return (
     <div className="space-y-6">
@@ -419,16 +428,29 @@ export default function ProgramDetail() {
 
       {tab === "priorities" && (
         <div className="space-y-2">
-          <p className="text-xs text-muted-foreground">
-            Hosts ranked by combined risk across every signal (findings, secrets, leaks,
-            CVEs, exposed ports). A <span className="text-primary">chain</span> is a host
-            carrying two or more independent high-signal exposures — the attacker&apos;s
-            best foothold.
-          </p>
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              Hosts ranked by combined risk across every signal (findings, secrets, leaks,
+              CVEs, exposed ports). A <span className="text-primary">chain</span> is a host
+              carrying two or more independent high-signal exposures — the attacker&apos;s
+              best foothold.
+            </p>
+            {(correlation?.issues.length ?? 0) > 0 && (
+              <select
+                value={prioritySort}
+                onChange={(e) => setPrioritySort(e.target.value as typeof prioritySort)}
+                className="h-8 shrink-0 rounded-md border border-border bg-background px-2 text-xs"
+              >
+                <option value="risk">Risk score</option>
+                <option value="severity">Severity</option>
+                <option value="host">Host name</option>
+              </select>
+            )}
+          </div>
           {(!correlation || correlation.issues.length === 0) && (
             <Empty label="No correlated issues yet — run a scan to build the picture." />
           )}
-          {correlation?.issues.map((it) => (
+          {sortedIssues.map((it) => (
             <Card key={it.host}>
               <CardContent className="flex items-center gap-4 p-4">
                 <div className="flex w-12 shrink-0 flex-col items-center">
@@ -461,11 +483,25 @@ export default function ProgramDetail() {
 
       {tab === "findings" && (
         <div className="space-y-2">
+          {findings.length > 0 && (
+            <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+              <span>Sort by</span>
+              <select
+                value={findingSort}
+                onChange={(e) => setFindingSort(e.target.value as typeof findingSort)}
+                className="h-8 rounded-md border border-border bg-background px-2"
+              >
+                <option value="severity">Severity</option>
+                <option value="newest">Newest found</option>
+                <option value="oldest">Oldest found</option>
+              </select>
+            </div>
+          )}
           {sortedFindings.length === 0 && <Empty label="No findings yet — run a scan." />}
           {sortedFindings.map((f) => (
             <Card
               key={f.fingerprint}
-              className="cursor-pointer transition-colors hover:border-primary/40"
+              className={`cursor-pointer transition-colors hover:border-primary/40 ${f.gone ? "opacity-60" : ""}`}
               onClick={() => setSelected(f)}
             >
               <CardContent className="flex items-center gap-4 p-4">
@@ -479,7 +515,13 @@ export default function ProgramDetail() {
                     </div>
                   )}
                 </div>
-                {f.is_new && <span className="text-xs text-primary">NEW</span>}
+                {f.gone ? (
+                  <span className="rounded-full bg-severity-low/15 px-1.5 py-0.5 text-[10px] uppercase text-severity-low">
+                    resolved
+                  </span>
+                ) : (
+                  f.is_new && <span className="text-xs text-primary">NEW</span>
+                )}
                 <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                   {f.module}
                 </span>
@@ -498,7 +540,7 @@ export default function ProgramDetail() {
           {cves.map((c) => {
             const host = hostByAssetFp.get(c.asset_fingerprint);
             return (
-              <Card key={c.fingerprint}>
+              <Card key={c.fingerprint} className={c.gone ? "opacity-60" : undefined}>
                 <CardContent className="flex items-center gap-4 p-4">
                   <SeverityBadge severity={c.severity} />
                   <div className="min-w-0 flex-1">
@@ -511,6 +553,11 @@ export default function ProgramDetail() {
                       >
                         {c.cve_id}
                       </a>
+                      {c.gone && (
+                        <span className="rounded-full bg-severity-low/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-severity-low">
+                          resolved
+                        </span>
+                      )}
                       {c.on_kev && (
                         <span className="rounded-full bg-severity-critical/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-severity-critical">
                           KEV

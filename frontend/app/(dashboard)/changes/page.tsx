@@ -14,6 +14,7 @@ interface Bundle {
   apex: string;
   surface: AttackSurface;
   deltas: Delta[];
+  gone: Evt[]; // items no longer live (assets/endpoints/ports) since the last sweep
 }
 
 const TYPE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -96,13 +97,20 @@ export default function ChangesPage() {
         setPrograms(ps.map((p) => [p.program_id, p.apex_domain]));
         const bs = await Promise.all(
           ps.map(async (p) => {
-            const [surface, deltas] = await Promise.all([
+            const [surface, deltas, assets, endpoints, ports] = await Promise.all([
               api.getAttackSurface(p.program_id).catch(() => null),
               api.listDeltas(p.program_id).catch(() => [] as Delta[]),
+              api.listAssets(p.program_id).catch(() => []),
+              api.listEndpoints(p.program_id).catch(() => []),
+              api.listPorts(p.program_id).catch(() => []),
             ]);
-            return surface
-              ? { pid: p.program_id, apex: p.apex_domain, surface, deltas }
-              : null;
+            if (!surface) return null;
+            const gone: Evt[] = [
+              ...assets.filter((a) => a.gone).map((a) => ({ type: "asset", label: a.hostname, at: a.last_seen || "", apex: p.apex_domain })),
+              ...endpoints.filter((e) => e.gone).map((e) => ({ type: "endpoint", label: e.url, at: e.last_seen || "", apex: p.apex_domain })),
+              ...ports.filter((pt) => pt.gone).map((pt) => ({ type: "port", label: `${pt.ip}:${pt.port}`, at: pt.last_seen || "", apex: p.apex_domain })),
+            ];
+            return { pid: p.program_id, apex: p.apex_domain, surface, deltas, gone };
           }),
         );
         setBundles(bs.filter((b): b is Bundle => b !== null));
@@ -121,11 +129,22 @@ export default function ChangesPage() {
     const added: Evt[] = [];
     const removed: Evt[] = [];
     const modified: Mod[] = [];
+    const seen = new Set<string>();
     for (const b of scoped) {
       for (const e of b.surface.recent) {
         const evt: Evt = { type: e.type, label: e.label, at: e.at, apex: b.apex, severity: e.severity };
-        (e.kind === "opened" ? added : removed).push(evt);
+        if (e.kind === "opened") added.push(evt);
+        else {
+          removed.push(evt);
+          seen.add(`${evt.type}:${evt.label}`);
+        }
       }
+      // items the readers flag as gone (no longer live) — dedupe against surface events
+      for (const g of b.gone)
+        if (!seen.has(`${g.type}:${g.label}`)) {
+          seen.add(`${g.type}:${g.label}`);
+          removed.push(g);
+        }
       for (const d of b.deltas)
         if (MODIFIED_KINDS.has(d.kind))
           modified.push({ kind: d.kind, before: d.before, after: d.after, at: d.observed_at || "", apex: b.apex });

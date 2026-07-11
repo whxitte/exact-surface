@@ -121,6 +121,7 @@ export function PortsTable({
               <th className="px-4 py-2.5 font-medium">Reason</th>
               <th className="px-4 py-2.5 font-medium">Domain</th>
               <th className="px-4 py-2.5 text-right font-medium">First seen</th>
+              <th className="px-4 py-2.5 text-right font-medium">Last seen</th>
             </tr>
           </thead>
           <tbody>
@@ -151,6 +152,12 @@ export function PortsTable({
                 </td>
                 <td className="whitespace-nowrap px-4 py-2.5 text-right text-xs text-muted-foreground">
                   {timeAgo(p.first_seen)}
+                </td>
+                <td
+                  className="whitespace-nowrap px-4 py-2.5 text-right text-xs text-muted-foreground"
+                  title={p.last_seen ? new Date(p.last_seen).toLocaleString() : ""}
+                >
+                  {timeAgo(p.last_seen)}
                 </td>
               </tr>
             ))}
