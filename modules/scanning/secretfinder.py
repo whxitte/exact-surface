@@ -163,6 +163,7 @@ async def scan_urls(
     concurrency: int = CONCURRENCY,
     max_urls: int = MAX_SECRET_URLS,
     deep_scan: DeepScan | None = _trufflehog_scan,
+    on_hit: Callable[[dict], Awaitable[None]] | None = None,
 ) -> list[dict]:
     """Fetch scannable URLs CONCURRENTLY and return all detected secrets.
 
@@ -171,7 +172,11 @@ async def scan_urls(
     over the bodies staged to a temp dir. ``deep_scan=None`` (or a missing binary)
     degrades gracefully to regex only. High-yield content (JS/config/data) is scanned
     first, then the set is capped — a big content-discovery haul (tens of thousands of
-    paths) must never blow the stage budget by fetching every body one at a time."""
+    paths) must never blow the stage budget by fetching every body one at a time.
+
+    ``on_hit`` (optional) is awaited for each regex secret THE MOMENT it's found, so
+    the caller can persist it immediately — a stage timeout then keeps what was found
+    instead of losing the whole batch."""
     scannable = [u for u in urls if is_scannable_url(u)]
     skipped = len(urls) - len(scannable)
     scannable.sort(key=_priority)  # high-yield first, so the cap keeps the best
@@ -208,13 +213,21 @@ async def scan_urls(
                 file_to_url[path] = url
             except OSError:  # a write failure just means deep-scan misses this body
                 pass
-        return find_secrets(content, url)
+        found = find_secrets(content, url)
+        if on_hit:  # stream each secret out now so a timeout doesn't lose it
+            for h in found:
+                await on_hit(h)
+        return found
 
     try:
         results = await asyncio.gather(*(_one(i, u) for i, u in enumerate(scannable)))
         hits = [h for per_url in results for h in per_url]
         if deep_scan and file_to_url:
-            hits += await deep_scan(tmpdir, file_to_url, timeout=DEEP_SCAN_TIMEOUT)
+            deep_hits = await deep_scan(tmpdir, file_to_url, timeout=DEEP_SCAN_TIMEOUT)
+            if on_hit:
+                for h in deep_hits:
+                    await on_hit(h)
+            hits += deep_hits
     finally:
         if tmpdir:
             shutil.rmtree(tmpdir, ignore_errors=True)

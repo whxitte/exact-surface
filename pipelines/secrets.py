@@ -61,9 +61,10 @@ async def run_secret_scan(
         }
 
     logger.info("secret-scanning {} endpoint(s)", len(urls))
-    hits = await scan_urls(urls, fetch=fetch)
-    models = [
-        ExposedSecret(
+    repo = SecretRepo.from_mongo(mongo)
+
+    def _model(h: dict) -> ExposedSecret:
+        return ExposedSecret(
             tenant_id=tid,
             program_id=program_id,
             fingerprint=secret_fingerprint(program_id, h["value"], h["source_locator"], hmac_key),
@@ -73,20 +74,36 @@ async def run_secret_scan(
             source_locator=h["source_locator"],
             severity=h["severity"],
         )
-        for h in hits
-    ]
-    res = await SecretRepo.from_mongo(mongo).upsert_all(models)
-    new = [
-        {"kind": m.kind, "masked": m.masked, "where": m.source_locator}
-        for m, x in zip(models, res, strict=True)
-        if x.inserted
-    ]
+
+    # Persist each secret the INSTANT it's found — a stage timeout on a huge haul then
+    # keeps everything found so far instead of losing the whole batch (real-time UI).
+    seen: set[str] = set()
+    new: list[dict] = []
+
+    async def _persist(h: dict) -> None:
+        m = _model(h)
+        if m.fingerprint in seen:
+            return
+        seen.add(m.fingerprint)
+        r = await repo.upsert(m)
+        if r.inserted:
+            new.append({"kind": m.kind, "masked": m.masked, "where": m.source_locator})
+
+    hits = await scan_urls(urls, fetch=fetch, on_hit=_persist)
+    # Backstop: upsert any hit the callback didn't already store (idempotent).
+    leftover = [_model(h) for h in hits if _model(h).fingerprint not in seen]
+    if leftover:
+        res = await repo.upsert_all(leftover)
+        for m, x in zip(leftover, res, strict=True):
+            seen.add(m.fingerprint)
+            if x.inserted:
+                new.append({"kind": m.kind, "masked": m.masked, "where": m.source_locator})
 
     logger.info(
         "secret scan {}: {} urls, {} secrets, {} new",
         program_id,
         len(urls),
-        len(models),
+        len(seen),
         len(new),
     )
-    return {"scanned": len(urls), "secrets": len(models), "new": len(new), "new_secrets": new}
+    return {"scanned": len(urls), "secrets": len(seen), "new": len(new), "new_secrets": new}

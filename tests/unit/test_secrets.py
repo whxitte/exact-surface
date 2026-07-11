@@ -120,6 +120,63 @@ async def test_pipeline_stores_masked_secret_never_plaintext():
     assert AWS_KEY not in json.dumps(doc, default=str)
 
 
+async def test_scan_urls_streams_each_hit_immediately():
+    streamed: list[str] = []
+
+    async def fetch(_url):
+        return f"a={AWS_KEY}"
+
+    async def on_hit(h):
+        streamed.append(h["value"])
+
+    await scan_urls(
+        ["https://x.com/a.js", "https://x.com/b.js"],
+        fetch=fetch,
+        deep_scan=None,
+        on_hit=on_hit,
+    )
+    assert streamed == [AWS_KEY, AWS_KEY]  # one callback per secret, as found
+
+
+async def test_pipeline_persists_secrets_before_a_later_failure(monkeypatch):
+    # A secret found early must already be stored even if the scan blows up later —
+    # this is what keeps a timed-out huge haul from losing everything.
+    import pytest
+
+    import pipelines.secrets as secrets_mod
+
+    mongo = FakeMongo()
+    await _seed(mongo, "app.customer.com", ["45.55.1.1"], "https://app.customer.com/main.js")
+
+    async def fake_scan_urls(urls, *, on_hit=None, **_kw):
+        await on_hit(
+            {
+                "value": AWS_KEY,
+                "kind": "aws_access_key",
+                "source_locator": urls[0],
+                "severity": "high",
+            }
+        )
+        raise RuntimeError("scan crashed after the first hit")
+
+    monkeypatch.setattr(secrets_mod, "scan_urls", fake_scan_urls)
+
+    with pytest.raises(RuntimeError):
+        await run_secret_scan(
+            mongo=mongo,
+            engine=ENGINE,
+            scope=SCOPE,
+            tenant=TENANT,
+            program_id="p1",
+            hmac_key=KEY,
+            fetch=lambda _u: "",
+        )
+
+    # The AWS key was streamed to the DB before the crash — not lost.
+    docs = list(SecretRepo(mongo.collection("secrets"))._c.docs.values())
+    assert len(docs) == 1 and docs[0]["value_hash"] == keyed_hash(AWS_KEY, KEY)
+
+
 async def test_pipeline_skips_out_of_reach_hosts():
     mongo = FakeMongo()
     # Host resolves to the metadata IP → scope denies contact → must not be fetched.

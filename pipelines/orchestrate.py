@@ -282,7 +282,9 @@ async def run_full_pipeline(
                     failed.append(name)
                     results[name] = {"failed": True, "note": stage_obj.note}
                     await audit.save(run)
-                    logger.error("stage {} failed (continuing): {}", name, exc)
+                    # TimeoutError (and some cancellations) stringify to "", which made
+                    # the log read "... failed (continuing): " — surface the type + note.
+                    logger.error("stage {} failed (continuing): {}", name, stage_obj.note)
                     continue
                 stage_obj.finished_at = datetime.now(UTC)
                 if res.get("skipped"):
