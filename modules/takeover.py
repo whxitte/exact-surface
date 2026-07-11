@@ -103,6 +103,15 @@ def _match_service(cname: str) -> Service | None:
     return None
 
 
+def _fingerprint_in(body: str) -> tuple[Service, str] | None:
+    """First (service, fingerprint) whose unclaimed-marker appears in *body*."""
+    for svc in SERVICES:
+        for fp in svc.fingerprints:
+            if fp in body:
+                return svc, fp
+    return None
+
+
 async def check_host(
     host: str,
     cnames: list[str],
@@ -110,36 +119,17 @@ async def check_host(
     fetch: Fetch,
     resolve: Resolve | None = None,
 ) -> dict | None:
-    """Return a takeover finding for *host* if one of its *cnames* points at an
-    unclaimed known service, else ``None``.
+    """Return a takeover finding for *host* if it looks claimable, else ``None``.
 
-    ``fetch(url) -> body`` retrieves the page (empty string on failure); ``resolve``
-    (optional) resolves the CNAME target so a dangling (NXDOMAIN) record can be
-    flagged for services where that means the name is claimable."""
+    Two signals: (1) a dangling CNAME to a claimable service that no longer resolves
+    (NXDOMAIN), and (2) an HTTP "unclaimed" fingerprint in the response body. The body
+    is scanned against EVERY service's fingerprints regardless of the CNAME target —
+    crucial for S3 fronted by CloudFront, where the CNAME is ``*.cloudfront.net`` but
+    the body is S3's ``NoSuchBucket`` (a CNAME-only match would miss it)."""
+    # 1) Dangling CNAME (NXDOMAIN) for claimable services — cheap, no fetch.
     for cname in cnames:
         svc = _match_service(cname)
-        if svc is None:
-            continue
-
-        # 1) HTTP fingerprint — the strong, confirmable signal.
-        if svc.fingerprints:
-            for scheme in ("https", "http"):
-                body = ""
-                try:
-                    body = await fetch(f"{scheme}://{host}")
-                except Exception:  # noqa: BLE001 - a fetch failure is not a finding
-                    body = ""
-                if body and any(fp in body for fp in svc.fingerprints):
-                    return {
-                        "host": host,
-                        "service": svc.name,
-                        "cname": cname,
-                        "evidence": next(fp for fp in svc.fingerprints if fp in body),
-                        "signal": "http-fingerprint",
-                    }
-
-        # 2) Dangling target — the CNAME resolves to nothing on a claimable service.
-        if svc.nxdomain_takeover and resolve is not None:
+        if svc and svc.nxdomain_takeover and resolve is not None:
             try:
                 ips = await resolve(cname)
             except Exception:  # noqa: BLE001
@@ -152,4 +142,28 @@ async def check_host(
                     "evidence": f"CNAME {cname} does not resolve (dangling)",
                     "signal": "nxdomain",
                 }
+
+    # 2) HTTP fingerprint — fetch the body once and scan it against ALL services.
+    for scheme in ("https", "http"):
+        try:
+            body = await fetch(f"{scheme}://{host}")
+        except Exception:  # noqa: BLE001 - a fetch failure is not a finding
+            body = ""
+        if not body:
+            continue
+        match = _fingerprint_in(body)
+        if match:
+            svc, fp = match
+            # attribute to the CNAME that points at this service, else the first CNAME.
+            cname = next(
+                (c for c in cnames if _match_service(c) is svc), cnames[0] if cnames else ""
+            )
+            return {
+                "host": host,
+                "service": svc.name,
+                "cname": cname,
+                "evidence": fp,
+                "signal": "http-fingerprint",
+            }
+        break  # got a real body on https; a live/other page is not a takeover
     return None

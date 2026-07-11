@@ -86,6 +86,56 @@ async def test_pipeline_creates_finding_and_flags_asset():
     assert asset["takeover_risk"] == "GitHub Pages"
 
 
+async def test_s3_behind_cloudfront_detected_by_body():
+    # The real miss: CNAME is CloudFront (unknown service) but the body is S3's
+    # NoSuchBucket — must still be flagged via the body scan.
+    body = (
+        "<html><head><title>404 Not Found</title></head><body>"
+        "<li>Code: NoSuchBucket</li></body></html>"
+    )
+
+    async def fetch(_url):
+        return body
+
+    hit = await check_host(
+        "dev-quipolite.quipohealth.com",
+        ["d123.cloudfront.net"],  # CloudFront CNAME — not itself a known service
+        fetch=fetch,
+    )
+    assert hit and hit["service"] == "AWS/S3" and hit["signal"] == "http-fingerprint"
+
+
+async def test_pipeline_checks_resolving_host_without_cname():
+    mongo = FakeMongo()
+    repo = AssetRepo.from_mongo(mongo)
+    await repo.upsert(
+        Asset(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint="s3",
+            hostname="dev.acme.com",
+            resolved_ips=["13.1.1.1"],  # resolves (to CloudFront) but no telltale CNAME
+        )
+    )
+
+    async def fetch(_url):
+        return "<li>Code: NoSuchBucket</li>"
+
+    res = await run_takeover(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        timeout=10,
+        fetch=fetch,
+        resolve=None,
+    )
+    assert res["checked"] == 1 and res["vulnerable"] == 1
+    asset = await repo.get("t1", "s3")
+    assert asset["takeover_risk"] == "AWS/S3"
+
+
 async def test_pipeline_skips_when_no_cnames():
     mongo = FakeMongo()
     await AssetRepo.from_mongo(mongo).upsert(

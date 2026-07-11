@@ -38,8 +38,13 @@ async def run_takeover(
 ) -> dict:
     tid = tenant.tenant_id
     assets = await AssetRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
+    # Check any host that resolves — a CNAME (dangling / claimable target) OR an A record
+    # (S3 fronted by CloudFront has no telltale CNAME but its body says "NoSuchBucket").
     candidates = [
-        a for a in assets if a.get("monitored", True) and (a.get("dns_records") or {}).get("cname")
+        a
+        for a in assets
+        if a.get("monitored", True)
+        and ((a.get("dns_records") or {}).get("cname") or a.get("resolved_ips"))
     ]
     if not candidates:
         return {
@@ -47,10 +52,10 @@ async def run_takeover(
             "vulnerable": 0,
             "new": 0,
             "skipped": True,
-            "note": "no hosts with CNAME records to check",
+            "note": "no resolving hosts to check",
         }
 
-    logger.info("takeover: checking {} host(s) with CNAMEs", len(candidates))
+    logger.info("takeover: body-checking {} resolving host(s)", len(candidates))
     sem = asyncio.Semaphore(CONCURRENCY)
     repo = AssetRepo.from_mongo(mongo)
 
