@@ -107,6 +107,7 @@ async def run_scan(
             check_id=f["template_id"],
             module="nuclei",
             location=f["matched_at"],
+            locator=f.get("matched", ""),  # e.g. the detected tech names
             name=f["name"] or f["template_id"],
             description=f["description"],
             severity=_severity(f["severity"]),

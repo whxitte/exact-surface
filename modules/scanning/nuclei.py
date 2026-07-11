@@ -25,6 +25,11 @@ SAFE_EXCLUDE_TAGS = ("dos", "intrusive", "fuzz")
 def _normalize(r: dict) -> dict:
     """nuclei JSONL row → our finding shape."""
     info = r.get("info") or {}
+    # What the template actually matched — for Wappalyzer/tech-detection templates this
+    # is the concrete tech names (e.g. "nginx, php, cloudflare"); otherwise the matcher
+    # name. Surfaced so a finding says WHAT it found, not just "Technology Detection".
+    extracted = [str(x) for x in (r.get("extracted-results") or []) if x]
+    matched = ", ".join(dict.fromkeys(extracted)) or (r.get("matcher-name") or "")
     return {
         "template_id": r.get("template-id") or r.get("templateID") or "unknown",
         "name": info.get("name", ""),
@@ -32,6 +37,7 @@ def _normalize(r: dict) -> dict:
         "matched_at": r.get("matched-at") or r.get("host") or "",
         "description": info.get("description", "") or "",
         "reference": info.get("reference") or [],
+        "matched": matched,
         "raw": r,
     }
 

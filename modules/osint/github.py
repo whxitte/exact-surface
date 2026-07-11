@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 
+from core.logging import logger
 from core.secrets_policy import find_secrets
 
 Search = Callable[[str], Awaitable[list[dict]]]
@@ -19,19 +20,33 @@ def _make_search(token: str) -> Search:  # pragma: no cover - needs a token
     async def _search(query: str) -> list[dict]:
         import aiohttp
 
+        # The `text-match` media type is REQUIRED to get `text_matches` back — without
+        # it GitHub returns items with no code fragments, so the secret detector has
+        # nothing to scan and every search silently yields zero leaks.
         headers = {
             "Authorization": f"Bearer {token}",
-            "Accept": "application/vnd.github+json",
+            "Accept": "application/vnd.github.text-match+json",
+            "X-GitHub-Api-Version": "2022-11-28",
         }
-        url = f"https://api.github.com/search/code?q={query}"
+        params = {"q": query, "per_page": "50"}
         async with aiohttp.ClientSession(headers=headers) as session:
-            async with session.get(url, timeout=aiohttp.ClientTimeout(total=30)) as resp:
+            async with session.get(
+                "https://api.github.com/search/code",
+                params=params,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as resp:
                 data = await resp.json()
+                if resp.status != 200:
+                    logger.warning(
+                        "github code-search {} failed: HTTP {} — {}",
+                        query,
+                        resp.status,
+                        (data or {}).get("message", ""),
+                    )
+                    return []
         items = []
         for it in data.get("items", []):
-            fragment = " ".join(
-                m.get("fragment", "") for tm in it.get("text_matches", []) for m in [tm]
-            )
+            fragment = " ".join(tm.get("fragment", "") for tm in it.get("text_matches", []))
             items.append(
                 {
                     "repo": (it.get("repository") or {}).get("full_name"),
@@ -56,16 +71,31 @@ async def search_leaks(
         if not token:
             return []
         search = _make_search(token)
-    items = await search(f'"{domain}"')
+
+    # A handful of targeted queries — the bare domain plus common secret keywords —
+    # deduped by result URL. GitHub code-search is rate-limited (~10 req/min), so the
+    # set is deliberately small.
+    queries = [
+        f'"{domain}"',
+        f'"{domain}" password',
+        f'"{domain}" api_key',
+        f'"{domain}" secret',
+    ]
+    seen_urls: set[str] = set()
     hits: list[dict] = []
-    for item in items:
-        for secret in find_secrets(item.get("content", ""), item.get("html_url", "")):
-            hits.append(
-                {
-                    "repo": item.get("repo"),
-                    "file_path": item.get("path"),
-                    "url": item.get("html_url"),
-                    **secret,
-                }
-            )
+    for query in queries:
+        for item in await search(query):
+            url = item.get("html_url", "")
+            if url in seen_urls:
+                continue
+            seen_urls.add(url)
+            for secret in find_secrets(item.get("content", ""), url):
+                hits.append(
+                    {
+                        "repo": item.get("repo"),
+                        "file_path": item.get("path"),
+                        "url": url,
+                        **secret,
+                    }
+                )
     return hits

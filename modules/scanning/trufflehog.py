@@ -46,6 +46,10 @@ async def scan_dir(
             timeout=timeout,
         )
     except ToolNotFound:
+        logger.warning(
+            "trufflehog not installed — secret scan running on regex only "
+            "(rebuild Dockerfile.pipeline to enable it)"
+        )
         return []
     except Exception as exc:  # noqa: BLE001 - trufflehog failure must not fail the scan
         logger.warning("trufflehog scan failed: {}", exc)
@@ -67,7 +71,13 @@ async def scan_dir(
                 "verified": verified,
             }
         )
-    if hits:
-        n_verified = sum(1 for h in hits if h["verified"])
-        logger.info("trufflehog: {} secret(s) ({} verified live)", len(hits), n_verified)
+    n_verified = sum(1 for h in hits if h["verified"])
+    # Always log — so a clean run reads as "ran, found nothing" rather than silence
+    # (which looked like the tool never executed).
+    logger.info(
+        "trufflehog: scanned {} staged file(s), {} secret(s) ({} verified live)",
+        len(file_to_url),
+        len(hits),
+        n_verified,
+    )
     return hits

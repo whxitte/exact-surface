@@ -222,6 +222,15 @@ async def scan_urls(
     try:
         results = await asyncio.gather(*(_one(i, u) for i, u in enumerate(scannable)))
         hits = [h for per_url in results for h in per_url]
+        # How many fetches actually returned scannable text — the gap between this and
+        # the fetched count is bodies filtered as non-text/empty (e.g. an SPA serving
+        # index.html for every path), which is the usual reason a big haul finds nothing.
+        logger.info(
+            "secret scan: {} of {} fetched returned text ({} regex hit(s) so far)",
+            len(file_to_url) if tmpdir else "?",
+            len(scannable) - failed,
+            len(hits),
+        )
         if deep_scan and file_to_url:
             deep_hits = await deep_scan(tmpdir, file_to_url, timeout=DEEP_SCAN_TIMEOUT)
             if on_hit:
