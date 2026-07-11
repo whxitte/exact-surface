@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
   Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
-  Bug, GitBranch, Boxes,
+  Bug, GitBranch, Boxes, Clock,
 } from "lucide-react";
 import {
   api, downloadReport,
@@ -16,6 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScheduleCard } from "@/components/schedule-card";
+import { AlertPolicySettings } from "@/components/alert-policy-settings";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -45,6 +46,7 @@ export default function ProgramDetail() {
   const [scanBusy, setScanBusy] = useState(false);
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [assetSort, setAssetSort] = useState<"name" | "status" | "monitored" | "recent">("status");
+  const [showSeen, setShowSeen] = useState(false);
   const [endpointSource, setEndpointSource] = useState<string>("all");
 
   const loadProgram = useCallback(() => {
@@ -341,6 +343,9 @@ export default function ProgramDetail() {
       {/* Scan schedule (cadence + last/next scan breakdown) */}
       {program?.verified && <ScheduleCard programId={id} />}
 
+      {/* Alert policy (what pages this domain sends to channels) */}
+      {program?.verified && <AlertPolicySettings programId={id} />}
+
       {/* Reports */}
       {program?.verified && (
         <Card>
@@ -369,7 +374,7 @@ export default function ProgramDetail() {
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-border">
+      <div className="flex w-full gap-1 border-b border-border overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden whitespace-nowrap min-w-0">
         {([
           ["surface", Activity, null],
           ["priorities", GitBranch, correlation?.count ?? null],
@@ -384,7 +389,7 @@ export default function ProgramDetail() {
           <button
             key={key}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm capitalize transition-colors ${
+            className={`flex items-center gap-2 border-b-2 px-4 py-2 text-sm capitalize transition-colors shrink-0 ${
               tab === key
                 ? "border-primary text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground"
@@ -514,7 +519,20 @@ export default function ProgramDetail() {
       {tab === "assets" && (
         <div className="space-y-2">
           {assets.length > 0 && (
-            <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+            <div className="flex items-center justify-end gap-3 text-xs text-muted-foreground">
+              <button
+                onClick={() => setShowSeen((v) => !v)}
+                aria-pressed={showSeen}
+                title="Show when each subdomain first appeared and was last seen alive"
+                className={`flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+                  showSeen
+                    ? "border-primary/40 text-primary"
+                    : "border-border hover:text-foreground"
+                }`}
+              >
+                <Clock className="h-3.5 w-3.5" />
+                {showSeen ? "Hide lifespan" : "Show lifespan"}
+              </button>
               <span>Sort by</span>
               <select
                 value={assetSort}
@@ -562,6 +580,19 @@ export default function ProgramDetail() {
                       ) : null;
                     })()}
                   </div>
+                  {showSeen && (
+                    <div className="hidden shrink-0 flex-col items-end gap-0.5 text-[11px] text-muted-foreground sm:flex">
+                      <span title={a.first_seen ? new Date(a.first_seen).toLocaleString() : ""}>
+                        <span className="text-severity-low">↑ alive</span> {timeAgo(a.first_seen)}
+                      </span>
+                      <span title={a.last_seen ? new Date(a.last_seen).toLocaleString() : ""}>
+                        <span className={alive ? "text-muted-foreground" : "text-severity-medium"}>
+                          {alive ? "seen" : "↓ last"}
+                        </span>{" "}
+                        {timeAgo(a.last_seen)}
+                      </span>
+                    </div>
+                  )}
                   {ep?.tech?.slice(0, 3).map((t) => (
                     <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                       {t}

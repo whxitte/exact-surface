@@ -82,7 +82,8 @@ export interface Asset {
   monitored?: boolean;
   dns_records?: Record<string, string[]>; // a/aaaa/cname/ns/mx/txt
   takeover_risk?: string | null; // service name if takeover-vulnerable
-  first_seen?: string;
+  first_seen?: string; // when the subdomain first appeared on the internet
+  last_seen?: string; // last time it was observed alive (stops advancing when it goes down)
 }
 export interface Endpoint {
   fingerprint: string;
@@ -183,6 +184,24 @@ export interface Correlation {
   count: number;
   chains: number;
   issues: CorrelatedIssue[];
+}
+export interface AlertPolicyValues {
+  finding_min_severity: string;
+  alert_findings: boolean;
+  alert_secrets: boolean;
+  alert_leaks: boolean;
+  alert_cves: boolean;
+  cve_min_cvss: number;
+  alert_new_assets: boolean;
+  alert_new_ports: boolean;
+  port_filter: string;
+}
+export interface AlertPolicy {
+  alert_policy: Partial<AlertPolicyValues>; // this scope's own overrides
+  effective?: AlertPolicyValues; // defaults←tenant←program (program endpoint only)
+  defaults: AlertPolicyValues;
+  tenant_defaults?: Partial<AlertPolicyValues>; // program endpoint only
+  severities: string[];
 }
 export interface SchedulePhase {
   pipeline: string;
@@ -361,6 +380,12 @@ export const api = {
   getTimeoutDefaults: () => request<TimeoutDefaults>("/schedule/timeout-defaults"),
   setTimeoutDefaults: (overrides: Record<string, number>) =>
     request<TimeoutDefaults>("/schedule/timeout-defaults", json({ overrides })),
+  getAlertPolicy: (id: string) => request<AlertPolicy>(`/programs/${id}/alert-policy`),
+  setAlertPolicy: (id: string, policy: Partial<AlertPolicyValues>) =>
+    request<AlertPolicy>(`/programs/${id}/alert-policy`, json({ policy })),
+  getAlertPolicyDefaults: () => request<AlertPolicy>("/schedule/alert-policy"),
+  setAlertPolicyDefaults: (policy: Partial<AlertPolicyValues>) =>
+    request<AlertPolicy>("/schedule/alert-policy", json({ policy })),
 
   listFindings: (id: string, q: Record<string, string> = {}) => {
     const qs = new URLSearchParams(q).toString();
