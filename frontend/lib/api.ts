@@ -66,10 +66,12 @@ export interface Finding {
   module: string;
   name: string;
   location: string;
+  locator?: string; // what matched (e.g. detected tech for Wappalyzer)
   severity: string;
   state: string;
   is_new: boolean;
   first_seen?: string;
+  last_seen?: string; // last scan that re-confirmed it (still live)
   description?: string;
   references?: string[];
 }
@@ -94,6 +96,7 @@ export interface Endpoint {
   tech: string[];
   source?: string; // probe | crawl | feroxbuster
   first_seen?: string;
+  last_seen?: string; // last scan that re-confirmed it live
 }
 export interface Port {
   fingerprint: string;
@@ -104,6 +107,7 @@ export interface Port {
   product?: string | null;
   version?: string | null;
   first_seen?: string;
+  last_seen?: string; // last scan that re-confirmed the port open
 }
 export interface Leak {
   fingerprint: string;
@@ -172,6 +176,7 @@ export interface Cve {
   confidence: string; // low | medium | high
   severity: string;
   first_seen?: string;
+  last_seen?: string; // last scan that re-confirmed the match
 }
 export interface CorrelatedIssue {
   host: string;

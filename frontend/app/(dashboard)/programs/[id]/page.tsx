@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
   Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
-  Bug, GitBranch, Boxes, Clock,
+  Bug, GitBranch, Boxes, Clock, Search,
 } from "lucide-react";
 import {
   api, downloadReport,
@@ -47,6 +47,7 @@ export default function ProgramDetail() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [assetSort, setAssetSort] = useState<"name" | "status" | "monitored" | "recent">("status");
   const [showSeen, setShowSeen] = useState(false);
+  const [assetSearch, setAssetSearch] = useState("");
   const [endpointSource, setEndpointSource] = useState<string>("all");
 
   const loadProgram = useCallback(() => {
@@ -109,14 +110,23 @@ export default function ProgramDetail() {
       : endpoints.filter((e) => (e.source || "other") === endpointSource);
 
   const isAlive = (a: Asset) => endpointByHost.get(a.hostname)?.status_code != null;
-  const sortedAssets = [...assets].sort((x, y) => {
-    if (assetSort === "status") return Number(isAlive(y)) - Number(isAlive(x));
-    if (assetSort === "monitored")
-      return Number(y.monitored !== false) - Number(x.monitored !== false);
-    if (assetSort === "recent")
-      return Date.parse(y.first_seen || "") - Date.parse(x.first_seen || "");
-    return x.hostname.localeCompare(y.hostname);
-  });
+  const q = assetSearch.trim().toLowerCase();
+  const sortedAssets = [...assets]
+    .filter(
+      (a) =>
+        !q ||
+        a.hostname.toLowerCase().includes(q) ||
+        (a.resolved_ips || []).some((ip) => ip.includes(q)) ||
+        (a.dns_records?.cname || []).some((c) => c.toLowerCase().includes(q)),
+    )
+    .sort((x, y) => {
+      if (assetSort === "status") return Number(isAlive(y)) - Number(isAlive(x));
+      if (assetSort === "monitored")
+        return Number(y.monitored !== false) - Number(x.monitored !== false);
+      if (assetSort === "recent")
+        return Date.parse(y.first_seen || "") - Date.parse(x.first_seen || "");
+      return x.hostname.localeCompare(y.hostname);
+    });
 
   async function requestChallenge() {
     setMsg("");
@@ -461,11 +471,17 @@ export default function ProgramDetail() {
                 <div className="min-w-0 flex-1">
                   <div className="truncate font-medium">{f.name}</div>
                   <div className="truncate font-mono text-xs text-muted-foreground">{f.location}</div>
+                  {f.locator && (
+                    <div className="mt-0.5 truncate text-[11px] text-primary/80">
+                      detected: {f.locator}
+                    </div>
+                  )}
                 </div>
                 {f.is_new && <span className="text-xs text-primary">NEW</span>}
                 <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
                   {f.module}
                 </span>
+                <Seen first={f.first_seen} last={f.last_seen} />
               </CardContent>
             </Card>
           ))}
@@ -509,6 +525,7 @@ export default function ProgramDetail() {
                   {c.cvss != null && (
                     <span className="font-mono text-sm tabular-nums">CVSS {c.cvss.toFixed(1)}</span>
                   )}
+                  <Seen first={c.first_seen} last={c.last_seen} />
                 </CardContent>
               </Card>
             );
@@ -519,34 +536,48 @@ export default function ProgramDetail() {
       {tab === "assets" && (
         <div className="space-y-2">
           {assets.length > 0 && (
-            <div className="flex items-center justify-end gap-3 text-xs text-muted-foreground">
-              <button
-                onClick={() => setShowSeen((v) => !v)}
-                aria-pressed={showSeen}
-                title="Show when each subdomain first appeared and was last seen alive"
-                className={`flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
-                  showSeen
-                    ? "border-primary/40 text-primary"
-                    : "border-border hover:text-foreground"
-                }`}
-              >
-                <Clock className="h-3.5 w-3.5" />
-                {showSeen ? "Hide lifespan" : "Show lifespan"}
-              </button>
-              <span>Sort by</span>
-              <select
-                value={assetSort}
-                onChange={(e) => setAssetSort(e.target.value as typeof assetSort)}
-                className="h-8 rounded-md border border-border bg-background px-2"
-              >
-                <option value="status">Alive first</option>
-                <option value="monitored">Monitored first</option>
-                <option value="recent">Newest</option>
-                <option value="name">Name</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={assetSearch}
+                  onChange={(e) => setAssetSearch(e.target.value)}
+                  placeholder="Search subdomains, IPs, CNAMEs…"
+                  className="h-8 w-64 rounded-full border border-border bg-background pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setShowSeen((v) => !v)}
+                  aria-pressed={showSeen}
+                  title="Show when each subdomain first appeared and was last seen alive"
+                  className={`flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors ${
+                    showSeen
+                      ? "border-primary/40 text-primary"
+                      : "border-border hover:text-foreground"
+                  }`}
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  {showSeen ? "Hide lifespan" : "Show lifespan"}
+                </button>
+                <span>Sort by</span>
+                <select
+                  value={assetSort}
+                  onChange={(e) => setAssetSort(e.target.value as typeof assetSort)}
+                  className="h-8 rounded-md border border-border bg-background px-2"
+                >
+                  <option value="status">Alive first</option>
+                  <option value="monitored">Monitored first</option>
+                  <option value="recent">Newest</option>
+                  <option value="name">Name</option>
+                </select>
+              </div>
             </div>
           )}
           {assets.length === 0 && <Empty label="No assets discovered yet." />}
+          {assets.length > 0 && sortedAssets.length === 0 && (
+            <Empty label="No assets match your search." />
+          )}
           {sortedAssets.map((a) => {
             const muted = a.monitored === false;
             const ep = endpointByHost.get(a.hostname);
@@ -680,9 +711,7 @@ export default function ProgramDetail() {
                 {ep.status_code != null && (
                   <span className="font-mono text-xs text-muted-foreground">{ep.status_code}</span>
                 )}
-                <span className="hidden text-xs text-muted-foreground md:inline">
-                  {timeAgo(ep.first_seen)}
-                </span>
+                <Seen first={ep.first_seen} last={ep.last_seen} />
               </CardContent>
             </Card>
           ))}
@@ -718,9 +747,7 @@ export default function ProgramDetail() {
                       {p.product ? ` · ${p.product}${p.version ? ` ${p.version}` : ""}` : ""}
                     </div>
                   </div>
-                  <span className="hidden text-xs text-muted-foreground md:inline">
-                    {timeAgo(p.first_seen)}
-                  </span>
+                  <Seen first={p.first_seen} last={p.last_seen} />
                 </CardContent>
               </Card>
             );
@@ -838,4 +865,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Empty({ label }: { label: string }) {
   return <p className="py-8 text-center text-sm text-muted-foreground">{label}</p>;
+}
+
+/** Compact "first found / last seen" column. last_seen only advances while the item
+ *  is still being re-observed, so it doubles as a "still live" recency signal. */
+function Seen({ first, last }: { first?: string; last?: string }) {
+  return (
+    <div className="hidden shrink-0 flex-col items-end gap-0.5 text-[11px] text-muted-foreground sm:flex">
+      <span title={first ? new Date(first).toLocaleString() : ""}>found {timeAgo(first)}</span>
+      <span title={last ? new Date(last).toLocaleString() : ""}>seen {timeAgo(last)}</span>
+    </div>
+  );
 }
