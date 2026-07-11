@@ -74,6 +74,8 @@ export interface Finding {
   last_seen?: string; // last scan that re-confirmed it (still live)
   description?: string;
   references?: string[];
+  cvss?: number | null;
+  raw?: Record<string, unknown>; // full tool output (nuclei request/response/curl/tags)
 }
 export interface Asset {
   fingerprint: string;
@@ -86,6 +88,7 @@ export interface Asset {
   takeover_risk?: string | null; // service name if takeover-vulnerable
   first_seen?: string; // when the subdomain first appeared on the internet
   last_seen?: string; // last time it was observed alive (stops advancing when it goes down)
+  gone?: boolean; // not re-observed in the latest scan sweep
 }
 export interface Endpoint {
   fingerprint: string;
@@ -97,6 +100,7 @@ export interface Endpoint {
   source?: string; // probe | crawl | feroxbuster
   first_seen?: string;
   last_seen?: string; // last scan that re-confirmed it live
+  gone?: boolean; // not re-observed in the latest sweep
 }
 export interface Port {
   fingerprint: string;
@@ -108,6 +112,7 @@ export interface Port {
   version?: string | null;
   first_seen?: string;
   last_seen?: string; // last scan that re-confirmed the port open
+  gone?: boolean; // not re-observed in the latest port sweep
 }
 export interface Leak {
   fingerprint: string;

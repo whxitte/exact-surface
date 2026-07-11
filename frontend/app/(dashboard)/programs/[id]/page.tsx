@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ScheduleCard } from "@/components/schedule-card";
 import { AlertPolicySettings } from "@/components/alert-policy-settings";
+import { PortsTable } from "@/components/ports-table";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -48,6 +49,7 @@ export default function ProgramDetail() {
   const [assetSort, setAssetSort] = useState<"name" | "status" | "monitored" | "recent">("status");
   const [showSeen, setShowSeen] = useState(false);
   const [assetSearch, setAssetSearch] = useState("");
+  const [showGoneEndpoints, setShowGoneEndpoints] = useState(false);
   const [endpointSource, setEndpointSource] = useState<string>("all");
 
   const loadProgram = useCallback(() => {
@@ -104,10 +106,10 @@ export default function ProgramDetail() {
   const endpointSources = Array.from(
     new Set(endpoints.map((e) => e.source || "other")),
   ).sort();
-  const shownEndpoints =
-    endpointSource === "all"
-      ? endpoints
-      : endpoints.filter((e) => (e.source || "other") === endpointSource);
+  const goneEndpoints = endpoints.filter((e) => e.gone).length;
+  const shownEndpoints = endpoints
+    .filter((e) => showGoneEndpoints || !e.gone)
+    .filter((e) => endpointSource === "all" || (e.source || "other") === endpointSource);
 
   const isAlive = (a: Asset) => endpointByHost.get(a.hostname)?.status_code != null;
   const q = assetSearch.trim().toLowerCase();
@@ -676,17 +678,37 @@ export default function ProgramDetail() {
                   {s === "all" ? "all" : s}
                   <span className="ml-1.5 opacity-60">
                     {s === "all"
-                      ? endpoints.length
-                      : endpoints.filter((e) => (e.source || "other") === s).length}
+                      ? endpoints.filter((e) => showGoneEndpoints || !e.gone).length
+                      : endpoints.filter(
+                          (e) => (showGoneEndpoints || !e.gone) && (e.source || "other") === s,
+                        ).length}
                   </span>
                 </button>
               ))}
+              {goneEndpoints > 0 && (
+                <button
+                  onClick={() => setShowGoneEndpoints((v) => !v)}
+                  className={`ml-auto flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors ${
+                    showGoneEndpoints
+                      ? "border-primary/40 text-primary"
+                      : "border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <EyeOff className="h-3.5 w-3.5" />
+                  {showGoneEndpoints ? "Hide" : "Show"} gone ({goneEndpoints})
+                </button>
+              )}
             </div>
           )}
           {endpoints.length === 0 && <Empty label="No endpoints discovered yet — probe/crawl first." />}
           {shownEndpoints.map((ep) => (
-            <Card key={ep.fingerprint}>
+            <Card key={ep.fingerprint} className={ep.gone ? "opacity-50" : undefined}>
               <CardContent className="flex items-center gap-3 p-3">
+                {ep.gone && (
+                  <span className="rounded bg-severity-medium/15 px-1.5 py-0.5 text-[10px] uppercase text-severity-medium">
+                    gone
+                  </span>
+                )}
                 <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
                   {ep.method}
                 </span>
@@ -718,42 +740,7 @@ export default function ProgramDetail() {
         </div>
       )}
 
-      {tab === "ports" && (
-        <div className="space-y-2">
-          {ports.length === 0 && (
-            <Empty label="No open ports — port scanning runs on confirmed-dedicated infra only (§9b)." />
-          )}
-          {ports.map((p) => {
-            const hosts = hostsByIp.get(p.ip) || [];
-            return (
-              <Card key={p.fingerprint}>
-                <CardContent className="flex items-center gap-3 p-3">
-                  <span className="font-mono text-sm">
-                    {p.ip}
-                    <span className="text-primary">:{p.port}</span>
-                    <span className="text-muted-foreground">/{p.protocol}</span>
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    {hosts.length > 0 && (
-                      <div className="truncate text-xs">
-                        {hosts[0]}
-                        {hosts.length > 1 && (
-                          <span className="text-muted-foreground"> +{hosts.length - 1} more</span>
-                        )}
-                      </div>
-                    )}
-                    <div className="truncate text-xs text-muted-foreground">
-                      {p.service || "—"}
-                      {p.product ? ` · ${p.product}${p.version ? ` ${p.version}` : ""}` : ""}
-                    </div>
-                  </div>
-                  <Seen first={p.first_seen} last={p.last_seen} />
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+      {tab === "ports" && <PortsTable ports={ports} hostsByIp={hostsByIp} />}
 
       {tab === "secrets" && (
         <div className="space-y-2">
