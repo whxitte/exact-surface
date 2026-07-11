@@ -12,9 +12,11 @@ reaches a channel (§9c).
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from core.logging import logger
+from core.severity import Severity
 from core.tenant import TenantContext
 from db.cves import CveMatchRepo
 from db.findings import FindingRepo
@@ -41,6 +43,21 @@ _SOURCES = [
     (CveMatchRepo, alert_from_cve, cve_is_alertable),
 ]
 
+#: deliver in parallel (a hanging channel like telegram must not serialize the whole
+#: stage into a timeout) and cap per source so a noisy scan can't spam a channel.
+DELIVER_CONCURRENCY = 10
+DELIVER_TIMEOUT = 20.0
+MAX_ALERTS_PER_SOURCE = 100
+
+_SEV_RANK = {s: i for i, s in enumerate(Severity)}  # critical=0 … info last
+
+
+def _by_severity(doc: dict) -> int:
+    try:
+        return _SEV_RANK.get(Severity(doc.get("severity", "info")), 99)
+    except ValueError:
+        return 99
+
 
 async def run_notify(
     *,
@@ -66,24 +83,46 @@ async def run_notify(
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     apex = program["apex_domain"] if program else program_id
 
+    sem = asyncio.Semaphore(DELIVER_CONCURRENCY)
+
+    async def _deliver(alert, channel) -> bool:
+        async with sem:
+            try:
+                return await asyncio.wait_for(deliver(alert, channel, senders), DELIVER_TIMEOUT)
+            except (Exception, TimeoutError) as exc:  # noqa: BLE001
+                logger.warning(
+                    "notify: {} delivery gave up: {}", channel.get("type"), type(exc).__name__
+                )
+                return False
+
     delivered = 0
     for repo_cls, formatter, alertable in _SOURCES:
         repo = repo_cls.from_mongo(mongo)
         items = await repo.list(tenant.tenant_id, program_id, is_new=True, limit=1000)
-        delivered_fps: list[str] = []
+        # highest-severity first, capped — deliver the important ones now, the rest
+        # next run (they keep is_new until delivered), so channels aren't spammed.
+        items = sorted(items, key=_by_severity)[:MAX_ALERTS_PER_SOURCE]
+
+        # Build every (doc, channel) delivery up front and run them CONCURRENTLY.
+        plan: list[tuple[str, Any]] = []
         for doc in items:
             if alertable and not alertable(doc):
                 continue
             alert = formatter(doc, apex)
-            sent_any = False
             for channel in channels:
-                if passes(alert, channel) and await deliver(alert, channel, senders):
-                    delivered += 1
-                    sent_any = True
-            if sent_any:
-                delivered_fps.append(doc["fingerprint"])
+                if passes(alert, channel):
+                    plan.append((doc["fingerprint"], _deliver(alert, channel)))
+        if not plan:
+            continue
+        outcomes = await asyncio.gather(*(coro for _, coro in plan))
+
+        delivered_fps: set[str] = set()
+        for (fp, _), ok in zip(plan, outcomes, strict=True):
+            if ok:
+                delivered += 1
+                delivered_fps.add(fp)
         if delivered_fps:
-            await repo.clear_is_new(tenant.tenant_id, delivered_fps)
+            await repo.clear_is_new(tenant.tenant_id, list(delivered_fps))
 
     logger.info("notify {}: {} channels, {} deliveries", program_id, len(channels), delivered)
     return {"channels": len(channels), "delivered": delivered}

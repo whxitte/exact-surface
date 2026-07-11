@@ -41,7 +41,14 @@ async def deliver(alert: Alert, channel: dict, senders: Senders) -> bool:
     try:
         return await fn(alert, channel.get("config") or {}, senders)
     except Exception as exc:  # noqa: BLE001 - a channel failure must not stop others
-        logger.warning("notification delivery failed ({}): {}", channel.get("type"), exc)
+        # str(exc) is empty for timeout/connection errors — show the type so the
+        # log is actionable ("TimeoutError" / "ClientConnectorError" vs blank).
+        logger.warning(
+            "notification delivery failed ({}): {}: {}",
+            channel.get("type"),
+            type(exc).__name__,
+            exc,
+        )
         return False
 
 
