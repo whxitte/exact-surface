@@ -5,11 +5,12 @@ import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
   Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
+  Bug, GitBranch, Boxes,
 } from "lucide-react";
 import {
   api, downloadReport,
-  type Asset, type Endpoint, type Finding, type Port, type Program, type Secret,
-  type Verification,
+  type Asset, type Correlation, type Cve, type Endpoint, type Finding, type Leak,
+  type Port, type Program, type Secret, type Verification,
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,9 @@ import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
 import { timeAgo } from "@/lib/utils";
 
-type Tab = "surface" | "findings" | "assets" | "endpoints" | "ports" | "secrets";
+type Tab =
+  | "surface" | "priorities" | "findings" | "cves" | "assets"
+  | "endpoints" | "ports" | "secrets" | "leaks";
 
 export default function ProgramDetail() {
   const { id } = useParams<{ id: string }>();
@@ -34,6 +37,9 @@ export default function ProgramDetail() {
   const [endpoints, setEndpoints] = useState<Endpoint[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [secrets, setSecrets] = useState<Secret[]>([]);
+  const [cves, setCves] = useState<Cve[]>([]);
+  const [leaks, setLeaks] = useState<Leak[]>([]);
+  const [correlation, setCorrelation] = useState<Correlation | null>(null);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [reportBusy, setReportBusy] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
@@ -60,6 +66,9 @@ export default function ProgramDetail() {
     api.listEndpoints(id).then(setEndpoints).catch(() => {});
     api.listPorts(id).then(setPorts).catch(() => {});
     api.listSecrets(id).then(setSecrets).catch(() => {});
+    api.listCves(id).then(setCves).catch(() => {});
+    api.listLeaks(id).then(setLeaks).catch(() => {});
+    api.getCorrelation(id).then(setCorrelation).catch(() => {});
   }, [program, id]);
 
   // Derive per-asset live status/tech from its root endpoint (probe output), so the
@@ -75,6 +84,10 @@ export default function ProgramDetail() {
       /* ignore unparseable urls */
     }
   }
+
+  // asset fingerprint -> hostname, so the CVEs tab can name the affected host.
+  const hostByAssetFp = new Map<string, string>();
+  for (const a of assets) hostByAssetFp.set(a.fingerprint, a.hostname);
 
   // ip -> hostname(s), so the ports tab can show which subdomain a port belongs to.
   const hostsByIp = new Map<string, string[]>();
@@ -359,11 +372,14 @@ export default function ProgramDetail() {
       <div className="flex gap-1 border-b border-border">
         {([
           ["surface", Activity, null],
+          ["priorities", GitBranch, correlation?.count ?? null],
           ["findings", ShieldAlert, findings.length],
+          ["cves", Bug, cves.length],
           ["assets", Server, assets.length],
           ["endpoints", Link2, endpoints.length],
           ["ports", Network, ports.length],
           ["secrets", KeyRound, secrets.length],
+          ["leaks", Boxes, leaks.length],
         ] as const).map(([key, Icon, count]) => (
           <button
             key={key}
@@ -384,6 +400,48 @@ export default function ProgramDetail() {
 
       {tab === "surface" && <AttackSurfaceView programId={id} />}
 
+      {tab === "priorities" && (
+        <div className="space-y-2">
+          <p className="text-xs text-muted-foreground">
+            Hosts ranked by combined risk across every signal (findings, secrets, leaks,
+            CVEs, exposed ports). A <span className="text-primary">chain</span> is a host
+            carrying two or more independent high-signal exposures — the attacker&apos;s
+            best foothold.
+          </p>
+          {(!correlation || correlation.issues.length === 0) && (
+            <Empty label="No correlated issues yet — run a scan to build the picture." />
+          )}
+          {correlation?.issues.map((it) => (
+            <Card key={it.host}>
+              <CardContent className="flex items-center gap-4 p-4">
+                <div className="flex w-12 shrink-0 flex-col items-center">
+                  <span className="text-lg font-bold tabular-nums">{it.risk_score}</span>
+                  <span className="text-[10px] uppercase text-muted-foreground">risk</span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-mono text-sm">{it.host}</span>
+                    {it.is_chain && (
+                      <span className="rounded-full bg-severity-high/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-severity-high">
+                        chain
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {it.signals.map((sig, i) => (
+                      <span key={i} className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+                        {sig}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <SeverityBadge severity={it.highest_severity} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {tab === "findings" && (
         <div className="space-y-2">
           {sortedFindings.length === 0 && <Empty label="No findings yet — run a scan." />}
@@ -400,10 +458,56 @@ export default function ProgramDetail() {
                   <div className="truncate font-mono text-xs text-muted-foreground">{f.location}</div>
                 </div>
                 {f.is_new && <span className="text-xs text-primary">NEW</span>}
-                <span className="text-xs text-muted-foreground">{f.module}</span>
+                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                  {f.module}
+                </span>
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {tab === "cves" && (
+        <div className="space-y-2">
+          {cves.length === 0 && (
+            <Empty label="No CVE matches — detected tech is matched against the NVD/KEV feed each cycle." />
+          )}
+          {cves.map((c) => {
+            const host = hostByAssetFp.get(c.asset_fingerprint);
+            return (
+              <Card key={c.fingerprint}>
+                <CardContent className="flex items-center gap-4 p-4">
+                  <SeverityBadge severity={c.severity} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`https://nvd.nist.gov/vuln/detail/${c.cve_id}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="font-medium hover:text-primary hover:underline"
+                      >
+                        {c.cve_id}
+                      </a>
+                      {c.on_kev && (
+                        <span className="rounded-full bg-severity-critical/15 px-2 py-0.5 text-[10px] font-semibold uppercase text-severity-critical">
+                          KEV
+                        </span>
+                      )}
+                      <span className="rounded bg-muted px-1.5 text-[10px] uppercase text-muted-foreground">
+                        {c.confidence} confidence
+                      </span>
+                    </div>
+                    <div className="truncate font-mono text-xs text-muted-foreground">
+                      {host ? `${host} · ` : ""}{c.cpe}
+                    </div>
+                  </div>
+                  {c.cvss != null && (
+                    <span className="font-mono text-sm tabular-nums">CVSS {c.cvss.toFixed(1)}</span>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
@@ -607,6 +711,38 @@ export default function ProgramDetail() {
                   </div>
                 </div>
                 <span className="font-mono text-sm">{String(s.masked)}</span>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {tab === "leaks" && (
+        <div className="space-y-2">
+          {leaks.length === 0 && (
+            <Empty label="No public leaks — GitHub/OSINT sources are searched for exposed credentials each cycle." />
+          )}
+          {leaks.map((l) => (
+            <Card key={l.fingerprint}>
+              <CardContent className="flex items-center gap-4 p-4">
+                <SeverityBadge severity={l.severity} />
+                <div className="min-w-0 flex-1">
+                  <div className="font-medium">{l.kind}</div>
+                  <div className="truncate font-mono text-xs text-muted-foreground">
+                    {l.repo ? `${l.repo} · ` : ""}{l.source}
+                  </div>
+                </div>
+                {l.url && (
+                  <a
+                    href={l.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-primary hover:underline"
+                  >
+                    view
+                  </a>
+                )}
+                <span className="font-mono text-sm">{l.masked}</span>
               </CardContent>
             </Card>
           ))}

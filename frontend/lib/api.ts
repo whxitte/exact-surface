@@ -161,6 +161,29 @@ export interface Secret {
   source_locator: string;
   severity: string;
 }
+export interface Cve {
+  fingerprint: string;
+  cve_id: string;
+  cpe: string;
+  asset_fingerprint: string;
+  cvss?: number | null;
+  on_kev: boolean;
+  confidence: string; // low | medium | high
+  severity: string;
+  first_seen?: string;
+}
+export interface CorrelatedIssue {
+  host: string;
+  risk_score: number;
+  highest_severity: string;
+  is_chain: boolean;
+  signals: string[];
+}
+export interface Correlation {
+  count: number;
+  chains: number;
+  issues: CorrelatedIssue[];
+}
 export interface SchedulePhase {
   pipeline: string;
   interval_seconds: number;
@@ -348,6 +371,8 @@ export const api = {
   listEndpoints: (id: string) => request<Endpoint[]>(`/programs/${id}/endpoints`),
   listPorts: (id: string) => request<Port[]>(`/programs/${id}/ports`),
   listLeaks: (id: string) => request<Leak[]>(`/programs/${id}/leaks`),
+  listCves: (id: string) => request<Cve[]>(`/programs/${id}/cves`),
+  getCorrelation: (id: string) => request<Correlation>(`/programs/${id}/correlation`),
   listSecrets: (id: string) => request<Secret[]>(`/programs/${id}/secrets`),
   listDeltas: (id: string) => request<Delta[]>(`/programs/${id}/deltas`),
 

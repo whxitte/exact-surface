@@ -481,3 +481,58 @@ def test_attack_surface_endpoint_shape():
     assert surf["current"]["assets"]["total"] == 1 and surf["current"]["total"] == 1
     assert "series" in surf and "recent" in surf
     assert surf["change"]["assets"]["opened"] == 1  # brand-new asset, no scans yet
+
+
+def test_cves_and_correlation_endpoints():
+    from core.models import Asset, CveMatch, Finding
+    from db.assets import AssetRepo
+    from db.cves import CveMatchRepo
+
+    client, fake, _ = build()
+    tok = _signup(client)
+    token, tenant_id = tok["access_token"], tok["tenant_id"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+    _run(
+        AssetRepo(fake.collection("assets")).upsert(
+            Asset(tenant_id=tenant_id, program_id=pid, fingerprint="a1", hostname="app.acme.com")
+        )
+    )
+    _run(
+        CveMatchRepo.from_mongo(fake).upsert(
+            CveMatch(
+                tenant_id=tenant_id,
+                program_id=pid,
+                fingerprint="c1",
+                cve_id="CVE-2024-0001",
+                cpe="cpe:/a:nginx:nginx:1.0",
+                asset_fingerprint="a1",
+                cvss=9.8,
+                on_kev=True,
+                severity="critical",
+            )
+        )
+    )
+    _run(
+        FindingRepo(fake.collection("findings")).upsert(
+            Finding(
+                tenant_id=tenant_id,
+                program_id=pid,
+                fingerprint=finding_fingerprint(pid, "x", "app.acme.com"),
+                check_id="x",
+                module="nuclei",
+                location="app.acme.com",
+                name="Something",
+                severity="high",
+            )
+        )
+    )
+
+    cves = client.get(f"/programs/{pid}/cves", headers=_auth(token)).json()
+    assert len(cves) == 1 and cves[0]["cve_id"] == "CVE-2024-0001" and cves[0]["on_kev"] is True
+
+    corr = client.get(f"/programs/{pid}/correlation", headers=_auth(token)).json()
+    assert corr["count"] >= 1
+    hosts = {i["host"]: i for i in corr["issues"]}
+    assert "app.acme.com" in hosts and hosts["app.acme.com"]["risk_score"] > 0

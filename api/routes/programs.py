@@ -35,6 +35,7 @@ from core.verification import dns_instructions, http_instructions
 from db.assets import AssetRepo
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
+from db.cves import CveMatchRepo
 from db.deltas import DeltaRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
@@ -504,6 +505,7 @@ router.add_api_route(
 router.add_api_route("/{program_id}/secrets", _reader(SecretRepo), methods=["GET"], tags=["data"])
 router.add_api_route("/{program_id}/ports", _reader(PortRepo), methods=["GET"], tags=["data"])
 router.add_api_route("/{program_id}/leaks", _reader(LeakRepo), methods=["GET"], tags=["data"])
+router.add_api_route("/{program_id}/cves", _reader(CveMatchRepo), methods=["GET"], tags=["data"])
 router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
     "/{program_id}/scan-runs", _reader(ScanRunRepo), methods=["GET"], tags=["data"]
@@ -548,3 +550,22 @@ async def list_findings(
     if state:
         docs = [d for d in docs if d.get("state") == state]
     return [clean_doc(d) for d in docs]
+
+
+@router.get("/{program_id}/correlation", tags=["data"])
+async def correlation(
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Risk-ranked, correlated issues (module 27) computed on demand from every stored
+    signal (assets/findings/secrets/leaks/CVEs/ports). The correlate stage discards its
+    result, so the dashboard recomputes it here from the persisted data."""
+    from core.tenant import TenantContext
+    from pipelines.correlate import run_correlate
+
+    return await run_correlate(
+        mongo=mongo,
+        tenant=TenantContext(principal.tenant_id),
+        program_id=program["program_id"],
+    )
