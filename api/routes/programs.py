@@ -527,7 +527,25 @@ async def trigger_scan(
 
 
 # -- reads -------------------------------------------------------------------
-def _reader(repo_cls):
+#: An item is "gone" if it wasn't re-observed in the latest scan sweep of its own kind:
+#: the freshest last_seen in the collection marks that sweep, so anything whose last_seen
+#: trails it by more than this grace was skipped (host down / port closed / path removed).
+#: The grace absorbs a sweep that spans time; it sits well under every phase cadence (≥2h).
+_GONE_GRACE_SECONDS = 3600
+
+
+def _annotate_gone(docs: list[dict]) -> list[dict]:
+    seens = [d["last_seen"] for d in docs if d.get("last_seen")]
+    ref = max(seens) if seens else None
+    for d in docs:
+        ls = d.get("last_seen")
+        d["gone"] = bool(
+            ref is not None and ls is not None and (ref - ls).total_seconds() > _GONE_GRACE_SECONDS
+        )
+    return docs
+
+
+def _reader(repo_cls, *, liveness: bool = False):
     async def read(
         program: dict = Depends(require_program),
         principal: Principal = Depends(get_principal),
@@ -536,17 +554,23 @@ def _reader(repo_cls):
         docs = await repo_cls.from_mongo(mongo).list(
             principal.tenant_id, program["program_id"], limit=1000
         )
+        if liveness:
+            _annotate_gone(docs)  # tag each with `gone` before dates get serialised
         return [clean_doc(d) for d in docs]
 
     return read
 
 
-router.add_api_route("/{program_id}/assets", _reader(AssetRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
-    "/{program_id}/endpoints", _reader(EndpointRepo), methods=["GET"], tags=["data"]
+    "/{program_id}/assets", _reader(AssetRepo, liveness=True), methods=["GET"], tags=["data"]
+)
+router.add_api_route(
+    "/{program_id}/endpoints", _reader(EndpointRepo, liveness=True), methods=["GET"], tags=["data"]
 )
 router.add_api_route("/{program_id}/secrets", _reader(SecretRepo), methods=["GET"], tags=["data"])
-router.add_api_route("/{program_id}/ports", _reader(PortRepo), methods=["GET"], tags=["data"])
+router.add_api_route(
+    "/{program_id}/ports", _reader(PortRepo, liveness=True), methods=["GET"], tags=["data"]
+)
 router.add_api_route("/{program_id}/leaks", _reader(LeakRepo), methods=["GET"], tags=["data"])
 router.add_api_route("/{program_id}/cves", _reader(CveMatchRepo), methods=["GET"], tags=["data"])
 router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"], tags=["data"])

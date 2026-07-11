@@ -538,6 +538,44 @@ def test_cves_and_correlation_endpoints():
     assert "app.acme.com" in hosts and hosts["app.acme.com"]["risk_score"] > 0
 
 
+def test_ports_reader_flags_gone():
+    import datetime as _dt
+
+    from core.models import Port
+    from db.ports import PortRepo
+
+    client, fake, _ = build()
+    tok = _signup(client)
+    token, tenant_id = tok["access_token"], tok["tenant_id"]
+    pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
+        "program_id"
+    ]
+    now = _dt.datetime.now(_dt.UTC)
+    repo = PortRepo.from_mongo(fake)
+    _run(
+        repo.upsert(
+            Port(tenant_id=tenant_id, program_id=pid, fingerprint="live", ip="1.1.1.1", port=443)
+        )
+    )
+    _run(
+        repo.upsert(
+            Port(tenant_id=tenant_id, program_id=pid, fingerprint="old", ip="2.2.2.2", port=22)
+        )
+    )
+    # 'live' re-seen just now; 'old' not seen for hours → gone
+    _run(fake.collection("ports").update_one({"fingerprint": "live"}, {"$set": {"last_seen": now}}))
+    _run(
+        fake.collection("ports").update_one(
+            {"fingerprint": "old"}, {"$set": {"last_seen": now - _dt.timedelta(hours=6)}}
+        )
+    )
+    ports = {
+        p["fingerprint"]: p
+        for p in client.get(f"/programs/{pid}/ports", headers=_auth(token)).json()
+    }
+    assert ports["live"]["gone"] is False and ports["old"]["gone"] is True
+
+
 def test_alert_policy_endpoints():
     client, _, _ = build()
     tok = _signup(client)
