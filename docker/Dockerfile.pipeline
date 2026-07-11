@@ -81,6 +81,14 @@ RUN ARCH="$(dpkg --print-architecture)" \
          echo "WARN: feroxbuster unavailable for $ARCH; content discovery will use ffuf only"; \
        fi
 
+# trufflehog — robust, live-verified secret detection (800+ detectors). Primary secret
+# engine; our regex detector stays as the always-on fallback. Non-fatal: the official
+# install script is arch-aware (amd64/arm64) and the image still builds if it fails.
+RUN curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+      | sh -s -- -b /usr/local/bin \
+    && trufflehog --version \
+    || echo "WARN: trufflehog unavailable; secret scan will use regex only"
+
 # Content-discovery wordlists (SecLists). Without these feroxbuster is handed a bare
 # filename, fails instantly, and content discovery silently finds nothing. Referenced
 # by name in modules/content_discovery/wordlist_selector.py; keep in sync.
