@@ -122,6 +122,7 @@ async def run_pipeline(
         raise ValueError(f"unknown pipeline: {pipeline}")
 
     # Record a ScanRun so every pipeline execution is visible in the activity feed.
+    import asyncio
     import uuid
     from datetime import UTC, datetime
 
@@ -130,6 +131,17 @@ async def run_pipeline(
     from db.audit import ScanRunRepo
 
     audit = ScanRunRepo.from_mongo(mongo)
+    heartbeat = 45  # re-save updated_at this often so a slow phase reads as alive
+
+    # One whole-program run of a phase at a time: if a genuinely-alive one is already in
+    # flight (e.g. a slow nuclei scan), skip this duplicate instead of piling on. Cascade
+    # (target-scoped) runs are exempt — they cover a specific new host and are small.
+    if not tset and await audit.active_phase_run(
+        tenant.tenant_id, program_id, pipeline, fresh_seconds=3 * heartbeat
+    ):
+        logger.info("{} already running for {} — skipping duplicate", pipeline, program_id)
+        return {"skipped": True, "note": f"{pipeline} already running"}
+
     run = ScanRun(
         tenant_id=tenant.tenant_id,
         scan_id=uuid.uuid4().hex,
@@ -150,9 +162,20 @@ async def run_pipeline(
     ):
         await audit.save(run)
         logger.info("{} started", pipeline)
+        # Heartbeat updated_at while the phase runs, so a long stage (nuclei can run for
+        # ~an hour) reads as RUNNING in the feed instead of being mislabelled "stalled",
+        # and the duplicate-guard above can tell an alive run from a dead one.
+        task = asyncio.ensure_future(_execute())
         try:
-            result = await _execute()
+            while True:
+                done, _ = await asyncio.wait({task}, timeout=heartbeat)
+                if task in done:
+                    break
+                run.updated_at = datetime.now(UTC)
+                await audit.save(run)
+            result = task.result()
         except Exception as exc:
+            task.cancel()
             run.status = ScanStatus.FAILED
             run.finished_at = datetime.now(UTC)
             run.error = f"{type(exc).__name__}: {exc}"

@@ -97,6 +97,37 @@ class ScanRunRepo:
             return doc
         return None
 
+    async def active_phase_run(
+        self,
+        tenant_id: str,
+        program_id: str,
+        pipeline: str,
+        *,
+        fresh_seconds: float,
+        now: datetime | None = None,
+    ) -> dict | None:
+        """A genuinely-alive whole-program run of *pipeline* (RUNNING + heartbeated within
+        ``fresh_seconds``), else None. Used to avoid piling up concurrent runs of an
+        expensive phase: a slow nuclei scan + a queue retry + the next cadence tick would
+        otherwise stack several scans. Cascade (target-scoped) runs are ignored — they are
+        small and cover just a new host — so only a whole-program run blocks another."""
+        now = now or datetime.now(UTC)
+        docs = await self._c.find(
+            {
+                "tenant_id": tenant_id,
+                "program_id": program_id,
+                "pipeline": pipeline,
+                "status": ScanStatus.RUNNING.value,
+            }
+        ).to_list(None)
+        for doc in docs:
+            if doc.get("targets"):  # cascade — doesn't count as the whole-program run
+                continue
+            ref = _as_aware(doc.get("updated_at")) or _as_aware(doc.get("started_at"))
+            if ref is not None and (now - ref).total_seconds() < fresh_seconds:
+                return doc  # alive and heartbeating → a real duplicate
+        return None
+
     async def reap_stale(self, older_than_seconds: float, now: datetime | None = None) -> int:
         """Mark orphaned QUEUED/RUNNING runs as FAILED("orphaned"); return count reaped.
 

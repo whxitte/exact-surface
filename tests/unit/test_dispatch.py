@@ -63,6 +63,63 @@ async def test_probe_with_no_assets_is_skipped_not_success():
     assert run["status"] == "skipped" and run["note"]
 
 
+async def test_whole_program_scan_skipped_while_one_is_running():
+    from datetime import UTC, datetime
+
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    mongo = FakeMongo()
+    await _seed(mongo)
+    # a genuinely-alive whole-program scan is already in flight
+    await ScanRunRepo.from_mongo(mongo).save(
+        ScanRun(
+            tenant_id="t1",
+            scan_id="live",
+            program_id="p1",
+            pipeline="scan",
+            status=ScanStatus.RUNNING,
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    res = await _run(mongo, "scan")
+    assert res["skipped"] is True and "already running" in res["note"]
+
+
+async def test_cascade_scan_not_blocked_by_running_whole_program_scan():
+    from datetime import UTC, datetime
+
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    mongo = FakeMongo()
+    await _seed(mongo)
+    await ScanRunRepo.from_mongo(mongo).save(
+        ScanRun(
+            tenant_id="t1",
+            scan_id="live",
+            program_id="p1",
+            pipeline="scan",
+            status=ScanStatus.RUNNING,
+            started_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
+        )
+    )
+    # a targeted (cascade) run for a new host is small + important → not blocked
+    res = await run_pipeline(
+        mongo=mongo,
+        engine=ENGINE,
+        tenant=TENANT,
+        program_id="p1",
+        pipeline="scan",
+        timeout=10,
+        hmac_key=b"k",
+        targets=("new.customer.com",),
+    )
+    assert res.get("note") != "scan already running"  # ran (empty-data → its own result)
+
+
 async def test_github_osint_without_token_is_skipped():
     mongo = FakeMongo()
     await _seed(mongo)
