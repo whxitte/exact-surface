@@ -104,6 +104,51 @@ async def test_content_discovery_dedicated_only_and_tech_aware():
     assert res["new"] == 1
 
 
+async def test_uses_probed_scheme_and_skips_unprobed_hosts():
+    # feroxbuster aborts if handed https:// for an http-only host, and can't discover on
+    # a host with no web server — so we fuzz probed-alive hosts at their working URL only.
+    mongo = FakeMongo()
+    ar = AssetRepo(mongo.collection("assets"))
+    er = EndpointRepo(mongo.collection("endpoints"))
+    for host, ip in [("http-only.customer.com", "45.55.1.2"), ("dead.customer.com", "45.55.1.3")]:
+        await ar.upsert(
+            Asset(
+                tenant_id="t1",
+                program_id="p1",
+                fingerprint=asset_fingerprint("p1", host),
+                hostname=host,
+                resolved_ips=[ip],
+            )
+        )
+    # only the http-only host was probed alive (over http); 'dead' has no endpoint
+    await er.upsert(
+        Endpoint(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint=endpoint_fingerprint("p1", "GET", "http://http-only.customer.com"),
+            url="http://http-only.customer.com",
+        )
+    )
+
+    calls: list[str] = []
+
+    async def fake_discover(url, _wordlist, _timeout):
+        calls.append(url)
+        return []
+
+    res = await run_content_discovery(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        timeout=10,
+        discover=fake_discover,
+    )
+    assert calls == ["http://http-only.customer.com"]  # http scheme kept; dead host skipped
+    assert res["hosts"] == 1
+
+
 async def test_content_discovery_fallback_to_ffuf(monkeypatch):
     from core.errors import ToolNotFound
 
@@ -118,11 +163,20 @@ async def test_content_discovery_fallback_to_ffuf(monkeypatch):
             resolved_ips=["45.55.1.1"],
         )
     )  # dedicated
+    await EndpointRepo(mongo.collection("endpoints")).upsert(
+        Endpoint(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint=endpoint_fingerprint("p1", "GET", "https://app.customer.com"),
+            url="https://app.customer.com",  # probed alive → eligible for content discovery
+        )
+    )
 
     async def fake_discover(url, wordlist, _timeout):
         raise ToolNotFound("feroxbuster")
 
     ffuf_calls = []
+
     async def fake_fuzz(url, wordlist, _timeout):
         ffuf_calls.append({"url": url, "wordlist": wordlist})
         return [{"url": "https://app.customer.com/admin", "status": 200}]
@@ -142,4 +196,3 @@ async def test_content_discovery_fallback_to_ffuf(monkeypatch):
     assert len(ffuf_calls) == 1
     assert ffuf_calls[0]["url"] == "https://app.customer.com/FUZZ"
     assert res["new"] == 1
-

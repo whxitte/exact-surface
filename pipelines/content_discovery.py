@@ -62,26 +62,41 @@ async def run_content_discovery(
 
     # tech per host, taken from the host's root endpoint if we probed one
     tech_by_host: dict[str, list[str]] = {}
+    # The URL/scheme the host actually answered on during probe. feroxbuster does a
+    # pre-flight connection and aborts the whole run with "Could not connect to any
+    # target provided" if handed https:// for a host that only serves http — or has no
+    # web server at all. So we only fuzz hosts we PROBED alive, at their working URL,
+    # instead of blindly hitting https://<every dedicated host>.
+    root_by_host: dict[str, str] = {}
     for ep in endpoints:
         host = urlsplit(ep["url"]).hostname or ""
         if ep.get("tech") and host not in tech_by_host:
             tech_by_host[host] = ep["tech"]
+        parts = urlsplit(ep["url"])
+        if not host or not parts.scheme:
+            continue
+        root = f"{parts.scheme}://{parts.netloc}"
+        cur = root_by_host.get(host)
+        # prefer https when a host answered on both schemes
+        if cur is None or (root.startswith("https://") and not cur.startswith("https://")):
+            root_by_host[host] = root
 
     scannable = [
         a["hostname"]
         for a in assets
-        if engine.evaluate(a["hostname"], a.get("resolved_ips", []), scope).permits(
+        if a["hostname"] in root_by_host  # probed alive — has a working web root
+        and engine.evaluate(a["hostname"], a.get("resolved_ips", []), scope).permits(
             Action.CONTENT_DISCOVERY
         )
     ]
     if not scannable:
-        logger.info("content-discovery {}: no confirmed-dedicated hosts to scan", program_id)
+        logger.info("content-discovery {}: no probed-alive dedicated hosts to scan", program_id)
         return {
             "hosts": 0,
             "paths": 0,
             "new": 0,
             "skipped": True,
-            "note": "no confirmed-dedicated hosts — bruteforce withheld on shared infra (§9b)",
+            "note": "no probed-alive dedicated hosts (bruteforce withheld on shared infra §9b)",
         }
 
     per_host = min(timeout, PER_HOST_TIMEOUT)
@@ -96,15 +111,16 @@ async def run_content_discovery(
     async def _scan_host(host: str) -> list[dict]:
         # Each host isolated + bounded: a slow/failing feroxbuster yields nothing for
         # that host but never sinks the (concurrent) stage.
+        target = root_by_host[host]  # the scheme/host that answered during probe
         wordlist = wordlist_for(tech_by_host.get(host, []))
         async with sem:
             try:
-                return await discover(f"https://{host}", wordlist, per_host)
+                return await discover(target, wordlist, per_host)
             except ToolNotFound:
                 try:
                     from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
 
-                    return await ffuf_fuzz(f"https://{host}/FUZZ", wordlist, per_host)
+                    return await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host)
                 except ToolNotFound:
                     logger.error("content-discovery: neither feroxbuster nor ffuf found")
                     return []
