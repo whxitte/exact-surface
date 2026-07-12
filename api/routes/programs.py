@@ -28,6 +28,13 @@ from core.alert_policy import (
     sanitize_alert_policy,
 )
 from core.config import get_settings
+from core.liveness import (
+    annotate_gone,
+    const_phase,
+    endpoint_phase,
+    finding_phase,
+    phase_reference_starts,
+)
 from core.models import (
     Authorization,
     Program,
@@ -527,38 +534,13 @@ async def trigger_scan(
 
 
 # -- reads -------------------------------------------------------------------
-#: An item is "gone" if a *later* sweep of its own producing phase re-observed peers but
-#: skipped it. We approximate that sweep by the freshest last_seen among items sharing the
-#: same source (`group_by`): grouping matters because endpoints come from phases on
-#: different cadences — probe (2h) only re-touches root URLs while deep paths come from
-#: content_discovery (24h), so comparing a feroxbuster path against a probe timestamp would
-#: wrongly mark every live deep path gone. Same-source comparison also self-heals flaky
-#: runs: if a phase fails and re-observes nothing, no peer gets a fresher timestamp, so
-#: nothing flips to gone. The grace absorbs a sweep that spans wall-clock time.
-_GONE_GRACE_SECONDS = 3600
+async def _phase_refs(mongo: Any, tenant_id: str, program_id: str) -> dict:
+    """Per-phase full-coverage-run reference starts for gone-detection (core.liveness)."""
+    runs = await ScanRunRepo.from_mongo(mongo).list(tenant_id, program_id, limit=500)
+    return phase_reference_starts(runs)
 
 
-def _annotate_gone(docs: list[dict], *, group_by: str | None = None) -> list[dict]:
-    # freshest last_seen per source group — that marks the group's latest sweep.
-    refs: dict[Any, Any] = {}
-    for d in docs:
-        ls = d.get("last_seen")
-        if ls is None:
-            continue
-        key = d.get(group_by) if group_by else None
-        cur = refs.get(key)
-        if cur is None or ls > cur:
-            refs[key] = ls
-    for d in docs:
-        ls = d.get("last_seen")
-        ref = refs.get(d.get(group_by) if group_by else None)
-        d["gone"] = bool(
-            ref is not None and ls is not None and (ref - ls).total_seconds() > _GONE_GRACE_SECONDS
-        )
-    return docs
-
-
-def _reader(repo_cls, *, liveness: bool = False, group_by: str | None = None):
+def _reader(repo_cls, *, phase_of=None):
     async def read(
         program: dict = Depends(require_program),
         principal: Principal = Depends(get_principal),
@@ -567,29 +549,39 @@ def _reader(repo_cls, *, liveness: bool = False, group_by: str | None = None):
         docs = await repo_cls.from_mongo(mongo).list(
             principal.tenant_id, program["program_id"], limit=1000
         )
-        if liveness:
-            _annotate_gone(docs, group_by=group_by)  # tag `gone` before dates serialise
+        if phase_of is not None:
+            refs = await _phase_refs(mongo, principal.tenant_id, program["program_id"])
+            annotate_gone(docs, refs, phase_of)  # tag `gone` before dates serialise
         return [clean_doc(d) for d in docs]
 
     return read
 
 
 router.add_api_route(
-    "/{program_id}/assets", _reader(AssetRepo, liveness=True), methods=["GET"], tags=["data"]
+    "/{program_id}/assets",
+    _reader(AssetRepo, phase_of=const_phase("ingest")),
+    methods=["GET"],
+    tags=["data"],
 )
 router.add_api_route(
     "/{program_id}/endpoints",
-    _reader(EndpointRepo, liveness=True, group_by="source"),
+    _reader(EndpointRepo, phase_of=endpoint_phase),
     methods=["GET"],
     tags=["data"],
 )
 router.add_api_route("/{program_id}/secrets", _reader(SecretRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
-    "/{program_id}/ports", _reader(PortRepo, liveness=True), methods=["GET"], tags=["data"]
+    "/{program_id}/ports",
+    _reader(PortRepo, phase_of=const_phase("port_scan")),
+    methods=["GET"],
+    tags=["data"],
 )
 router.add_api_route("/{program_id}/leaks", _reader(LeakRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
-    "/{program_id}/cves", _reader(CveMatchRepo, liveness=True), methods=["GET"], tags=["data"]
+    "/{program_id}/cves",
+    _reader(CveMatchRepo, phase_of=const_phase("cve_watch")),
+    methods=["GET"],
+    tags=["data"],
 )
 router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"], tags=["data"])
 router.add_api_route(
@@ -630,9 +622,10 @@ async def list_findings(
     docs = await FindingRepo.from_mongo(mongo).list(
         principal.tenant_id, program["program_id"], is_new=is_new, limit=1000
     )
-    # A finding is "gone" (resolved) if a later re-run of its own module stopped
-    # reporting it — grouped by module so nuclei/dork/takeover judge independently.
-    _annotate_gone(docs, group_by="module")
+    # A finding is "gone" (resolved) only when a full-coverage re-run of its producing
+    # module (nuclei→scan, tlsx→tls, dork, takeover) stopped reporting it.
+    refs = await _phase_refs(mongo, principal.tenant_id, program["program_id"])
+    annotate_gone(docs, refs, finding_phase)
     if severity:
         docs = [d for d in docs if d.get("severity") == severity]
     if state:

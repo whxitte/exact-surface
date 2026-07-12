@@ -541,7 +541,8 @@ def test_cves_and_correlation_endpoints():
 def test_ports_reader_flags_gone():
     import datetime as _dt
 
-    from core.models import Port
+    from core.models import Port, ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
     from db.ports import PortRepo
 
     client, fake, _ = build()
@@ -550,7 +551,8 @@ def test_ports_reader_flags_gone():
     pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
         "program_id"
     ]
-    now = _dt.datetime.now(_dt.UTC)
+    t0 = _dt.datetime(2026, 7, 1, tzinfo=_dt.UTC)
+    t2 = t0 + _dt.timedelta(days=1)
     repo = PortRepo.from_mongo(fake)
     _run(
         repo.upsert(
@@ -562,13 +564,23 @@ def test_ports_reader_flags_gone():
             Port(tenant_id=tenant_id, program_id=pid, fingerprint="old", ip="2.2.2.2", port=22)
         )
     )
-    # 'live' re-seen just now; 'old' not seen for hours → gone
-    _run(fake.collection("ports").update_one({"fingerprint": "live"}, {"$set": {"last_seen": now}}))
-    _run(
-        fake.collection("ports").update_one(
-            {"fingerprint": "old"}, {"$set": {"last_seen": now - _dt.timedelta(hours=6)}}
+    # 'live' re-seen at the latest full-coverage port scan (t2); 'old' not seen since t0.
+    _run(fake.collection("ports").update_one({"fingerprint": "live"}, {"$set": {"last_seen": t2}}))
+    _run(fake.collection("ports").update_one({"fingerprint": "old"}, {"$set": {"last_seen": t0}}))
+    # two full-coverage port_scan runs — the newer (t2) is the gone reference.
+    for sid, start in [("r0", t0), ("r2", t2)]:
+        _run(
+            ScanRunRepo.from_mongo(fake).save(
+                ScanRun(
+                    tenant_id=tenant_id,
+                    scan_id=sid,
+                    program_id=pid,
+                    pipeline="port_scan",
+                    status=ScanStatus.SUCCESS,
+                    started_at=start,
+                )
+            )
         )
-    )
     ports = {
         p["fingerprint"]: p
         for p in client.get(f"/programs/{pid}/ports", headers=_auth(token)).json()

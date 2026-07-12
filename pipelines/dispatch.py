@@ -134,6 +134,8 @@ async def run_pipeline(
         pipeline=pipeline,
         status=ScanStatus.RUNNING,
         started_at=datetime.now(UTC),
+        # cascade runs carry targets → not full coverage; the gone-detector ignores them.
+        targets=list(targets),
     )
     # Attribute every log line from this cadence run (tenant/program/scan/pipeline)
     # — the scheduler path previously logged with no context (t=- s=-).

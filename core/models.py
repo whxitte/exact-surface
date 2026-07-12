@@ -344,5 +344,9 @@ class ScanRun(TenantScopedModel):
     finished_at: datetime | None = None
     stats: dict = Field(default_factory=dict)  # counts: discovered/new/errors
     stages: list[ScanStage] = Field(default_factory=list)  # per-stage progress (full runs)
+    #: cascade/target-scoped runs carry the hostnames they were limited to; empty means
+    #: full coverage (scheduled or full run). Load-bearing for gone-detection: only
+    #: full-coverage runs are evidence that a missing item is actually gone.
+    targets: list[str] = Field(default_factory=list)
     note: str | None = None  # why skipped / short explanation (single-pipeline runs)
     error: str | None = None
