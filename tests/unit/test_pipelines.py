@@ -251,31 +251,6 @@ async def test_full_pipeline_records_per_stage_progress():
     assert by["dork"]["status"] == "skipped"
 
 
-async def test_program_bootstraps_as_soon_as_ingest_succeeds():
-    # A slow later stage (nuclei) that gets interrupted must not leave the program stuck
-    # re-bootstrapping — the baseline is set the moment discovery runs.
-    mongo = FakeMongo()
-    await ProgramRepo.from_mongo(mongo).save(
-        Program(tenant_id="t1", program_id="p1", apex_domain="customer.com", verified=True)
-    )
-    assert (await ProgramRepo.from_mongo(mongo).get("t1", "p1"))[
-        "initial_scan_completed_at"
-    ] is None
-
-    await run_full_pipeline(
-        mongo=mongo,
-        engine=ENGINE,
-        scope=SCOPE,
-        tenant=TENANT,
-        program_id="p1",
-        apex="customer.com",
-        timeout=10,
-        **_injected([]),
-    )
-    prog = await ProgramRepo.from_mongo(mongo).get("t1", "p1")
-    assert prog["initial_scan_completed_at"] is not None  # bootstrapped after ingest
-
-
 async def test_enabled_optional_module_runs():
     mongo = FakeMongo()
 

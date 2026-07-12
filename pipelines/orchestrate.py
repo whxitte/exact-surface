@@ -307,20 +307,6 @@ async def run_full_pipeline(
                 results[name] = res
                 await audit.save(run)  # flip to done (+ stats/note) after the stage completes
 
-                # Once discovery has run, the program has a baseline. Mark it bootstrapped
-                # NOW (not after the whole pipeline) so a slow/interrupted later stage —
-                # nuclei can run for an hour and be killed by a rebuild — doesn't leave the
-                # program stuck endlessly re-launching full runs. Steady-state per-phase
-                # cadence then covers the remaining phases.
-                if name == "ingest" and stage_obj.status != ScanStatus.FAILED:
-                    from db.programs import ProgramRepo
-
-                    prog = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
-                    if prog and prog.get("initial_scan_completed_at") is None:
-                        await ProgramRepo.from_mongo(mongo).mark_initial_scan_completed(
-                            tenant.tenant_id, program_id, datetime.now(UTC)
-                        )
-
         # The run is SUCCESS even if a non-fatal stage failed — every other stage ran
         # and its data was saved; the failed stage shows red in the stepper.
         run.status = ScanStatus.FAILED if failed else ScanStatus.SUCCESS

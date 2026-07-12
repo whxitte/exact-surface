@@ -31,11 +31,7 @@ def make_enqueuer(pool: Any):
 
     async def enqueue(job: Job) -> None:  # pragma: no cover - needs a live redis
         if job.pipeline == FULL_PIPELINE:
-            # bootstrap: run the ordered full pipeline via run_program_task.
-            # `_max_tries=1`: a full run interrupted by a worker restart (a rebuild mid
-            # nuclei scan) must NOT be auto-resumed by arq with its original scan_id —
-            # that reused the log key and made the live feed mix the old, cancelled run
-            # with the new one. The scheduler re-bootstraps with a fresh id if needed.
+            # bootstrap: run the ordered full pipeline via run_program_task
             await pool.enqueue_job(
                 PROGRAM_TASK,
                 job.tenant_id,
@@ -44,7 +40,6 @@ def make_enqueuer(pool: Any):
                 job.scan_id or None,
                 _job_id=job.dedup_key(),
                 _defer_by=0,
-                _max_tries=1,
             )
             return
         await pool.enqueue_job(
