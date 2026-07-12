@@ -69,6 +69,10 @@ const SECTIONS: Section[] = [
         </p>
         <ol className="ml-4 list-decimal space-y-1.5">
           <li><Term>Ingest</Term> — enumerate subdomains (subfinder, crt.sh, DNS).</li>
+          <li>
+            <Term>Uncover</Term> — passive host discovery from Shodan/Censys (optional; needs
+            an API key). Off by default.
+          </li>
           <li><Term>Probe</Term> — which hosts are alive over HTTP/S, their status, title, tech (httpx).</li>
           <li><Term>TLS</Term> — certificate chain, expiry, SANs (tlsx).</li>
           <li><Term>Takeover</Term> — dangling DNS / claimable cloud services (see below).</li>
@@ -87,6 +91,12 @@ const SECTIONS: Section[] = [
         <p>
           You can see each stage run live under <Term>Activity</Term>, and set its cadence and timeout
           under a program&apos;s <Term>schedule</Term> settings.
+        </p>
+        <p className="rounded-md border border-border bg-muted/30 p-3 text-muted-foreground">
+          <Term>Optional modules</Term> — Uncover, TLS, Service-ID, and Dorking are off by default
+          and only run inside a <Term>full</Term> pipeline scan (first add, or a manual scan), not on
+          the continuous per-phase schedule. Enable them per program under its Optional modules, then
+          trigger a scan to see them run.
         </p>
       </>
     ),
@@ -303,19 +313,26 @@ const SECTIONS: Section[] = [
     id: "integrations",
     title: "Integrations & configuration",
     icon: Plug,
-    keywords: "integrations github token google cse brave dork api key settings",
+    keywords: "integrations github token google cse shodan censys uncover brave dork api key settings",
     body: (
       <>
-        <p>Set these in <Term>Settings → Integrations</Term> (stored encrypted, per tenant):</p>
+        <p>Set these in <Term>Settings → Integrations</Term> (stored encrypted, per tenant). Every
+          integration degrades gracefully — the module skips, it never fails the scan:</p>
         <ul className="ml-4 list-disc space-y-1.5">
           <li>
             <Term>GitHub token</Term> — required for the Leaks / GitHub-OSINT module. Without it, the
-            module skips (it doesn&apos;t fail).
+            module skips.
           </li>
           <li>
             <Term>Google CSE key + CX</Term> — enables dorking. Create a Programmable Search Engine (for
             the <Code>cx</Code>) and enable the &quot;Custom Search API&quot; in Google Cloud (for the key).
-            The JSON API is free up to 100 queries/day and is not deprecated. Without it, dorking skips.
+            The JSON API is free up to 100 queries/day and is not deprecated.
+          </li>
+          <li>
+            <Term>Shodan API key</Term> and/or <Term>Censys API ID + Secret</Term> — enable the Uncover
+            module (passive host discovery). Note: Shodan&apos;s <em>search</em> requires a paid
+            membership (a free key can&apos;t run searches and returns nothing); Censys has a free search
+            tier. If a key is present but empty results come back, the scan log shows the reason.
           </li>
         </ul>
       </>

@@ -29,11 +29,17 @@ from modules.recon.uncover import search as uncover_search
 
 
 def _engine_query(engine: str, apex: str) -> str:
-    """Broad SSL/keyword queries so wildcard + CDN certs (CN=``*.apex``) still match —
-    an exact ``subject.CN:apex`` misses those, which is why the first run found nothing."""
+    """Cert-based queries that catch wildcard + CDN certs (CN=``*.apex``) — an exact
+    ``subject.CN:apex`` misses those, which is why the first run found nothing.
+
+    * Shodan: ``ssl:"apex"`` matches the domain anywhere in the TLS cert (CN, SANs, …).
+    * Censys: ``…leaf_data.names: "apex"`` — ``names`` is CN + every SAN, so it covers
+      subdomains and wildcard leaf certs too."""
     if engine == "shodan":
-        return f'ssl:"{apex}"'  # matches the domain anywhere in the cert (CN, SANs, …)
-    return apex  # censys/fofa/quake: full-text keyword
+        return f'ssl:"{apex}"'
+    if engine == "censys":
+        return f'services.tls.certificates.leaf_data.names: "{apex}"'
+    return apex  # fofa/quake: full-text keyword
 
 
 def _split(entry: str) -> tuple[str, int] | None:
@@ -121,11 +127,13 @@ async def run_uncover(
             }
         for eng in engines:
             try:
-                entries.update(
-                    await uncover_search(
-                        _engine_query(eng, apex), timeout, engine=eng, api_env=api_env
-                    )
+                hits = await uncover_search(
+                    _engine_query(eng, apex), timeout, engine=eng, api_env=api_env
                 )
+                entries.update(hits)
+                # per-engine visibility: an empty result on a paid Shodan plan vs a
+                # Censys auth/plan error read very differently in the logs.
+                logger.info("uncover {}: {} result(s) from {}", apex, len(hits), eng)
             except Exception as exc:  # noqa: BLE001 - one engine must not sink the stage
                 logger.warning("uncover {} via {} failed: {}", apex, eng, exc)
 
