@@ -29,12 +29,11 @@ from modules.recon.uncover import search as uncover_search
 
 
 def _engine_query(engine: str, apex: str) -> str:
-    """Cert-subject queries find an org's own hosts; others fall back to a keyword."""
+    """Broad SSL/keyword queries so wildcard + CDN certs (CN=``*.apex``) still match —
+    an exact ``subject.CN:apex`` misses those, which is why the first run found nothing."""
     if engine == "shodan":
-        return f'ssl.cert.subject.CN:"{apex}"'
-    if engine == "censys":
-        return f'services.tls.certificates.leaf_data.subject.common_name:"{apex}"'
-    return apex
+        return f'ssl:"{apex}"'  # matches the domain anywhere in the cert (CN, SANs, …)
+    return apex  # censys/fofa/quake: full-text keyword
 
 
 def _split(entry: str) -> tuple[str, int] | None:
@@ -72,15 +71,24 @@ def _ip_authorized(scope: ProgramScope, ip: str) -> bool:
     )
 
 
-async def _available_engines(mongo: Any, tid: str) -> list[str]:
+async def _resolve_keys(mongo: Any, tid: str) -> tuple[dict[str, str], list[str]]:
+    """Return (API-key env for the uncover child, engines that have a usable key).
+
+    uncover reads keys from env vars, so we hand the tenant's stored keys straight to
+    the subprocess (SHODAN_API_KEY / CENSYS_API_ID+SECRET)."""
+    env: dict[str, str] = {}
     engines: list[str] = []
-    if await resolve_secret(mongo, tid, "shodan_api_key"):
+    shodan = await resolve_secret(mongo, tid, "shodan_api_key")
+    if shodan:
+        env["SHODAN_API_KEY"] = shodan
         engines.append("shodan")
-    if await resolve_secret(mongo, tid, "censys_api_id") and await resolve_secret(
-        mongo, tid, "censys_api_secret"
-    ):
+    cid = await resolve_secret(mongo, tid, "censys_api_id")
+    csec = await resolve_secret(mongo, tid, "censys_api_secret")
+    if cid and csec:
+        env["CENSYS_API_ID"] = cid
+        env["CENSYS_API_SECRET"] = csec
         engines.append("censys")
-    return engines
+    return env, engines
 
 
 async def run_uncover(
@@ -101,7 +109,7 @@ async def run_uncover(
     if search is not None:
         entries.update(await search(apex))
     else:
-        engines = await _available_engines(mongo, tid)
+        api_env, engines = await _resolve_keys(mongo, tid)
         if not engines:
             logger.info("uncover {}: skipped (no Shodan/Censys key configured)", apex)
             return {
@@ -113,7 +121,11 @@ async def run_uncover(
             }
         for eng in engines:
             try:
-                entries.update(await uncover_search(_engine_query(eng, apex), timeout, engine=eng))
+                entries.update(
+                    await uncover_search(
+                        _engine_query(eng, apex), timeout, engine=eng, api_env=api_env
+                    )
+                )
             except Exception as exc:  # noqa: BLE001 - one engine must not sink the stage
                 logger.warning("uncover {} via {} failed: {}", apex, eng, exc)
 

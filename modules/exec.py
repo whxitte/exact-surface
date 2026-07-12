@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import shutil
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
@@ -41,8 +42,13 @@ async def run_tool(
     timeout: float,
     stdin: str | None = None,
     check: bool = False,
+    env: dict[str, str] | None = None,
 ) -> ToolRun:
     """Run ``binary args`` with a hard timeout. Kills the process on timeout.
+
+    ``env`` adds/overrides environment variables for the child (merged over the
+    parent env) — used to hand a tool a per-tenant API key without leaking it into
+    the worker's own environment.
 
     Raises :class:`ToolNotFound` if the binary is missing, :class:`ToolTimeout` on
     timeout (after killing), and — only when ``check=True`` —
@@ -59,6 +65,7 @@ async def run_tool(
             stdin=asyncio.subprocess.PIPE if stdin is not None else None,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env={**os.environ, **env} if env else None,
         )
     except FileNotFoundError as exc:  # race: vanished between which() and exec
         raise ToolNotFound(binary) from exc
@@ -200,9 +207,10 @@ async def run_tool_lines(
     *,
     timeout: float,
     stdin: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> list[str]:
     """Run a line-emitting tool (gau, waybackurls) and return stripped non-empty lines."""
-    run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
+    run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False, env=env)
     return [ln.strip() for ln in run.stdout.splitlines() if ln.strip()]
 
 
