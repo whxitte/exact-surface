@@ -111,15 +111,19 @@ class Scheduler:
         for prog in await self._ready_programs():
             tid, pid = prog["tenant_id"], prog["program_id"]
 
+            # A full run covers every phase, so while one is in flight (e.g. a manual
+            # re-scan) we must NOT also fan out per-phase cadence jobs — a second nuclei
+            # then contends with the full run's scan and shows up as a stalled duplicate.
+            active_full = await audit.find_active_full(
+                tid, pid, now=now, stale_seconds=self._settings.scan_run_stale_seconds
+            )
+            if active_full is not None:
+                continue
+
             # -- bootstrap: first full run before any per-phase cadence ----------
             if prog.get("initial_scan_completed_at") is None:
                 if _capped(tid):
                     continue
-                active = await audit.find_active_full(
-                    tid, pid, now=now, stale_seconds=self._settings.scan_run_stale_seconds
-                )
-                if active is not None:
-                    continue  # a full run is already queued/running — let it finish
                 last_full = await schedule.last_run(tid, pid, FULL_PIPELINE)
                 if is_due(last_full, now, BOOTSTRAP_RETRY_SECONDS):
                     jobs.append(

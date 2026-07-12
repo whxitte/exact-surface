@@ -136,6 +136,23 @@ async def test_pipeline_checks_resolving_host_without_cname():
     assert asset["takeover_risk"] == "AWS/S3"
 
 
+async def test_takeover_risk_survives_later_asset_upsert():
+    # Regression: the takeover stage runs before crawl/scan; those re-upsert the asset,
+    # which used to wipe takeover_risk back to None (DNS page always showed 0).
+    mongo = FakeMongo()
+    repo = AssetRepo.from_mongo(mongo)
+    await repo.upsert(
+        Asset(tenant_id="t1", program_id="p1", fingerprint="a1", hostname="x.acme.com")
+    )
+    await repo.set_flag("t1", "a1", "takeover_risk", "AWS/S3")
+    # a later stage re-discovers/updates the same asset (fresh model → takeover_risk None)
+    await repo.upsert(
+        Asset(tenant_id="t1", program_id="p1", fingerprint="a1", hostname="x.acme.com")
+    )
+    asset = await repo.get("t1", "a1")
+    assert asset["takeover_risk"] == "AWS/S3"  # preserved, not clobbered
+
+
 async def test_pipeline_skips_when_no_cnames():
     mongo = FakeMongo()
     await AssetRepo.from_mongo(mongo).upsert(

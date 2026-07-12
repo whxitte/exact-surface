@@ -136,6 +136,28 @@ async def test_bootstrap_not_re_enqueued_while_full_run_active():
     assert jobs == []
 
 
+async def test_no_per_phase_fanout_while_full_run_active():
+    # A manual/scheduled full run is in flight on a bootstrapped program — the scheduler
+    # must not also fan out per-phase cadence jobs (they contend and stall).
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    mongo = FakeMongo()
+    await _seed_ready(mongo, bootstrapped=True)
+    await ScanRunRepo.from_mongo(mongo).save(
+        ScanRun(
+            tenant_id="t1",
+            scan_id="full1",
+            program_id="p1",
+            pipeline="full",
+            status=ScanStatus.RUNNING,
+            started_at=NOW,
+        )
+    )
+    jobs = await Scheduler(mongo, FakeEnqueuer()).plan(NOW)
+    assert jobs == []
+
+
 async def test_program_switches_to_per_phase_after_initial_scan():
     mongo = FakeMongo()
     await _seed_ready(mongo, bootstrapped=True)
