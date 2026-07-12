@@ -27,6 +27,7 @@ from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
 from pipelines.takeover import run_takeover
+from pipelines.uncover import run_uncover
 
 
 def _auth_current(auth: dict | None) -> bool:
@@ -86,6 +87,8 @@ async def run_pipeline(
     async def _execute() -> dict:
         if pipeline == "ingest":
             return await run_ingest(**common, apex=apex)
+        if pipeline == "uncover":
+            return await run_uncover(**common, apex=apex)
         if pipeline == "probe":
             return await run_probe(**common, targets=tset)
         if pipeline == "crawl":

@@ -353,6 +353,7 @@ export default function ProgramDetail() {
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               {(
                 [
+                  ["uncover", "Shodan/Censys", "passive host discovery (needs Shodan/Censys key)"],
                   ["tls", "TLS inspection", "cert chain + expiry (tlsx)"],
                   ["service_scan", "Service ID", "nmap -sV on open ports"],
                   ["dork", "Dorking", "search-engine exposures (needs Google CSE key)"],

@@ -18,6 +18,7 @@ HOUR = 60 * MINUTE
 #: stage -> max runtime seconds. Covers every full-pipeline stage (14).
 DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "ingest": 5 * MINUTE,
+    "uncover": 5 * MINUTE,
     "probe": 5 * MINUTE,
     "tls": 5 * MINUTE,
     "takeover": 5 * MINUTE,

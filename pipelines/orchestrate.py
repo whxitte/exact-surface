@@ -36,6 +36,7 @@ from pipelines.secrets import run_secret_scan
 from pipelines.service_scan import run_service_scan
 from pipelines.takeover import run_takeover
 from pipelines.tls import run_tls_scan
+from pipelines.uncover import run_uncover
 
 
 def build_program_scope(program: dict, authorization: dict | None) -> ProgramScope:
@@ -91,7 +92,7 @@ async def _run_stage_with_heartbeat(coro, *, budget: float, run, audit) -> dict:
 #: optional modules — off by default, toggled per program via ``enabled_modules``.
 #: Each has a stage in the pipeline that renders as a (gray) SKIPPED node when the
 #: module is disabled, and runs its tool when enabled.
-OPTIONAL_MODULES: tuple[str, ...] = ("tls", "service_scan", "dork")
+OPTIONAL_MODULES: tuple[str, ...] = ("uncover", "tls", "service_scan", "dork")
 
 #: canonical full-pipeline stage order — the complete outside-in attacker chain,
 #: shared with the API so an enqueue-time QUEUED ScanRun pre-renders the same
@@ -99,6 +100,7 @@ OPTIONAL_MODULES: tuple[str, ...] = ("tls", "service_scan", "dork")
 #: stages self-skip as "disabled" unless enabled for the program.
 FULL_STAGE_NAMES: tuple[str, ...] = (
     "ingest",
+    "uncover",  # optional — Shodan/Censys passive discovery
     "probe",
     "tls",  # optional
     "takeover",
@@ -178,6 +180,15 @@ async def run_full_pipeline(
             "ingest",
             lambda t: run_ingest(
                 **common, timeout=t, apex=apex, **inj("subfinder", "crtsh", "resolve")
+            ),
+        ),
+        (
+            "uncover",
+            optional(
+                "uncover",
+                lambda t: run_uncover(
+                    **common, apex=apex, timeout=t, search=injected.get("uncover_search")
+                ),
             ),
         ),
         ("probe", lambda t: run_probe(**common, timeout=t, **inj("probe"))),

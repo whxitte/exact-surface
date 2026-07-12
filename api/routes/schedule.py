@@ -27,6 +27,7 @@ router = APIRouter(prefix="/schedule", tags=["schedule"])
 #: human labels for the configurable pipelines (UI copy).
 _PIPELINE_LABELS = {
     "ingest": "Subdomain enumeration",
+    "uncover": "Shodan/Censys discovery",
     "probe": "HTTP probe",
     "takeover": "Subdomain takeover check",
     "crawl": "Crawl",

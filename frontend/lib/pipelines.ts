@@ -10,6 +10,10 @@ export const PIPELINE_INFO: Record<string, { label: string; desc: string }> = {
     label: "Discover",
     desc: "Find subdomains (subfinder, crt.sh, DNS) and resolve them to hosts.",
   },
+  uncover: {
+    label: "Uncover",
+    desc: "Passive host discovery via Shodan/Censys (needs an API key).",
+  },
   probe: {
     label: "Probe",
     desc: "Check which hosts are alive and fingerprint their tech stack (httpx).",
