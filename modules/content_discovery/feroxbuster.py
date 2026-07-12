@@ -11,6 +11,12 @@ from modules.exec import iter_jsonl, run_tool
 Runner = Callable[..., Awaitable[list[dict]]]
 
 
+class TargetUnreachable(Exception):
+    """feroxbuster's HTTP client couldn't connect to the target — a client-level failure
+    (often IPv6 happy-eyeballs or TLS-fingerprint quirks) that Go-based tools like ffuf /
+    httpx don't hit. The caller retries the host with ffuf."""
+
+
 async def _default_runner(binary: str, args, *, timeout: float, stdin: str | None = None):
     """Run feroxbuster and parse its JSONL. Unlike the generic ``run_tool_jsonl``,
     this surfaces WHY a run produced nothing (exit code + stderr) — feroxbuster
@@ -18,8 +24,12 @@ async def _default_runner(binary: str, args, *, timeout: float, stdin: str | Non
     run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
     rows = list(iter_jsonl(run.stdout))
     if not rows:
-        diag = (run.stderr or "").strip().splitlines()
-        if diag:  # a real error (e.g. "Could not connect to any target provided")
+        stderr = run.stderr or ""
+        if "could not connect" in stderr.lower():
+            # feroxbuster can't reach a host httpx already probed alive — hand it to ffuf.
+            raise TargetUnreachable(stderr.strip().splitlines()[-1][:200])
+        diag = stderr.strip().splitlines()
+        if diag:  # some other real error
             logger.warning(
                 "feroxbuster produced no results (exit {}): {}", run.returncode, diag[-1][:300]
             )
@@ -50,14 +60,12 @@ async def discover(
         "-k",
         "-n",
         # feroxbuster defaults to 50 threads; with 10 hosts scanned at once that's ~500
-        # concurrent connections, which saturates the network and makes the initial
-        # heuristic request time out after the default 7s → "Could not connect to any
-        # target provided" even for live hosts. Fewer threads + a longer timeout keeps
-        # the connection reliable.
+        # concurrent connections. Fewer threads eases the load; a 10s connect timeout
+        # fails fast on a host feroxbuster's client can't reach so we fall back to ffuf.
         "-t",
         "25",
         "-T",
-        "20",
+        "10",
     ]
     if runner is _default_runner:
         wordlist = wordlist_path(wordlist)

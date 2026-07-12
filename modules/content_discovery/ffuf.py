@@ -18,11 +18,13 @@ async def fuzz(
     url: str, wordlist: str, timeout: float, *, runner: Runner = run_tool_stdout
 ) -> list[dict]:
     """Fuzz ``FUZZ`` in *url* and return ``{url, status, length}`` hits."""
-    out = await runner(
-        "ffuf",
-        ["-u", url, "-w", wordlist, "-of", "json", "-o", "-", "-s"],
-        timeout=timeout,
-    )
+    args = ["-u", url, "-w", wordlist, "-of", "json", "-o", "-", "-s"]
+    if runner is run_tool_stdout:  # real tool: a bare wordlist name fails; resolve + bound
+        from modules.content_discovery.wordlist_selector import wordlist_path
+
+        args[3] = wordlist_path(wordlist)  # the -w value
+        args += ["-maxtime", str(max(int(timeout), 1))]
+    out = await runner("ffuf", args, timeout=timeout + 15)
     try:
         payload = json.loads(out) if out.strip() else {}
     except json.JSONDecodeError:

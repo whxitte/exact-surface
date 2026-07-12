@@ -149,6 +149,51 @@ async def test_uses_probed_scheme_and_skips_unprobed_hosts():
     assert res["hosts"] == 1
 
 
+async def test_ffuf_fallback_when_feroxbuster_cant_connect(monkeypatch):
+    # feroxbuster's client can't reach a host httpx already probed alive → retry with ffuf.
+    from modules.content_discovery.feroxbuster import TargetUnreachable
+
+    mongo = FakeMongo()
+    await AssetRepo(mongo.collection("assets")).upsert(
+        Asset(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint=asset_fingerprint("p1", "app.customer.com"),
+            hostname="app.customer.com",
+            resolved_ips=["45.55.1.1"],
+        )
+    )
+    await EndpointRepo(mongo.collection("endpoints")).upsert(
+        Endpoint(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint=endpoint_fingerprint("p1", "GET", "https://app.customer.com"),
+            url="https://app.customer.com",
+        )
+    )
+
+    async def fake_discover(_url, _wordlist, _timeout):
+        raise TargetUnreachable("Could not connect to any target provided")
+
+    ffuf_calls: list[str] = []
+
+    async def fake_fuzz(url, _wordlist, _timeout):
+        ffuf_calls.append(url)
+        return [{"url": "https://app.customer.com/admin", "status": 200}]
+
+    monkeypatch.setattr("modules.content_discovery.ffuf.fuzz", fake_fuzz)
+    res = await run_content_discovery(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        timeout=10,
+        discover=fake_discover,
+    )
+    assert ffuf_calls == ["https://app.customer.com/FUZZ"] and res["new"] == 1
+
+
 async def test_content_discovery_fallback_to_ffuf(monkeypatch):
     from core.errors import ToolNotFound
 

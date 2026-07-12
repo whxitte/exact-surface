@@ -20,6 +20,7 @@ from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
 from db.endpoints import EndpointRepo
+from modules.content_discovery.feroxbuster import TargetUnreachable
 from modules.content_discovery.feroxbuster import discover as ferox_discover
 from modules.content_discovery.wordlist_selector import select_wordlist
 
@@ -108,6 +109,17 @@ async def run_content_discovery(
     )
     sem = asyncio.Semaphore(CONCURRENCY)
 
+    async def _ffuf(target: str, wordlist: str, reason: str) -> list[dict]:
+        # ffuf uses Go's HTTP stack (the same one httpx probed this host with), so it
+        # connects where feroxbuster's client can't (IPv6/TLS quirks).
+        try:
+            from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
+
+            return await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host)
+        except ToolNotFound:
+            logger.warning("content-discovery: {} ({}), and ffuf not installed", target, reason)
+            return []
+
     async def _scan_host(host: str) -> list[dict]:
         # Each host isolated + bounded: a slow/failing feroxbuster yields nothing for
         # that host but never sinks the (concurrent) stage.
@@ -116,14 +128,11 @@ async def run_content_discovery(
         async with sem:
             try:
                 return await discover(target, wordlist, per_host)
-            except ToolNotFound:
-                try:
-                    from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
-
-                    return await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host)
-                except ToolNotFound:
-                    logger.error("content-discovery: neither feroxbuster nor ffuf found")
-                    return []
+            except ToolNotFound:  # feroxbuster missing entirely
+                return await _ffuf(target, wordlist, "feroxbuster not installed")
+            except TargetUnreachable as exc:  # feroxbuster's client couldn't connect
+                logger.info("content-discovery: feroxbuster can't reach {} — trying ffuf", target)
+                return await _ffuf(target, wordlist, str(exc))
             except Exception as exc:  # noqa: BLE001
                 logger.warning("content-discovery: feroxbuster failed for {}: {}", host, exc)
                 return []
