@@ -51,6 +51,7 @@ export default function ProgramDetail() {
   const [assetSearch, setAssetSearch] = useState("");
   const [showGoneEndpoints, setShowGoneEndpoints] = useState(false);
   const [findingSort, setFindingSort] = useState<"severity" | "newest" | "oldest">("severity");
+  const [findingSearch, setFindingSearch] = useState("");
   const [prioritySort, setPrioritySort] = useState<"risk" | "severity" | "host">("risk");
   const [endpointSource, setEndpointSource] = useState<string>("all");
 
@@ -218,11 +219,21 @@ export default function ProgramDetail() {
     }
   }
 
-  const sortedFindings = [...findings].sort((a, b) => {
-    if (findingSort === "newest") return Date.parse(b.first_seen || "") - Date.parse(a.first_seen || "");
-    if (findingSort === "oldest") return Date.parse(a.first_seen || "") - Date.parse(b.first_seen || "");
-    return severityRank(a.severity) - severityRank(b.severity);
-  });
+  const fq = findingSearch.trim().toLowerCase();
+  const sortedFindings = [...findings]
+    .filter(
+      (f) =>
+        !fq ||
+        f.name.toLowerCase().includes(fq) ||
+        f.location.toLowerCase().includes(fq) ||
+        f.module.toLowerCase().includes(fq) ||
+        (f.locator || "").toLowerCase().includes(fq),
+    )
+    .sort((a, b) => {
+      if (findingSort === "newest") return Date.parse(b.first_seen || "") - Date.parse(a.first_seen || "");
+      if (findingSort === "oldest") return Date.parse(a.first_seen || "") - Date.parse(b.first_seen || "");
+      return severityRank(a.severity) - severityRank(b.severity);
+    });
   const sortedIssues = [...(correlation?.issues || [])].sort((a, b) => {
     if (prioritySort === "host") return a.host.localeCompare(b.host);
     if (prioritySort === "severity") return severityRank(a.highest_severity) - severityRank(b.highest_severity);
@@ -484,20 +495,34 @@ export default function ProgramDetail() {
       {tab === "findings" && (
         <div className="space-y-2">
           {findings.length > 0 && (
-            <div className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
-              <span>Sort by</span>
-              <select
-                value={findingSort}
-                onChange={(e) => setFindingSort(e.target.value as typeof findingSort)}
-                className="h-8 rounded-md border border-border bg-background px-2"
-              >
-                <option value="severity">Severity</option>
-                <option value="newest">Newest found</option>
-                <option value="oldest">Oldest found</option>
-              </select>
+            <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={findingSearch}
+                  onChange={(e) => setFindingSearch(e.target.value)}
+                  placeholder="Search findings, host, module…"
+                  className="h-8 w-64 rounded-full border border-border bg-background pl-8 pr-3 text-xs focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span>Sort by</span>
+                <select
+                  value={findingSort}
+                  onChange={(e) => setFindingSort(e.target.value as typeof findingSort)}
+                  className="h-8 rounded-md border border-border bg-background px-2"
+                >
+                  <option value="severity">Severity</option>
+                  <option value="newest">Newest found</option>
+                  <option value="oldest">Oldest found</option>
+                </select>
+              </div>
             </div>
           )}
-          {sortedFindings.length === 0 && <Empty label="No findings yet — run a scan." />}
+          {findings.length > 0 && sortedFindings.length === 0 && (
+            <Empty label="No findings match your search." />
+          )}
+          {findings.length === 0 && <Empty label="No findings yet — run a scan." />}
           {sortedFindings.map((f) => (
             <Card
               key={f.fingerprint}

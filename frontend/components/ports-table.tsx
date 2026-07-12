@@ -20,6 +20,7 @@ export function PortsTable({
 }) {
   const [sev, setSev] = useState<string>("all");
   const [showGone, setShowGone] = useState(false);
+  const [sort, setSort] = useState<"severity" | "port" | "ip" | "recent">("severity");
 
   const rows = useMemo(
     () =>
@@ -31,8 +32,14 @@ export function PortsTable({
           host: (hostsByIp.get(p.ip) || [])[0] || "",
           hostCount: (hostsByIp.get(p.ip) || []).length,
         }))
-        .sort((a, b) => severityRank(a.severity) - severityRank(b.severity)),
-    [ports, hostsByIp],
+        .sort((a, b) => {
+          if (sort === "port") return a.p.port - b.p.port;
+          if (sort === "ip") return a.p.ip.localeCompare(b.p.ip);
+          if (sort === "recent")
+            return Date.parse(b.p.first_seen || "") - Date.parse(a.p.first_seen || "");
+          return severityRank(a.severity) - severityRank(b.severity);
+        }),
+    [ports, hostsByIp, sort],
   );
 
   const goneCount = rows.filter((r) => r.p.gone).length;
@@ -94,18 +101,31 @@ export function PortsTable({
             {s !== "all" && counts[s] ? <span className="ml-1.5 opacity-60">{counts[s]}</span> : null}
           </button>
         ))}
-        {goneCount > 0 && (
-          <button
-            onClick={() => setShowGone((v) => !v)}
-            className={cn(
-              "ml-auto flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition-colors",
-              showGone ? "border-primary/40 text-primary" : "border-border text-muted-foreground hover:text-foreground",
-            )}
+        <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
+          {goneCount > 0 && (
+            <button
+              onClick={() => setShowGone((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md border px-2 py-1 transition-colors",
+                showGone ? "border-primary/40 text-primary" : "border-border hover:text-foreground",
+              )}
+            >
+              <EyeOff className="h-3.5 w-3.5" />
+              {showGone ? "Hide" : "Show"} closed ({goneCount})
+            </button>
+          )}
+          <span>Sort by</span>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value as typeof sort)}
+            className="h-8 rounded-md border border-border bg-background px-2"
           >
-            <EyeOff className="h-3.5 w-3.5" />
-            {showGone ? "Hide" : "Show"} closed ({goneCount})
-          </button>
-        )}
+            <option value="severity">Severity</option>
+            <option value="port">Port</option>
+            <option value="ip">IP</option>
+            <option value="recent">Newest</option>
+          </select>
+        </div>
       </div>
 
       {/* table */}
