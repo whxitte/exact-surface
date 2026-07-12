@@ -29,6 +29,9 @@ MAX_ENDPOINTS_PER_RUN = 2000
 #: full-run timeouts; cap the host count and give each host a small slice.
 MAX_ACTIVE_CRAWL_HOSTS = 25
 MAX_HOST_CRAWL_SECONDS = 45.0
+#: crawl hosts concurrently (each katana is independent) — serial crawling of 25 hosts
+#: at 45s each was ~19 min worst case; 10-at-a-time cuts that to ~2 min.
+CRAWL_CONCURRENCY = 10
 # gau --subs harvests the whole domain's archived URLs and can be slow on a big
 # domain; give it real time and run it alongside waybackurls (not after) so the
 # passive phase is max(gau, wayback), not their sum.
@@ -87,16 +90,26 @@ async def run_crawl(
         )
     ][:MAX_ACTIVE_CRAWL_HOSTS]
     logger.info(
-        "crawling archives (gau/wayback) on {} + active katana on {} host(s)",
+        "crawling archives (gau/wayback) on {} + active katana on {} host(s), {} at a time",
         apex,
         len(crawl_hosts),
+        CRAWL_CONCURRENCY,
     )
-    for hostname in crawl_hosts:
-        logger.info("katana crawling {}", hostname)
-        try:
-            urls.update(await katana(f"https://{hostname}", host_timeout))
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("katana crawl failed for {}: {}", hostname, exc)
+    sem = asyncio.Semaphore(CRAWL_CONCURRENCY)
+
+    async def _crawl_one(hostname: str) -> set[str]:
+        # each katana is isolated + bounded: a slow/failing host yields nothing but
+        # never sinks the (concurrent) stage.
+        async with sem:
+            logger.info("katana crawling {}", hostname)
+            try:
+                return await katana(f"https://{hostname}", host_timeout)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("katana crawl failed for {}: {}", hostname, exc)
+                return set()
+
+    for host_urls in await asyncio.gather(*(_crawl_one(h) for h in crawl_hosts)):
+        urls.update(host_urls)
 
     # Keep only in-scope hosts, cap volume.
     in_scope_urls = [u for u in sorted(urls) if scope.owns_host(urlsplit(u).hostname or "")][

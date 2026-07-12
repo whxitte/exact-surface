@@ -17,13 +17,14 @@ async def _default_runner(binary: str, args, *, timeout: float, stdin: str | Non
     exiting instantly with no output was invisible before."""
     run = await run_tool(binary, args, timeout=timeout, stdin=stdin, check=False)
     rows = list(iter_jsonl(run.stdout))
-    if not rows and (run.returncode != 0 or not run.stdout.strip()):
-        diag = (run.stderr or run.stdout).strip().splitlines()
-        logger.warning(
-            "feroxbuster produced no results (exit {}): {}",
-            run.returncode,
-            diag[-1][:300] if diag else "no output on stdout/stderr",
-        )
+    if not rows:
+        diag = (run.stderr or "").strip().splitlines()
+        if diag:  # a real error (e.g. "Could not connect to any target provided")
+            logger.warning(
+                "feroxbuster produced no results (exit {}): {}", run.returncode, diag[-1][:300]
+            )
+        else:  # ran fine, this host just has no discoverable paths — not an error
+            logger.debug("feroxbuster: no paths on this host (exit {})", run.returncode)
     return rows
 
 
@@ -48,6 +49,15 @@ async def discover(
         "--silent",
         "-k",
         "-n",
+        # feroxbuster defaults to 50 threads; with 10 hosts scanned at once that's ~500
+        # concurrent connections, which saturates the network and makes the initial
+        # heuristic request time out after the default 7s → "Could not connect to any
+        # target provided" even for live hosts. Fewer threads + a longer timeout keeps
+        # the connection reliable.
+        "-t",
+        "25",
+        "-T",
+        "20",
     ]
     if runner is _default_runner:
         wordlist = wordlist_path(wordlist)
