@@ -22,10 +22,11 @@ async def test_uncover_scope_gates_results():
 
     async def fake_search(_apex):
         return [
-            "api.customer.com:443",  # in-scope hostname → asset
-            "45.55.1.9:6379",  # authorized IP → port (exposed Redis)
-            "8.8.8.8:53",  # unauthorized IP → dropped
-            "evil.com:443",  # out-of-scope hostname → dropped
+            # in-scope hostname on a CDN IP → asset only (the IP isn't authorized)
+            {"host": "api.customer.com", "ip": "13.1.1.1", "port": 443},
+            {"host": "45.55.1.9", "ip": "45.55.1.9", "port": 6379},  # authorized IP → port (Redis)
+            {"host": "8.8.8.8", "ip": "8.8.8.8", "port": 53},  # unauthorized IP → dropped
+            {"host": "evil.com", "ip": "1.2.3.4", "port": 443},  # out-of-scope host+ip → dropped
         ]
 
     res = await run_uncover(

@@ -62,8 +62,11 @@ async def test_tlsx_parses_cert_and_sans():
 
 
 async def test_uncover_returns_hostports():
-    async def runner(_query):  # new signature: (query) -> host:port lines
-        return ["5.6.7.8:80", "1.2.3.4:443", "5.6.7.8:80"]
+    async def runner(_query):  # new signature: (query) -> [{host, ip, port}, …]
+        return [
+            {"host": "api.example.com", "ip": "1.2.3.4", "port": 443},
+            {"host": "5.6.7.8", "ip": "5.6.7.8", "port": 80},
+        ]
 
     out = await uncover_search("ssl:customer.com", 10, engine="shodan", runner=runner)
-    assert out == ["1.2.3.4:443", "5.6.7.8:80"]  # deduped + sorted
+    assert {r["host"] for r in out} == {"api.example.com", "5.6.7.8"}

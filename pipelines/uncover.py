@@ -42,13 +42,6 @@ def _engine_query(engine: str, apex: str) -> str:
     return apex  # fofa/quake: full-text keyword
 
 
-def _split(entry: str) -> tuple[str, int] | None:
-    host, _, port = entry.rpartition(":")
-    if not host or not port.isdigit():
-        return None
-    return host.strip().lower().rstrip("."), int(port)
-
-
 def _is_ip(host: str) -> bool:
     try:
         ipaddress.ip_address(host)
@@ -110,10 +103,10 @@ async def run_uncover(
 ) -> dict:
     tid = tenant.tenant_id
 
-    # Collect raw host:port entries from every configured engine (or the test double).
-    entries: set[str] = set()
+    # Collect {host, ip, port} results from every configured engine (or the test double).
+    results: list[dict] = []
     if search is not None:
-        entries.update(await search(apex))
+        results.extend(await search(apex))
     else:
         api_env, engines = await _resolve_keys(mongo, tid)
         if not engines:
@@ -130,37 +123,41 @@ async def run_uncover(
                 hits = await uncover_search(
                     _engine_query(eng, apex), timeout, engine=eng, api_env=api_env
                 )
-                entries.update(hits)
+                results.extend(hits)
                 # per-engine visibility: an empty result on a paid Shodan plan vs a
                 # Censys auth/plan error read very differently in the logs.
                 logger.info("uncover {}: {} result(s) from {}", apex, len(hits), eng)
             except Exception as exc:  # noqa: BLE001 - one engine must not sink the stage
                 logger.warning("uncover {} via {} failed: {}", apex, eng, exc)
 
-    # Scope-gate every result: in-scope hostname → asset, authorized IP → port, else drop.
+    # Scope-gate every result. A single result can yield BOTH an asset (its in-scope
+    # hostname — e.g. a cert SAN Shodan surfaced) AND a port (its IP, if that IP is in an
+    # authorized dedicated CIDR). Neither in scope → dropped (a listing ≠ authorization).
+    seen: set[tuple] = set()
     host_set: set[str] = set()
     ports: dict[tuple[str, int], Port] = {}
     out_of_scope = 0
-    for entry in entries:
-        parsed = _split(entry)
-        if parsed is None:
+    for r in results:
+        key = (r.get("host", ""), r.get("ip", ""), r.get("port"))
+        if key in seen:
             continue
-        host, port = parsed
-        if _is_ip(host):
-            if _ip_authorized(scope, host):
-                ports[(host, port)] = Port(
-                    tenant_id=tid,
-                    program_id=program_id,
-                    fingerprint=port_fingerprint(program_id, host, port, "tcp"),
-                    ip=host,
-                    port=port,
-                    source="uncover",
-                )
-            else:
-                out_of_scope += 1
-        elif scope.owns_host(host):
+        seen.add(key)
+        host, ip, port = r.get("host", ""), r.get("ip", ""), r.get("port")
+        used = False
+        if host and not _is_ip(host) and scope.owns_host(host):
             host_set.add(host)
-        else:
+            used = True
+        if ip and port and _is_ip(ip) and _ip_authorized(scope, ip):
+            ports[(ip, int(port))] = Port(
+                tenant_id=tid,
+                program_id=program_id,
+                fingerprint=port_fingerprint(program_id, ip, int(port), "tcp"),
+                ip=ip,
+                port=int(port),
+                source="uncover",
+            )
+            used = True
+        if not used:
             out_of_scope += 1
 
     asset_models = [
@@ -182,7 +179,7 @@ async def run_uncover(
         "uncover {}: {} indexed result(s) → {} in-scope asset(s) ({} new), "
         "{} authorized port(s) ({} new), {} out-of-scope dropped",
         apex,
-        len(entries),
+        len(seen),
         len(asset_models),
         len(new_hosts),
         len(ports),
@@ -190,7 +187,7 @@ async def run_uncover(
         out_of_scope,
     )
     return {
-        "found": len(entries),
+        "found": len(seen),
         "assets": len(asset_models),
         "new_assets": len(new_hosts),
         "ports": len(ports),
