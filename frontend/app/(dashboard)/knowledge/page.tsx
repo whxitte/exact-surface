@@ -173,7 +173,7 @@ const SECTIONS: Section[] = [
     id: "findings",
     title: "Findings, severity & confirmation",
     icon: ShieldAlert,
-    keywords: "findings nuclei severity confirmed unconfirmed resolved detected tech wappalyzer curl request",
+    keywords: "findings nuclei severity confirmed unconfirmed resolved detected tech wappalyzer curl request actionable informational false positive fp rate triage",
     body: (
       <>
         <p>
@@ -185,6 +185,19 @@ const SECTIONS: Section[] = [
         <p>
           Severity is info → critical. A finding marked <Term>resolved</Term> is one a full re-run of its
           module no longer reports (see Live vs. Gone). Dork results also land here, tagged <Code>dork</Code>.
+        </p>
+        <p>
+          <Term>Actionable vs. informational.</Term> A scan surfaces a lot of inventory — tech
+          fingerprints, TLS version, missing headers, CAA records. Those are <Term>informational</Term>{" "}
+          (info/low). The Overview leads with <Term>Actionable</Term> — findings that are still open and{" "}
+          <Term>medium</Term> or above — so triage isn&apos;t buried. Notifications use the same floor by
+          default (your alert policy).
+        </p>
+        <p>
+          <Term>False-positive rate.</Term> When you mark a finding <Term>false positive</Term> (or
+          confirm/accept/resolve it), it counts toward the <Term>FP rate</Term> shown on the Overview —
+          false positives ÷ findings you&apos;ve decided. A low rate (target under 5%) is what keeps the
+          signal trustworthy; it reads &quot;—&quot; until you&apos;ve triaged your first finding.
         </p>
       </>
     ),

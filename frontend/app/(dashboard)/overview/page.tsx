@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Globe, Server, KeyRound, ShieldAlert, Sparkles } from "lucide-react";
+import { Globe, Server, KeyRound, ShieldAlert, Sparkles, Target } from "lucide-react";
 import { api, type Stats } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { SEVERITIES } from "@/lib/severity";
@@ -35,6 +35,8 @@ export default function OverviewPage() {
 
   const bySev = stats?.findings_by_severity ?? {};
   const maxSev = Math.max(1, ...Object.values(bySev));
+  const fpRate = stats?.false_positive_rate;
+  const fpLabel = fpRate == null ? "—" : `${(fpRate * 100).toFixed(1)}%`;
 
   return (
     <div className="space-y-8">
@@ -48,14 +50,23 @@ export default function OverviewPage() {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
         <Stat icon={Globe} label="Programs" value={stats?.programs ?? "—"} />
         <Stat icon={Server} label="Assets" value={stats?.assets ?? "—"} />
-        <Stat icon={ShieldAlert} label="Findings" value={stats?.findings ?? "—"} />
+        <Stat icon={Target} label="Actionable" value={stats?.open_actionable ?? "—"} accent />
         <Stat icon={KeyRound} label="Secrets" value={stats?.secrets ?? "—"} />
-        <Stat icon={Sparkles} label="New" value={stats?.new_findings ?? "—"} accent />
+        <Stat icon={Sparkles} label="New" value={stats?.new_findings ?? "—"} />
       </div>
 
       <Card>
         <CardContent className="p-5">
-          <h2 className="mb-4 text-sm font-semibold">Findings by severity</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Findings by severity</h2>
+            <div className="flex gap-4 text-xs text-muted-foreground">
+              <span>{stats?.findings ?? 0} total</span>
+              <span>{stats?.informational ?? 0} informational</span>
+              <span title="User-marked false-positive rate (target < 5%)">
+                FP rate <span className="tabular-nums text-foreground">{fpLabel}</span>
+              </span>
+            </div>
+          </div>
           <div className="space-y-3">
             {SEVERITIES.map((sev) => {
               const count = bySev[sev] ?? 0;

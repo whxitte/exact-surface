@@ -97,9 +97,13 @@ def test_full_self_serve_workflow():
     findings = client.get(f"/programs/{pid}/findings", headers=_auth(token)).json()
     assert len(findings) == 1 and findings[0]["name"] == "Exposed .env"
 
-    # stats
+    # stats — incl. the signal-quality fields the overview binds to
     st = client.get("/stats", headers=_auth(token)).json()
     assert st["findings"] == 1 and st["findings_by_severity"]["high"] == 1
+    assert st["open_actionable"] == 1  # the one high finding is actionable
+    assert st["informational"] == 0
+    assert st["false_positive_rate"] is None  # nothing triaged/decided yet
+    assert st["decided"] == 0
 
 
 def test_scan_refused_without_verification_and_authorization():

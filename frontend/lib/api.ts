@@ -133,6 +133,13 @@ export interface Stats {
   findings: number;
   new_findings: number;
   findings_by_severity: Record<string, number>;
+  // signal quality
+  open_actionable: number;
+  informational: number;
+  findings_by_state: Record<string, number>;
+  false_positive_rate: number | null;
+  false_positives: number;
+  decided: number;
 }
 export interface ScanStage {
   name: string;
