@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.auth import create_access_token, generate_api_key, hash_password, verify_password
-from api.deps import Principal, get_mongo_dep, get_principal
+from api.deps import Principal, get_mongo_dep, get_principal, require_owner
 from api.rate_limit import limiter
 from api.schemas import ApiKeyCreate, ApiKeyCreated, LoginRequest, SignupRequest, TokenResponse
 from core.models import ApiKey, Role, Tenant, User
@@ -71,9 +71,13 @@ async def me(principal: Principal = Depends(get_principal)) -> dict:
 @router.post("/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
 async def create_api_key(
     body: ApiKeyCreate,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(require_owner),
     mongo: Any = Depends(get_mongo_dep),
 ) -> ApiKeyCreated:
+    # No privilege escalation: an admin cannot mint an owner-scoped key. (Only
+    # owners/admins reach here at all; this caps the key's role at the creator's.)
+    if body.role == Role.OWNER and principal.role != Role.OWNER:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "cannot mint a key above your own role")
     raw, key_hash, prefix = generate_api_key()
     key_id = "k_" + uuid.uuid4().hex[:12]
     await ApiKeyRepo.from_mongo(mongo).create(

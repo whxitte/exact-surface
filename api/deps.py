@@ -92,6 +92,12 @@ def require_role(*allowed: Role):
     return _dep
 
 
+# Privileged operations — account-level or security-critical (mint credentials,
+# destroy a program, create the legal scanning-authorization record, manage
+# integration secrets). Owners and admins only; members are read/operate.
+require_owner = require_role(Role.OWNER, Role.ADMIN)
+
+
 async def require_program(
     program_id: str,
     principal: Principal = Depends(get_principal),

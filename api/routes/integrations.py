@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.deps import Principal, get_mongo_dep, get_principal
+from api.deps import Principal, get_mongo_dep, get_principal, require_owner
 from core.integrations import INTEGRATION_BY_NAME, INTEGRATION_KEYS
 from db.integrations import IntegrationSecretRepo
 
@@ -52,7 +52,7 @@ async def list_integrations(
 async def set_integration(
     name: str,
     body: IntegrationSet,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(require_owner),
     mongo: Any = Depends(get_mongo_dep),
 ) -> None:
     if name not in INTEGRATION_BY_NAME:
@@ -63,7 +63,7 @@ async def set_integration(
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_integration(
     name: str,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(require_owner),
     mongo: Any = Depends(get_mongo_dep),
 ) -> None:
     if name not in INTEGRATION_BY_NAME:

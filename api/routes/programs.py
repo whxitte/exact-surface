@@ -14,6 +14,7 @@ from api.deps import (
     get_domain_verifier,
     get_mongo_dep,
     get_principal,
+    require_owner,
     require_program,
 )
 from api.schemas import (
@@ -100,7 +101,9 @@ async def get_program(program: dict = Depends(require_program)) -> dict:
 
 @router.delete("/{program_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_program(
-    program: dict = Depends(require_program), mongo: Any = Depends(get_mongo_dep)
+    program: dict = Depends(require_program),
+    _: Principal = Depends(require_owner),
+    mongo: Any = Depends(get_mongo_dep),
 ) -> None:
     """Permanently remove a program and all of its discovered data (assets,
     endpoints, findings, scan history, …). To merely pause it without losing
@@ -377,7 +380,7 @@ async def check_verification(
 async def create_authorization(
     body: AuthorizationCreate,
     program: dict = Depends(require_program),
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(require_owner),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
     if not program.get("verified"):
