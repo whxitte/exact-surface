@@ -50,7 +50,7 @@ async def fake_resolve(hosts, _timeout):
     return {h: RESOLVE_MAP[h] for h in hosts if h in RESOLVE_MAP}
 
 
-async def fake_probe(hosts, _timeout):
+async def fake_probe(hosts, _timeout, *, rate=None):
     return [
         {"url": f"https://{h}", "input": h, "status_code": 200, "title": "x", "tech": ["nginx"]}
         for h in hosts
@@ -58,7 +58,7 @@ async def fake_probe(hosts, _timeout):
 
 
 def make_fake_scan(capture):
-    async def fake_scan(urls, _timeout, aggressive=False, on_finding=None):
+    async def fake_scan(urls, _timeout, aggressive=False, rate=None, on_finding=None):
         capture.append({"urls": list(urls), "aggressive": aggressive})
         return [
             {
@@ -84,7 +84,7 @@ async def fake_wayback(_apex, _t):
     return []
 
 
-async def fake_katana(_url, _t):
+async def fake_katana(_url, _t, *, rate=None):
     return []
 
 
@@ -92,7 +92,7 @@ async def fake_fetch(_url):
     return ""
 
 
-async def fake_discover(_url, _wordlist, _t):
+async def fake_discover(_url, _wordlist, _t, *, rate=None):
     return []
 
 
@@ -327,7 +327,7 @@ async def test_full_pipeline_stage_timeout_fails_cleanly_not_stalls():
     tmo.STAGE_MARGIN_SECONDS = 0
     try:
 
-        async def slow_probe(_hosts, _t):
+        async def slow_probe(_hosts, _t, *, rate=None):
             await asyncio.sleep(0.5)
             return []
 

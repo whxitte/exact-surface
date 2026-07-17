@@ -71,7 +71,7 @@ async def test_probe_emits_delta_on_status_change():
     )
 
     def probe_returning(status):
-        async def probe(hosts, _timeout):
+        async def probe(hosts, _timeout, *, rate=None):
             return [
                 {
                     "url": f"https://{h}",

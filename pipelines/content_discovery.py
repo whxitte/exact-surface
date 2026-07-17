@@ -12,10 +12,12 @@ import asyncio
 from typing import Any
 from urllib.parse import urlsplit
 
+from core.config import get_settings
 from core.errors import ToolNotFound
 from core.hashing import endpoint_fingerprint
 from core.logging import logger
 from core.models import Endpoint
+from core.ratelimit import derive_subprocess_rate
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
@@ -108,6 +110,13 @@ async def run_content_discovery(
         CONCURRENCY,
     )
     sem = asyncio.Semaphore(CONCURRENCY)
+    # §3.8b: both tools are subprocesses, and BOTH default to no rate limit at all —
+    # they empty a wordlist at the host as fast as it answers, which makes this the
+    # most abusive stage we run. Each invocation targets ONE host, so the flag IS the
+    # per-target rate: pass the cap itself, not an aggregate (ADR-0013).
+    cap = get_settings().global_rate_per_target
+    ferox_rate = derive_subprocess_rate(1, cap, tool="feroxbuster")
+    ffuf_rate = derive_subprocess_rate(1, cap, tool="ffuf")
 
     async def _ffuf(target: str, wordlist: str, reason: str) -> list[dict]:
         # ffuf uses Go's HTTP stack (the same one httpx probed this host with), so it
@@ -115,7 +124,7 @@ async def run_content_discovery(
         try:
             from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
 
-            return await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host)
+            return await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host, rate=ffuf_rate.aggregate)
         except ToolNotFound:
             logger.warning("content-discovery: {} ({}), and ffuf not installed", target, reason)
             return []
@@ -127,7 +136,7 @@ async def run_content_discovery(
         wordlist = wordlist_for(tech_by_host.get(host, []))
         async with sem:
             try:
-                return await discover(target, wordlist, per_host)
+                return await discover(target, wordlist, per_host, rate=ferox_rate.aggregate)
             except ToolNotFound:  # feroxbuster missing entirely
                 return await _ffuf(target, wordlist, "feroxbuster not installed")
             except TargetUnreachable as exc:  # feroxbuster's client couldn't connect

@@ -45,7 +45,8 @@ is the boundary.
   - `scope` — **the safety control** (§9b). Classify IP → decide actions.
   - `plans` — §13 tier limits. Fails closed to FREE.
   - `signal` — actionable-vs-informational + the §15 false-positive rate.
-  - `ratelimit` — token bucket **and** `subprocess_rate_for` (ADR-0009).
+  - `ratelimit` — token bucket, fleet-shared+degrading store (ADR-0012), **and**
+    `derive_subprocess_rate` for every scanner subprocess (ADR-0009 + ADR-0013).
   - `metrics` — the Prometheus registry (counters/gauges/histograms). In `core`, not
     `daemon`, so the limiter can instrument itself — ADR-0010.
   - `hashing` (idempotency keys) · `severity` · `lifecycle` (finding state
@@ -86,10 +87,12 @@ respect. All are re-enforced worker-side.
    confirmed-dedicated.
 5. **Politeness** — ≤10 rps/target. In-process requests at customer hosts are paced
    by the token bucket, shared across the fleet via Redis and degrading to a
-   divided local share if Redis dies (ADR-0012); subprocesses get a derived `-rate`
-   (ADR-0009). Both published to `/metrics`. Note what this does **not** cover:
-   httpx/katana/feroxbuster/ffuf/nuclei are subprocesses bounded only by their own
-   rate flags.
+   divided local share if Redis dies (ADR-0012). Every scanner subprocess
+   (naabu/httpx/katana/nuclei/feroxbuster/ffuf) gets a rate flag derived from the
+   same cap (ADR-0009 + ADR-0013), since the bucket cannot see a subprocess's
+   sockets. Both published to `/metrics` and covered by one alert. Not covered:
+   tools that talk to third-party APIs/resolvers rather than customer hosts
+   (subfinder, dnsx, gau, asnmap).
 
 ---
 
@@ -168,7 +171,7 @@ What is emitted, and why each earns its place:
 | `vantari_scheduler_ticks_total{status}` · `..._jobs_enqueued_total` | scheduler | Ticking but enqueueing nothing? |
 | `vantari_scan_stage_total{stage,status}` · `..._duration_seconds` | worker | Which stage is failing, timing out, or slowing? |
 | `vantari_scan_run_total{pipeline,status}` · `..._duration_seconds` | worker | Are whole runs completing? |
-| `vantari_port_scan_per_target_pps` · `..._rate_pps` | worker | §15: does naabu stay under the cap? |
+| `vantari_subprocess_per_target_pps{tool}` · `..._rate_pps{tool}` | worker | §15: does each scanner subprocess stay under the cap? |
 | `vantari_politeness_decisions_total{decision}` · `..._rate_limit_pps` | worker | Is the limiter throttling? |
 | `vantari_alert_latency_seconds` | worker | §15 notify-hop latency. |
 | `vantari_http_requests_total{method,status}` | api | API traffic/errors. |
@@ -246,11 +249,6 @@ just enough of motor; every tool wrapper takes an injectable runner.
 - **The alert thresholds in `docker/alerts.yml` are duplicated from app config**
   because Prometheus cannot read `Settings`. `test_dashboard_queries.py` pins the
   politeness cap against `global_rate_per_target`; the others are unguarded.
-- **Most scanner subprocesses have unaudited rate flags.** ADR-0012 made the token
-  bucket real for in-process requests, and ADR-0009 caps naabu. But httpx, katana,
-  feroxbuster, ffuf and nuclei send their own packets and are bounded only by
-  whatever their own flags say — nobody has checked them against
-  `global_rate_per_target`. This is the largest remaining AUP surface.
 - **`worker_fleet_size` is duplicated config.** It must be ≥ the real worker replica
   count or the degraded-mode guarantee is void; nothing enforces that.
 - **The Redis rate-limit Lua is untested against a real Redis** — including

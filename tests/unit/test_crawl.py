@@ -47,7 +47,7 @@ async def test_crawl_filters_out_of_scope_and_gates_active_crawl():
 
     katana_targets: list[str] = []
 
-    async def katana(url, _t):
+    async def katana(url, _t, *, rate=None):
         katana_targets.append(url)
         return [f"{url}/admin"]
 
@@ -82,7 +82,7 @@ async def test_crawl_caps_active_hosts_and_bounds_per_host_timeout():
 
     calls: list[tuple[str, float]] = []
 
-    async def katana(url, t):
+    async def katana(url, t, *, rate=None):
         calls.append((url, t))
         return []
 

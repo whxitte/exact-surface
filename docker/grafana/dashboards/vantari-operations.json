@@ -83,19 +83,19 @@
     },
     {
       "type": "timeseries",
-      "title": "Port scan rate vs the per-target cap",
-      "description": "§15 exit criterion: naabu never exceeds the global rate cap, verified by metrics. The per-target line crossing the cap is an AUP breach against a third party — a token bucket cannot govern a subprocess, so this is the only thing that proves the derived --rate was right.",
+      "title": "Subprocess per-target rate vs the cap",
+      "description": "§15 exit criterion: no scanner subprocess exceeds the global rate cap, verified by metrics. Every tool that sends its own packets is here (naabu, httpx, katana, nuclei, feroxbuster, ffuf) — the token bucket cannot govern them, so this per-tool line crossing the cap is the only thing that proves the derived rate flag was right (ADR-0013).",
       "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "vantari_port_scan_per_target_pps",
-          "legendFormat": "per-target pps — {{instance}}"
+          "expr": "max by (tool) (vantari_subprocess_per_target_pps)",
+          "legendFormat": "{{tool}}"
         },
         {
           "refId": "B",
-          "expr": "vantari_politeness_rate_limit_pps",
+          "expr": "max(vantari_politeness_rate_limit_pps)",
           "legendFormat": "configured cap"
         }
       ],

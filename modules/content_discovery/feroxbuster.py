@@ -10,6 +10,9 @@ from modules.exec import iter_jsonl, run_tool
 
 Runner = Callable[..., Awaitable[list[dict]]]
 
+#: feroxbuster applies NO rate limit by default. This is not that (§3.8b, ADR-0013).
+DEFAULT_RATE = 10
+
 
 class TargetUnreachable(Exception):
     """feroxbuster's HTTP client couldn't connect to the target — a client-level failure
@@ -39,7 +42,12 @@ async def _default_runner(binary: str, args, *, timeout: float, stdin: str | Non
 
 
 async def discover(
-    url: str, wordlist: str, timeout: float, *, runner: Runner = _default_runner
+    url: str,
+    wordlist: str,
+    timeout: float,
+    *,
+    rate: int = DEFAULT_RATE,
+    runner: Runner = _default_runner,
 ) -> list[dict]:
     """Return discovered ``{url, status, content_length}`` entries for *url*.
 
@@ -66,6 +74,13 @@ async def discover(
         "25",
         "-T",
         "10",
+        # Threads bound CONCURRENCY, not rate — 25 threads with feroxbuster's default
+        # of no rate limit still empties a wordlist at the host as fast as it will
+        # answer. Content discovery brute-forces thousands of paths, so this is the
+        # most abusive thing we run; --rate-limit is what actually caps it (ADR-0013).
+        # Documented as per-directory: `-n` (no recursion) keeps that ≈ per-target.
+        "--rate-limit",
+        str(rate),
     ]
     if runner is _default_runner:
         wordlist = wordlist_path(wordlist)

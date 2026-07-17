@@ -11,18 +11,21 @@ groups:
   - name: vantari-compliance
     rules:
       # §15 exit criterion: "naabu never exceeds the global rate cap (verified by
-      # metrics)". This is the metric that verifies it. Pages because exceeding the
-      # cap is an AUP breach against a third party, not a degraded-service issue.
-      - alert: PortScanRateExceedsPolitenessCap
-        expr: vantari_port_scan_per_target_pps > 10
+      # metrics)". Now covers EVERY scanner subprocess, not just naabu — httpx,
+      # katana, nuclei, feroxbuster and ffuf all defaulted to 150 rps or unlimited
+      # until ADR-0013, so the {{ $labels.tool }} label is what tells you which one
+      # slipped. Pages because exceeding the cap is an AUP breach against a third
+      # party, not a degraded-service issue.
+      - alert: SubprocessRateExceedsPolitenessCap
+        expr: vantari_subprocess_per_target_pps > 10
         for: 0m
         labels: { severity: page }
         annotations:
-          summary: "Port scan exceeded the per-target politeness cap"
+          summary: "{{ $labels.tool }} exceeded the per-target politeness cap"
           description: >-
-            naabu was handed {{ $value }} pps per target, above the
+            {{ $labels.tool }} was handed {{ $value }} req/pps per target, above the
             VANTARI_GLOBAL_RATE_PER_TARGET cap of 10. A token bucket cannot govern a
-            subprocess, so this means the derived --rate was wrong. Threshold must
+            subprocess, so this means the derived rate flag was wrong. Threshold must
             match global_rate_per_target.
 
       # Sustained throttling means the limiter is doing its job, but it also means

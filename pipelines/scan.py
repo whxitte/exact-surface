@@ -14,9 +14,11 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlsplit
 
+from core.config import get_settings
 from core.hashing import finding_fingerprint
 from core.logging import logger
 from core.models import Finding
+from core.ratelimit import derive_subprocess_rate
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.severity import Severity
 from core.tenant import TenantContext
@@ -131,11 +133,26 @@ async def run_scan(
                 {"name": model.name, "severity": model.severity.value, "location": model.location}
             )
 
+    # §3.8b: nuclei is a subprocess, so -rl is the only ceiling that reaches it (its
+    # own default is 150 rps). The lists above hold ONE url per host, so their length
+    # IS the host count and the aggregate math holds — if that ever changes to
+    # multiple urls per host, this silently grants that host N x the cap (ADR-0013).
+    cap = get_settings().global_rate_per_target
     raw: list[dict] = []
     if safe_urls:
-        raw += await scan(safe_urls, nuclei_timeout, aggressive=False, on_finding=on_finding)
+        rate = derive_subprocess_rate(len(safe_urls), cap, tool="nuclei")
+        raw += await scan(
+            safe_urls, nuclei_timeout, aggressive=False, rate=rate.aggregate, on_finding=on_finding
+        )
     if aggressive_urls:
-        raw += await scan(aggressive_urls, nuclei_timeout, aggressive=True, on_finding=on_finding)
+        rate = derive_subprocess_rate(len(aggressive_urls), cap, tool="nuclei")
+        raw += await scan(
+            aggressive_urls,
+            nuclei_timeout,
+            aggressive=True,
+            rate=rate.aggregate,
+            on_finding=on_finding,
+        )
 
     # Persist anything NOT already streamed (e.g. an injected runner in tests, or a
     # finding whose real-time write failed) — idempotent, so nothing is double-counted.

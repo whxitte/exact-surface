@@ -99,5 +99,6 @@ async def test_port_scan_passes_derived_rate_and_publishes_metrics():
     assert seen["rate"] / len(seen["hosts"]) <= cap
 
     rendered = REGISTRY.render()
-    assert "vantari_port_scan_per_target_pps" in rendered
+    # Labelled tool=naabu now (one metric family for every subprocess, ADR-0013).
+    assert 'vantari_subprocess_per_target_pps{tool="naabu"}' in rendered
     assert "vantari_politeness_rate_limit_pps" in rendered

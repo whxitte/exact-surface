@@ -11,9 +11,11 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlsplit
 
+from core.config import get_settings
 from core.hashing import canonical_hash, endpoint_fingerprint
 from core.logging import logger
 from core.models import Endpoint
+from core.ratelimit import derive_subprocess_rate
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
@@ -57,12 +59,22 @@ async def run_probe(
             "note": "no assets to probe yet — run discovery first",
         }
 
+    # §3.8b: httpx is a subprocess sending its own requests, so the token bucket
+    # cannot govern it — the ceiling is handed over as -rl. httpx is given the whole
+    # host list at once, so the flag is an AGGREGATE and the per-target rate is
+    # aggregate/hosts (same shape as naabu, ADR-0009/0013).
+    rate = derive_subprocess_rate(
+        len(probeable), get_settings().global_rate_per_target, tool="httpx"
+    )
     logger.info(
-        "probing {} of {} asset(s) with httpx (the rest didn't resolve or aren't HTTP-probeable)",
+        "probing {} of {} asset(s) with httpx (rate {}/s aggregate, {:.1f}/s per target, cap {}/s)",
         len(probeable),
         len(assets),
+        rate.aggregate,
+        rate.per_target,
+        rate.cap,
     )
-    results = await probe(probeable, timeout)
+    results = await probe(probeable, timeout, rate=rate.aggregate)
     models = [
         Endpoint(
             tenant_id=tenant.tenant_id,

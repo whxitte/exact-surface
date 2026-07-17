@@ -95,10 +95,10 @@ def test_histogram_queries_use_the_bucket_suffix():
 def test_the_politeness_cap_alert_matches_the_configured_default():
     """The threshold is duplicated into Prometheus because it cannot read app
     config. If the setting moves and the rule doesn't, the §15 exit criterion
-    ("naabu never exceeds the global rate cap") stops being enforced."""
+    ("no subprocess exceeds the global rate cap") stops being enforced."""
     from core.config import Settings
 
     cap = Settings().global_rate_per_target
-    assert f"vantari_port_scan_per_target_pps > {cap:g}" in ALERTS.read_text(), (
+    assert f"vantari_subprocess_per_target_pps > {cap:g}" in ALERTS.read_text(), (
         f"alerts.yml threshold does not match global_rate_per_target={cap:g}"
     )

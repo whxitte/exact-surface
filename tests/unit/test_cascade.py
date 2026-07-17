@@ -108,7 +108,7 @@ async def test_probe_targets_scope_run_to_named_hosts():
 
     seen: list[str] = []
 
-    async def capturing_probe(hosts, _timeout):
+    async def capturing_probe(hosts, _timeout, *, rate=None):
         seen.extend(hosts)
         return [{"url": f"https://{h}", "status_code": 200} for h in hosts]
 

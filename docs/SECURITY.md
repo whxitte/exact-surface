@@ -150,23 +150,30 @@ that even if every worker degrades at once, the aggregate stays within the cap �
 so `VANTARI_WORKER_FLEET_SIZE` **must be ≥ your real replica count**. In prod, a
 worker that cannot reach a shared store refuses to start.
 
-**Scanner subprocesses** (`core.ratelimit.subprocess_rate_for`) — a token bucket
-**cannot** govern naabu: it is a subprocess that sends its own packets, so our
-limiter never sees them. The ceiling has to be handed to the tool up front.
-naabu's `-rate` is process-wide and spread across its targets, so N targets at
-`cap` each means an aggregate of `cap × N`, clamped by an absolute ceiling so our
-own egress has a hard stop. See ADR-0009.
+**Scanner subprocesses** (`core.ratelimit.derive_subprocess_rate`) — a token bucket
+**cannot** govern a subprocess: naabu, httpx, katana, nuclei, feroxbuster and ffuf
+each send their own traffic, so our limiter never sees it. The ceiling is handed to
+the tool up front, via its rate flag (`-rate`/`-rl`/`--rate-limit`), derived from
+the per-target cap. For a tool given many hosts at once the flag is an aggregate
+(`cap × hosts`, clamped by an absolute ceiling); for a per-host invocation it is the
+cap itself. Every derivation publishes `vantari_subprocess_per_target_pps{tool}`, so
+the ceiling is verifiable per tool rather than asserted. See ADR-0009 (naabu) and
+ADR-0013 (the rest).
 
-> This was a live bug: `port_scan.py` called naabu without passing a rate, so it
-> used naabu's flat `1000` default — **100× the cap** for a single-host scan —
-> while naabu's own docstring wrongly claimed the limiter covered it.
+> This was a live bug, twice over. First: `port_scan.py` called naabu without a
+> rate, using naabu's flat `1000` default — **100× the cap** — while naabu's
+> docstring wrongly claimed the limiter covered it (ADR-0009). Then an audit found
+> the *other five* tools passed no rate flag at all: httpx/katana/nuclei ran at
+> their 150 rps default (15× the cap) and feroxbuster/ffuf were unlimited. `-c` and
+> `-t` look like rate controls but bound concurrency, not rate (ADR-0013).
 
 **Verifiable, not asserted.** `/metrics` exposes
-`vantari_politeness_rate_limit_pps` (the cap),
-`vantari_port_scan_rate_pps` (aggregate) and
-`vantari_port_scan_per_target_pps` (derived). The Phase D exit gate is
-"naabu never exceeds the cap *verified by metrics*" — these are that evidence.
-Tests: `tests/unit/test_politeness_rate.py`.
+`vantari_politeness_rate_limit_pps` (the cap) and, per tool,
+`vantari_subprocess_rate_pps{tool}` (aggregate) and
+`vantari_subprocess_per_target_pps{tool}` (derived). The §15 exit gate is
+"no subprocess exceeds the cap *verified by metrics*" — these are that evidence, and
+`SubprocessRateExceedsPolitenessCap` pages if any tool crosses it. Tests:
+`tests/unit/test_politeness_rate.py`, `tests/unit/test_subprocess_rate.py`.
 
 Masscan is disabled in v1 (ADR-0004) and stays disabled until Vantari has
 dedicated, abuse-contact-registered netblocks.

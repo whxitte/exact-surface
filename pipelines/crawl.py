@@ -12,9 +12,11 @@ import asyncio
 from typing import Any
 from urllib.parse import urlsplit
 
+from core.config import get_settings
 from core.hashing import endpoint_fingerprint
 from core.logging import logger
 from core.models import Endpoint
+from core.ratelimit import derive_subprocess_rate
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
@@ -96,14 +98,21 @@ async def run_crawl(
         CRAWL_CONCURRENCY,
     )
     sem = asyncio.Semaphore(CRAWL_CONCURRENCY)
+    # §3.8b: katana is a subprocess, so -rl is the only control that reaches it.
+    # Unlike naabu/httpx each invocation targets ONE host, so the flag IS the
+    # per-target rate — pass the cap itself, not an aggregate. Concurrent crawls are
+    # of DIFFERENT hosts, so each stays within its own target's ceiling (ADR-0013).
+    rate = derive_subprocess_rate(1, get_settings().global_rate_per_target, tool="katana")
 
     async def _crawl_one(hostname: str) -> set[str]:
         # each katana is isolated + bounded: a slow/failing host yields nothing but
         # never sinks the (concurrent) stage.
         async with sem:
-            logger.info("katana crawling {}", hostname)
+            logger.info(
+                "katana crawling {} (rate {}/s, cap {}/s)", hostname, rate.aggregate, rate.cap
+            )
             try:
-                return await katana(f"https://{hostname}", host_timeout)
+                return await katana(f"https://{hostname}", host_timeout, rate=rate.aggregate)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("katana crawl failed for {}: {}", hostname, exc)
                 return set()

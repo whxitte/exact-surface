@@ -83,7 +83,7 @@ async def test_content_discovery_dedicated_only_and_tech_aware():
 
     calls = []
 
-    async def fake_discover(url, wordlist, _timeout):
+    async def fake_discover(url, wordlist, _timeout, *, rate=None):
         calls.append({"url": url, "wordlist": wordlist})
         return [{"url": f"{url}/wp-admin", "status": 200}]
 
@@ -132,7 +132,7 @@ async def test_uses_probed_scheme_and_skips_unprobed_hosts():
 
     calls: list[str] = []
 
-    async def fake_discover(url, _wordlist, _timeout):
+    async def fake_discover(url, _wordlist, _timeout, *, rate=None):
         calls.append(url)
         return []
 
@@ -172,12 +172,12 @@ async def test_ffuf_fallback_when_feroxbuster_cant_connect(monkeypatch):
         )
     )
 
-    async def fake_discover(_url, _wordlist, _timeout):
+    async def fake_discover(_url, _wordlist, _timeout, *, rate=None):
         raise TargetUnreachable("Could not connect to any target provided")
 
     ffuf_calls: list[str] = []
 
-    async def fake_fuzz(url, _wordlist, _timeout):
+    async def fake_fuzz(url, _wordlist, _timeout, *, rate=None):
         ffuf_calls.append(url)
         return [{"url": "https://app.customer.com/admin", "status": 200}]
 
@@ -217,12 +217,12 @@ async def test_content_discovery_fallback_to_ffuf(monkeypatch):
         )
     )
 
-    async def fake_discover(url, wordlist, _timeout):
+    async def fake_discover(url, wordlist, _timeout, *, rate=None):
         raise ToolNotFound("feroxbuster")
 
     ffuf_calls = []
 
-    async def fake_fuzz(url, wordlist, _timeout):
+    async def fake_fuzz(url, wordlist, _timeout, *, rate=None):
         ffuf_calls.append({"url": url, "wordlist": wordlist})
         return [{"url": "https://app.customer.com/admin", "status": 200}]
 

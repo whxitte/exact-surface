@@ -75,6 +75,61 @@ def subprocess_rate_for(
     return max(1, min(ceiling, int(per_target_cap * n)))
 
 
+@dataclass(frozen=True)
+class SubprocessRate:
+    """What a scanner subprocess was told, and what that means per target."""
+
+    tool: str
+    aggregate: int  #: value handed to the tool's rate flag (process-wide)
+    per_target: float  #: derived per-target rate — must stay <= cap
+    cap: float  #: the configured §3.8b ceiling
+
+    @property
+    def within_cap(self) -> bool:
+        return self.per_target <= self.cap
+
+
+def derive_subprocess_rate(
+    host_count: int, per_target_cap: float, *, tool: str, ceiling: int = SUBPROCESS_RATE_CEILING
+) -> SubprocessRate:
+    """Derive a scanner subprocess's rate flag AND publish it (§3.8b, ADR-0013).
+
+    Every tool that sends its own packets needs this: the token bucket in this
+    process cannot see their traffic, so the ceiling has to be handed over up front.
+    naabu was capped this way first (ADR-0009); httpx, katana, nuclei, feroxbuster
+    and ffuf were not, and defaulted to 150 rps or unlimited.
+
+    Publishing here rather than at each call site is deliberate — deriving the rate
+    and reporting it become one act, so a tool cannot be capped-but-invisible (or,
+    worse, look reported while running uncapped).
+    """
+    aggregate = subprocess_rate_for(host_count, per_target_cap, ceiling=ceiling)
+    rate = SubprocessRate(
+        tool=tool,
+        aggregate=aggregate,
+        per_target=aggregate / max(1, host_count),
+        cap=per_target_cap,
+    )
+    REGISTRY.set(
+        "vantari_politeness_rate_limit_pps",
+        per_target_cap,
+        help="Configured max packets/requests per second per target IP (§3.8b)",
+    )
+    REGISTRY.set(
+        "vantari_subprocess_rate_pps",
+        float(aggregate),
+        help="Aggregate rate handed to a scanner subprocess's rate flag",
+        tool=tool,
+    )
+    REGISTRY.set(
+        "vantari_subprocess_per_target_pps",
+        rate.per_target,
+        help="Derived per-target rate for a scanner subprocess; must stay <= the cap (§3.8b)",
+        tool=tool,
+    )
+    return rate
+
+
 def build_limiter(settings, store=None, *, redis=None) -> PolitenessLimiter:
     """Construct a process's politeness limiter from settings.
 

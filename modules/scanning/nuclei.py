@@ -18,6 +18,9 @@ from modules.exec import stream_tool
 
 Runner = Callable[..., Awaitable[list[dict]]]
 
+#: nuclei's own default is 150 rps. This is not it (§3.8b, ADR-0013).
+DEFAULT_RATE = 10
+
 #: Never run these tag classes — they are aggressive/harmful (§9d, §3.10).
 SAFE_EXCLUDE_TAGS = ("dos", "intrusive", "fuzz")
 
@@ -107,6 +110,7 @@ async def scan(
     timeout: float,
     *,
     aggressive: bool = False,
+    rate: int = DEFAULT_RATE,
     runner: Runner = _default_runner,
     on_finding=None,
 ) -> list[dict]:
@@ -122,6 +126,11 @@ async def scan(
 
     # -stats + interval so progress streams to the logs; -c widens template
     # concurrency to finish a big URL set in reasonable time.
+    #
+    # -c and -rl are different controls and both are needed: -c bounds how many
+    # templates run at once, -rl bounds how fast requests actually leave. 50
+    # concurrent templates with nuclei's default 150 rps is what the §3.8b cap
+    # exists to prevent; concurrency is fine once the rate is bounded (ADR-0013).
     args = [
         "-jsonl",
         "-no-color",
@@ -131,6 +140,8 @@ async def scan(
         "20",
         "-c",
         "50",
+        "-rl",
+        str(rate),
         "-etags",
         ",".join(SAFE_EXCLUDE_TAGS),
     ]
