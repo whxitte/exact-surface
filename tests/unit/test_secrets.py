@@ -23,7 +23,9 @@ SCOPE = ProgramScope(
 )
 KEY = b"unit-hmac-key"
 
-AWS_KEY = "AKIAIOSFODNN7EXAMPLE"
+# A realistic-looking key (NOT the canonical `AKIA…EXAMPLE` docs placeholder, which
+# is now correctly filtered as a false positive — see test below).
+AWS_KEY = "AKIAZ7Q2K9WMFB3RTUVX"
 
 
 def test_is_scannable_url_skips_binary_assets():
@@ -42,7 +44,7 @@ async def test_scan_urls_skips_binary_without_fetching():
 
     async def fetch(url):
         fetched.append(url)
-        return "AKIAIOSFODNN7EXAMPLE"
+        return AWS_KEY
 
     hits = await scan_urls(
         ["https://x.com/app.js", "https://x.com/logo.png", "https://x.com/f.ttf"],
@@ -67,6 +69,47 @@ def test_find_secrets_dedupes_within_source():
     text = f"{AWS_KEY} again {AWS_KEY}"
     hits = [h for h in find_secrets(text, "s") if h["kind"] == "aws_access_key"]
     assert len(hits) == 1
+
+
+# -- false-positive filtering (§15 FP rate — the make-or-break metric) --------
+def test_placeholder_generic_secrets_are_filtered():
+    """The regex layer records hits independently of trufflehog verification, so a
+    JS bundle full of tutorial placeholders used to become 'findings'."""
+    text = (
+        'apiKey = "YOUR_API_KEY_HERE"\n'
+        'secret: "changeme_please_1234"\n'
+        "token = 'example_token_value'\n"
+    )
+    assert find_secrets(text, "s") == []
+
+
+def test_the_canonical_aws_example_key_is_filtered():
+    """AKIA…EXAMPLE is AWS's own docs key — it appears in countless copied
+    tutorials, so flagging it is pure noise. Filtering it removes a real FP source."""
+    kinds = {h["kind"] for h in find_secrets("key=AKIAIOSFODNN7EXAMPLE", "s")}
+    assert "aws_access_key" not in kinds
+
+
+def test_secret_valued_as_a_url_is_filtered():
+    """generic patterns can match `apiUrl = "https://…"`; a URL is not a credential."""
+    assert find_secrets('apiKey = "https://api.example.com/v1/thing"', "s") == []
+
+
+def test_low_entropy_generic_junk_is_filtered():
+    assert find_secrets('token = "aaaaaaaaaaaaaaaaaaaa"', "s") == []
+
+
+def test_real_prefixed_keys_are_never_entropy_filtered():
+    """Entropy applies ONLY to the catch-all pattern. A real prefixed key must be
+    kept even if its entropy is modest — dropping it would be a false negative."""
+    text = f"{AWS_KEY}\nghp_abcdefghijklmnopqrstuvwxyz0123456789\n"
+    kinds = {h["kind"] for h in find_secrets(text, "s")}
+    assert {"aws_access_key", "github_token"} <= kinds
+
+
+def test_a_real_generic_secret_still_passes():
+    hits = find_secrets('client_secret: "a8Fk29Lm4Qp7Rs1Tv6Wx3Yz"', "s")
+    assert any(h["kind"] == "generic_secret" for h in hits)
 
 
 def test_mask_redacts_middle():

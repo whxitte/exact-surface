@@ -52,7 +52,7 @@ async def test_scan_dir_missing_binary_is_not_an_error():
 
 
 async def test_scan_urls_merges_regex_and_deep_engine():
-    aws = "AKIAIOSFODNN7EXAMPLE"
+    aws = "AKIAZ7Q2K9WMFB3RTUVX"
 
     async def fetch(_url):
         return f"const k = '{aws}';"
@@ -77,7 +77,7 @@ async def test_scan_urls_merges_regex_and_deep_engine():
 
 
 async def test_scan_urls_prefers_verified_on_duplicate():
-    aws = "AKIAIOSFODNN7EXAMPLE"
+    aws = "AKIAZ7Q2K9WMFB3RTUVX"
 
     async def fetch(_url):
         return f"const k = '{aws}';"
@@ -103,7 +103,7 @@ async def test_scan_urls_prefers_verified_on_duplicate():
 
 async def test_scan_urls_deep_scan_disabled():
     async def fetch(_url):
-        return "AKIAIOSFODNN7EXAMPLE"
+        return "AKIAZ7Q2K9WMFB3RTUVX"
 
     hits = await scan_urls(["https://x.com/app.js"], fetch=fetch, deep_scan=None)
     assert len(hits) == 1  # regex only, no crash

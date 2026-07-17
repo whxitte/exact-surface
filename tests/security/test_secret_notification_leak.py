@@ -12,7 +12,7 @@ from __future__ import annotations
 from core.secrets_policy import mask
 from modules.notification.router import alert_from_leak, alert_from_secret
 
-PLAINTEXT = "AKIAIOSFODNN7EXAMPLE"  # canonical fake AWS access key id
+PLAINTEXT = "AKIAZ7Q2K9WMFB3RTUVX"  # canonical fake AWS access key id
 
 
 def test_mask_never_reveals_full_value():

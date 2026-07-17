@@ -33,3 +33,4 @@ frontend/out/
 data/
 *.log
 scope_feeds_cache/
+for-claude-referece/

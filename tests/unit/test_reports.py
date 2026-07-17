@@ -195,7 +195,7 @@ async def test_generate_report_all_text_formats():
     ]:
         report = await generate_report(mongo=mongo, tenant=TENANT, program_id="p1", fmt=fmt)
         assert needle in report.body
-        assert "AKIAIOSFODNN7EXAMPLE" not in report.body  # plaintext never in a report (§9c)
+        assert "AKIAZ7Q2K9WMFB3RTUVX" not in report.body  # plaintext never in a report (§9c)
     # the masked value appears in the HTML secret table
     html = await generate_report(mongo=mongo, tenant=TENANT, program_id="p1", fmt="html")
     assert AWS_MASKED in html.body

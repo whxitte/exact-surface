@@ -14,9 +14,74 @@ than catching every exotic token, because a noisy secret scanner is untrustworth
 
 from __future__ import annotations
 
+import math
 import re
 
 from core.severity import Severity
+
+# Substrings that never appear in a real credential but are ubiquitous in
+# placeholder/sample values. Deliberately unambiguous: "test" and "1234" are NOT
+# here because `sk_test_…` and real tokens legitimately contain them — a marker that
+# risks dropping a real secret would defeat the point. (Idea from the ZeroPoint
+# reference engine; adapted to Vantari's high-signal patterns.)
+_PLACEHOLDER_MARKERS = (
+    "your_",
+    "your-",
+    "yourkey",
+    "<your",
+    "placeholder",
+    "example",
+    "changeme",
+    "change_me",
+    "change-me",
+    "replace_me",
+    "replace-me",
+    "insert_",
+    "dummy",
+    "redacted",
+    "xxxxxx",
+    "lorem",
+    "samplekey",
+    "notarealkey",
+)
+
+_URL_PREFIXES = ("http://", "https://", "//", "ws://", "wss://")
+
+#: Entropy floor for the catch-all ``generic_secret`` pattern ONLY. The specific
+#: patterns (AKIA/ghp_/sk_live_/AIza/private-key headers) are self-validating by
+#: their prefix and must never be entropy-filtered, or a real-but-low-entropy key
+#: would be dropped as a false negative. A real 16+ char secret sits well above 3.0;
+#: this trims repetitive junk like "aaaaaaaaaaaaaaaa" / "1234123412341234".
+_GENERIC_ENTROPY_FLOOR = 3.0
+
+
+def _shannon_entropy(value: str) -> float:
+    """Bits/char of a string. Low → repetitive/placeholder; high → random secret."""
+    if not value:
+        return 0.0
+    length = len(value)
+    counts = {ch: value.count(ch) for ch in set(value)}
+    return -sum((n / length) * math.log2(n / length) for n in counts.values())
+
+
+def _is_false_positive(kind: str, value: str) -> bool:
+    """True if a regex match is almost certainly not a live secret.
+
+    Vantari's regex layer records hits independently of trufflehog's live
+    verification, so without this a bundle with ``apiKey = "YOUR_API_KEY_HERE"``
+    produced a real finding — directly inflating the §15 false-positive rate, the
+    make-or-break metric. Kept conservative: the URL/placeholder checks are safe for
+    every pattern, and entropy is applied only to the catch-all.
+    """
+    if value.startswith(_URL_PREFIXES):
+        return True  # a URL is not a credential (generic patterns can match apiUrl=…)
+    low = value.lower()
+    if any(marker in low for marker in _PLACEHOLDER_MARKERS):
+        return True
+    if kind == "generic_secret" and _shannon_entropy(value) < _GENERIC_ENTROPY_FLOOR:
+        return True
+    return False
+
 
 # (kind, pattern, severity). Patterns with a capture group report that group;
 # otherwise the whole match. Ordered high-signal first.
@@ -70,6 +135,8 @@ def find_secrets(text: str, source_locator: str) -> list[dict]:
             if key in seen:
                 continue
             seen.add(key)
+            if _is_false_positive(kind, value):
+                continue  # placeholder / URL / no-entropy — not a live secret (§15 FP rate)
             hits.append(
                 {
                     "kind": kind,

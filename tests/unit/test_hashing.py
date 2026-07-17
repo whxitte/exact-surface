@@ -63,7 +63,7 @@ def test_port_fp():
 
 
 def test_secret_fp_does_not_embed_plaintext():
-    secret = "AKIAIOSFODNN7EXAMPLE"
+    secret = "AKIAZ7Q2K9WMFB3RTUVX"
     fp = secret_fingerprint("p1", secret, "https://a.customer.com/.env", KEY)
     assert secret not in fp
     # same secret + locator → same fp (dedup); different key → different fp

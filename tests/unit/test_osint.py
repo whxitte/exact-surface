@@ -13,7 +13,7 @@ from pipelines.github_osint import run_github_leak_scan
 from tests.fakes import FakeMongo
 
 TENANT = TenantContext("t1", "u1")
-AWS = "AKIAIOSFODNN7EXAMPLE"
+AWS = "AKIAZ7Q2K9WMFB3RTUVX"
 
 
 # -- github ------------------------------------------------------------------

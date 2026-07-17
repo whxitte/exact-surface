@@ -125,7 +125,7 @@ async def test_notify_delivers_and_masks_and_fires_once():
 
     # the secret alert carries the masked value, never plaintext
     blob = json.dumps(http.calls, ensure_ascii=False)
-    assert AWS_MASKED in blob and "AKIAIOSFODNN7EXAMPLE" not in blob
+    assert AWS_MASKED in blob and "AKIAZ7Q2K9WMFB3RTUVX" not in blob
 
     # alert-once: is_new cleared → second run delivers nothing
     senders2, http2 = _senders()
