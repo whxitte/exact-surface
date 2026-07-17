@@ -1,8 +1,13 @@
 """naabu wrapper — fast-but-polite port discovery (module 11, ADR-0004).
 
 Masscan is disabled in v1; naabu is the port scanner, run with a bounded ``-rate``.
-The global politeness limiter still caps total packets per target IP (§3.8b), and
-the scope engine only ever permits port scanning against confirmed-dedicated IPs.
+
+``-rate`` is the ONLY politeness control that applies here: naabu is a subprocess
+that sends its own packets, so the token-bucket limiter in ``core.ratelimit``
+cannot intercept them. Callers must therefore derive the rate from the per-target
+cap (``core.ratelimit.subprocess_rate_for``) — the default below is a fallback for
+direct/manual use, not a policy. The scope engine independently guarantees only
+confirmed-dedicated IPs are ever port-scanned (§9b).
 """
 
 from __future__ import annotations

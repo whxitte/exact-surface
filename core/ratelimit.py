@@ -38,6 +38,27 @@ class RateLimit:
         return cls(rate=float(n), burst=float(n))
 
 
+#: Absolute ceiling on a scanner subprocess's aggregate packet rate, however many
+#: targets it is given. Per-target politeness is the spec's requirement (§3.8b),
+#: but our own egress still needs a hard stop.
+SUBPROCESS_RATE_CEILING = 1000
+
+
+def subprocess_rate_for(
+    host_count: int, per_target_cap: float, *, ceiling: int = SUBPROCESS_RATE_CEILING
+) -> int:
+    """Aggregate packets/sec to give a scanner subprocess (naabu) so that the
+    **per-target** rate stays within the politeness cap (§3.8b).
+
+    The token-bucket limiter cannot govern a subprocess — naabu sends its own
+    packets — so the ceiling has to be handed to the tool up front. naabu's
+    ``-rate`` is process-wide and spread across its targets, so N targets at
+    ``cap`` each means an aggregate of ``cap * N``, clamped to *ceiling*.
+    """
+    n = max(1, host_count)
+    return max(1, min(ceiling, int(per_target_cap * n)))
+
+
 def _refill(tokens: float, last_ts: float, now: float, limit: RateLimit) -> tuple[float, float]:
     """Return (new_token_count, now) after refilling since ``last_ts``."""
     elapsed = max(0.0, now - last_ts)

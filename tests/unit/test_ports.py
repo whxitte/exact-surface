@@ -73,9 +73,11 @@ async def test_port_scan_only_scans_dedicated_hosts():
     )  # cloudflare
 
     scanned_hosts = []
+    seen_rate: list = []
 
-    async def fake_naabu(hosts, _timeout):
+    async def fake_naabu(hosts, _timeout, *, rate=None):
         scanned_hosts.extend(hosts)
+        seen_rate.append(rate)
         return [{"ip": "45.55.1.1", "host": "app.customer.com", "port": 443, "protocol": "tcp"}]
 
     res = await run_port_scan(
@@ -106,7 +108,7 @@ async def test_port_scan_nmap_enrichment():
         )
     )
 
-    async def fake_naabu(hosts, _timeout):
+    async def fake_naabu(hosts, _timeout, *, rate=None):
         return [{"ip": "45.55.1.1", "host": "app.customer.com", "port": 22, "protocol": "tcp"}]
 
     async def fake_nmap(ip, ports, _timeout):

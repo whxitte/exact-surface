@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.config import get_settings
 from core.hashing import port_fingerprint
 from core.logging import logger
 from core.models import Port
+from core.ratelimit import subprocess_rate_for
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
+from daemon.metrics import REGISTRY
 from db.assets import AssetRepo
 from db.ports import PortRepo
 from modules.ports.naabu import scan_ports
@@ -53,8 +56,38 @@ async def run_port_scan(
             "skipped": True,
             "note": "no confirmed-dedicated hosts — CDN/cloud-shared IPs are HTTP-probe only (§9b)",
         }
-    logger.info("port-scanning {} dedicated host(s) with naabu", len(scannable))
-    open_ports = await naabu(scannable, timeout)
+    # §3.8b: the token-bucket limiter cannot govern naabu — it is a subprocess
+    # sending its own packets — so the politeness ceiling must be handed to the
+    # tool. Derive an aggregate rate that keeps the PER-TARGET rate within the cap,
+    # and publish both so the ceiling is verifiable from metrics (§7 Phase D exit)
+    # rather than merely asserted.
+    cap = get_settings().global_rate_per_target
+    rate = subprocess_rate_for(len(scannable), cap)
+    per_target = rate / max(1, len(scannable))
+    REGISTRY.set(
+        "vantari_politeness_rate_limit_pps",
+        cap,
+        help="Configured max packets/sec per target IP (§3.8b)",
+    )
+    REGISTRY.set(
+        "vantari_port_scan_rate_pps",
+        rate,
+        help="Aggregate packets/sec handed to naabu for the last port scan",
+    )
+    REGISTRY.set(
+        "vantari_port_scan_per_target_pps",
+        per_target,
+        help="Derived per-target packets/sec for the last port scan; must stay <= the cap",
+    )
+    logger.info(
+        "port-scanning {} dedicated host(s) with naabu (rate {}/s aggregate, {:.1f}/s per target,"
+        " cap {}/s)",
+        len(scannable),
+        rate,
+        per_target,
+        cap,
+    )
+    open_ports = await naabu(scannable, timeout, rate=rate)
 
     # Optional service/version enrichment per IP.
     service_by = {}

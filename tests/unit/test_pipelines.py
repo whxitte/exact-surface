@@ -96,7 +96,7 @@ async def fake_discover(_url, _wordlist, _t):
     return []
 
 
-async def fake_naabu(_hosts, _t):
+async def fake_naabu(_hosts, _t, *, rate=None):
     return []
 
 
