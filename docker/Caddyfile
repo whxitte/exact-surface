@@ -1,0 +1,13 @@
+# Caddy reverse proxy for the prod stack. Terminates TLS (automatic Let's Encrypt)
+# and is the single public ingress. Set DOMAIN in the environment; Caddy fetches and
+# renews the certificate for it automatically.
+#
+# Everything routes to the Next.js frontend, which already rewrites `/api/:path*` to
+# the API over the internal network (frontend/next.config.mjs) — the same path the
+# dev stack uses on :3000. The API and datastores are NOT published to the host in
+# prod; this proxy is the only thing reachable from outside.
+
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:3000
+}

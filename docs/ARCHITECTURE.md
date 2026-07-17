@@ -233,10 +233,12 @@ just enough of motor; every tool wrapper takes an injectable runner.
   latency (finding first-seen → notified) *is* instrumented
   (`vantari_alert_latency_seconds`), but that is only the notify hop — it is not
   the signup→first-alert figure §15 asks for.
-- **Phase G is nearly done.** Observability, rate-limit degradation (ADR-0012),
-  encrypted backups, per-tool subprocess caps (ADR-0013) and scope-feed auto-update
-  (ADR-0014) are wired; still outstanding: a real prod compose file, and the 7-day
-  unattended run itself — the exit gate, which can only be run, not coded.
+- **Phase G is code-complete; the exit gate is not.** Observability, rate-limit
+  degradation (ADR-0012), encrypted backups, per-tool subprocess caps (ADR-0013),
+  scope-feed auto-update (ADR-0014) and a hardened prod compose are all wired. What
+  remains is the 7-day unattended run itself — the exit gate, which can only be run,
+  not coded — plus the "unverified" items below (nothing here has run against real
+  Docker/Mongo/Redis/Helm in this environment).
 - **Scope-feed updates reach workers only on restart.** The feed is distributed via
   Mongo now (ADR-0014) and the scheduler refreshes it daily, but a running worker
   builds its engine once at startup — so a refresh lands on the next rolling restart,

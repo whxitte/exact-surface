@@ -23,14 +23,28 @@ Self-hosted MongoDB + Redis run in the stack — **no Atlas required** (ADR-0001
 This is enough for a single tenant on one host (min 4 GB / 2 vCPU, §3.8).
 
 ## DigitalOcean / AWS / GCP (single VM)
-1. Provision a 4 GB / 2 vCPU VM (Ubuntu, Docker installed).
-2. `git clone`, set `.env` (strong secrets), `docker compose -f docker/docker-compose.yml up -d`.
-   > There is **no separate prod compose file yet** — this is the dev stack. Before
-   > using it for real traffic: remove the published `mongo`/`redis` host ports,
-   > set `GRAFANA_ADMIN_PASSWORD`, and put the api behind TLS (next step).
-3. Front the api with a reverse proxy (Caddy/Nginx) for TLS; lock `VANTARI_ENV=prod`.
+1. Provision a 4 GB / 2 vCPU VM (Ubuntu, Docker installed), with a DNS record for
+   your domain pointing at it (Caddy needs it to obtain a certificate).
+2. `git clone`; set `.env` (strong `VANTARI_JWT_SECRET`, `VANTARI_SECRET_HASH_KEY`)
+   **and** the prod-only vars `DOMAIN`, `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`,
+   `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`.
+3. `docker compose -f docker/docker-compose.prod.yml up -d --build`.
+
+The prod compose differs from the dev stack in the ways that matter for exposure:
+Mongo and Redis have **no host ports** (internal network only) and **both require
+auth**; the API and frontend are not published either — **Caddy** is the single
+ingress and terminates TLS (automatic Let's Encrypt for `$DOMAIN`); `VANTARI_ENV=prod`
+makes `assert_prod_safe()` refuse insecure secrets. Grafana is published on
+**loopback only** (`127.0.0.1:3001`) — reach it via an SSH tunnel.
+
+> **Mongo auth applies only on first init of an empty volume.** `MONGO_INITDB_ROOT_*`
+> is a no-op against an existing `mongo_data` volume — if you started with the dev
+> stack, enable auth by migrating (dump → recreate the volume → restore), not by
+> flipping the compose file.
+
 4. **Scanning egress:** run workers from IPs whose abuse contact you control;
-   keep `VANTARI_MASSCAN_ENABLED=false` (ADR-0004). naabu stays rate-capped.
+   keep `VANTARI_MASSCAN_ENABLED=false` (ADR-0004). Every scanner subprocess stays
+   rate-capped (ADR-0009 + ADR-0013).
 
 ## Kubernetes (Helm)
 ```bash
