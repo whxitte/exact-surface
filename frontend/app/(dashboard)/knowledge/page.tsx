@@ -450,6 +450,13 @@ const SECTIONS: Section[] = [
           No. It is detection-only: it observes, fingerprints, and reports. It never exploits, writes, or
           disrupts.
         </Q>
+        <Q q="Why does a large scan take a while?">
+          Every request Vantari sends a target — probing, crawling, content discovery, vulnerability
+          checks — is <Term>paced to stay under a per-target rate cap</Term> so scanning never looks like
+          abuse to the host or its cloud provider. A domain with many subdomains or a big content-discovery
+          run is therefore deliberately spread out rather than run flat-out. Politeness is a hard
+          constraint, not a setting.
+        </Q>
       </div>
     ),
   },

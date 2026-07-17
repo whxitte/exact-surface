@@ -27,22 +27,34 @@ that shape everything else.
 
 ## Status
 
-**Phase A (Foundation) — complete and verified.**
+**Phases A–G are code-complete (559 tests). Not yet validated on real
+infrastructure, and the production exit gate has not been run.**
 
-| Piece | State |
-|-------|-------|
-| Central scope engine (`core/scope.py`) | ✅ built + exhaustively tested |
-| Content-hash fingerprints (`core/hashing.py`) | ✅ |
-| Politeness rate limiter (`core/ratelimit.py`) | ✅ token bucket, Redis + in-memory |
-| Config / logging / models / severity / lifecycle | ✅ |
-| Mongo layer + index bootstrap (`db/mongo.py`) | ✅ |
-| Task-queue skeleton (`taskqueue/`) | ✅ interfaces (execution: Phase B) |
-| Daemon health + `--dry-run`, API `/healthz` | ✅ |
-| Docker images + compose stack | ✅ |
-| Unit tests | ✅ 70 passing |
+| Area | State |
+|------|-------|
+| Core (scope engine, fingerprints, severity, lifecycle, plans, signal) | ✅ built + exhaustively unit-tested |
+| Politeness limiter — fleet-shared (Redis) + degrading, wired into every scan | ✅ (ADR-0012); every scanner subprocess rate-capped (ADR-0013) |
+| Modules + pipelines (recon → probe → crawl → scan → secrets → CVE → notify) | ✅ end-to-end against fakes |
+| Scheduler + worker execution (arq), cascade, cadence, fairness cap | ✅ (fairness cap unexercised at scale) |
+| API — auth, tenant isolation, plan quotas; Next.js dashboard | ✅ (security suite in `tests/security/`) |
+| Observability — Prometheus/Grafana, Sentry, per-process `/metrics` | ✅ (ADR-0011) |
+| Encrypted Mongo backups, scope-feed auto-update, prod compose | ✅ (ADR-0014) |
+| Unit + integration + security tests | ✅ 559 passing, ruff clean |
 
-Next: **Phase B** — implement modules 1–10 (recon → probe → scan → crawl) and wire
-the scheduler/worker execution path.
+**What stands between here and release** — see `context.md` for the running log:
+
+- **Nothing has run against real infrastructure in this repo's CI env** — Docker
+  images unbuilt, Helm chart unrendered, Redis rate-limit Lua and the Mongo scope
+  feed exercised only against fakes, **no backup ever restored**.
+- **The §7 exit gate** — 7 days unattended with real tenants — has not been run.
+- **No load test** yet (§8: 100 tenants / 10k assets / 1M findings, p99 < 500ms).
+- **CVE/KEV match latency (§15)** is not measurable — `CveRecord` lacks a
+  `published` timestamp.
+
+> A recurring lesson from the engineering log: several controls passed a green test
+> suite while being **dead code or broken at the seams** (the politeness limiter was
+> never called; backups couldn't run). Treat "tests pass" as necessary, not
+> sufficient — the real gate is exercising it on live infra.
 
 ## Quickstart (full stack, any OS)
 
