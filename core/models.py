@@ -150,6 +150,10 @@ class Program(TenantScopedModel):
     #: optional modules turned on for this program (see orchestrate.OPTIONAL_MODULES);
     #: disabled ones render as a gray node and do no work.
     enabled_modules: list[str] = Field(default_factory=list)
+    #: nuclei template ids relevant to this program's fingerprinted tech, as of the
+    #: last watch run (module 22). ``None`` = never baselined. Only *relevant* ids are
+    #: stored (tens), never the full ~10k corpus. See pipelines/nuclei_watch.py.
+    known_template_ids: list[str] | None = None
     #: per-pipeline cadence overrides (seconds) for THIS program; falls back to the
     #: tenant defaults, then the built-ins. See taskqueue.cadence.effective_cadence.
     cadence_overrides: dict[str, int] = Field(default_factory=dict)

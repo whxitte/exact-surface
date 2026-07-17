@@ -234,6 +234,8 @@ async def test_full_pipeline_records_per_stage_progress():
         "secrets",
         "cve_watch",
         "github_osint",
+        "cloud_buckets",
+        "nuclei_watch",
         "dork",
         "correlate",
         "notify",

@@ -159,9 +159,11 @@ just enough of motor; every tool wrapper takes an injectable runner.
 
 - **Rate limiter emits no counters.** `core` must not import `daemon.metrics`
   (wrong direction). Needs an injected observer or moving the registry.
-- **Orphaned modules**: `cloud_buckets` (18) and `nuclei_watch` (22) are written
-  and unit-tested but **no pipeline calls them**. Passing tests make them look
-  done.
+- **`nuclei_watch` has no default template lister.** The pipeline is wired and
+  tested, but nuclei's `-tl` output contract has not been verified against the
+  pinned binary, so the lister must be injected. Without one the stage reports
+  `skipped` honestly rather than silently finding nothing. Verify against a real
+  nuclei build, then add the default.
 - **Dork** ships Google CSE only; Brave/SerpAPI settings exist without wrappers.
 - **`preview_env`** is advertised in `modules/registry.py` but has no module file
   — the detection lives in `core/fingerprint.is_ephemeral_host`. The registry is

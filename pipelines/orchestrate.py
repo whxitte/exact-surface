@@ -21,6 +21,7 @@ from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo, program_within_plan
+from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
 from pipelines.correlate import run_correlate
 from pipelines.crawl import run_crawl
@@ -29,6 +30,7 @@ from pipelines.dork import run_dork
 from pipelines.github_osint import run_github_leak_scan
 from pipelines.ingest import run_ingest
 from pipelines.notify import run_notify
+from pipelines.nuclei_watch import run_nuclei_watch
 from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
 from pipelines.scan import run_scan
@@ -156,7 +158,19 @@ async def _run_stage_with_heartbeat(coro, *, budget: float, run, audit) -> dict:
 #: optional modules — off by default, toggled per program via ``enabled_modules``.
 #: Each has a stage in the pipeline that renders as a (gray) SKIPPED node when the
 #: module is disabled, and runs its tool when enabled.
-OPTIONAL_MODULES: tuple[str, ...] = ("uncover", "tls", "service_scan", "dork")
+OPTIONAL_MODULES: tuple[str, ...] = (
+    "uncover",
+    "tls",
+    "service_scan",
+    "dork",
+    # cloud_buckets needs no API key, but it probes ~45 third-party endpoints per
+    # run and its attribution is name-derived (a bucket matching your domain label
+    # may not be yours) — so it is opt-in, like dork.
+    "cloud_buckets",
+    #: nuclei_watch needs an injected template lister (nuclei -tl contract unverified
+    #: against the pinned binary) — opt-in until that is confirmed.
+    "nuclei_watch",
+)
 
 #: canonical full-pipeline stage order — the complete outside-in attacker chain,
 #: shared with the API so an enqueue-time QUEUED ScanRun pre-renders the same
@@ -176,6 +190,8 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "secrets",
     "cve_watch",
     "github_osint",
+    "cloud_buckets",  # optional — S3/GCS/Azure permutation
+    "nuclei_watch",  # optional — new template → targeted re-scan
     "dork",  # optional
     "correlate",
     "notify",
@@ -287,6 +303,35 @@ async def run_full_pipeline(
         ),
         ("cve_watch", lambda t: run_cve_watch(**core, **inj("recent", "kev"))),
         ("github_osint", lambda t: run_github_leak_scan(**core, domain=apex, **inj("search"))),
+        (
+            "cloud_buckets",
+            optional(
+                "cloud_buckets",
+                lambda t: run_cloud_buckets(
+                    **core,
+                    apex=apex,
+                    **(
+                        {"checker": injected["bucket_checker"]}
+                        if "bucket_checker" in injected
+                        else {}
+                    ),
+                ),
+            ),
+        ),
+        (
+            "nuclei_watch",
+            optional(
+                "nuclei_watch",
+                lambda t: run_nuclei_watch(
+                    **core,
+                    **(
+                        {"templates": injected["template_lister"]}
+                        if "template_lister" in injected
+                        else {}
+                    ),
+                ),
+            ),
+        ),
         (
             "dork",
             optional(

@@ -30,6 +30,8 @@ DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "secrets": 10 * MINUTE,
     "cve_watch": 2 * MINUTE,
     "github_osint": 5 * MINUTE,
+    "cloud_buckets": 5 * MINUTE,  # ~45 bucket probes, bounded fan-out
+    "nuclei_watch": 2 * MINUTE,  # list templates + set diff; no target contact
     "dork": 5 * MINUTE,
     "correlate": 2 * MINUTE,
     "notify": 2 * MINUTE,
