@@ -25,6 +25,10 @@ ARG NOTIFY_VERSION=v1.0.7
 ARG ALTERX_VERSION=v0.1.0
 ARG FFUF_VERSION=v2.1.0
 ARG GAU_VERSION=v2.2.4
+# age encrypts the Mongo backups (scripts/backup.py). A Go single-binary, so it
+# fits this stage — and it is a real encryption tool rather than a hand-rolled
+# chunked-AES file format, which is not something to invent in a security product.
+ARG AGE_VERSION=v1.2.1
 # waybackurls has no release tags; pin to a commit if reproducibility is critical.
 ARG WAYBACKURLS_VERSION=latest
 # ProjectDiscovery suite (JSON-native, rate-limit-aware) + companions.
@@ -42,7 +46,8 @@ RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@${SUBFINDE
     go install github.com/projectdiscovery/alterx/cmd/alterx@${ALTERX_VERSION} && \
     go install github.com/ffuf/ffuf/v2@${FFUF_VERSION} && \
     go install github.com/lc/gau/v2/cmd/gau@${GAU_VERSION} && \
-    go install github.com/tomnomnom/waybackurls@${WAYBACKURLS_VERSION}
+    go install github.com/tomnomnom/waybackurls@${WAYBACKURLS_VERSION} && \
+    go install filippo.io/age/cmd/age@${AGE_VERSION}
 # NOTE: gitleaks is intentionally NOT installed — secret detection is regex-based
 # (core/secrets_policy.py), it does not shell out to the gitleaks binary. (Its
 # module path also mismatches its repo, breaking `go install @latest`.)
@@ -54,9 +59,21 @@ ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
 # nmap + masscan + libpcap runtime + feroxbuster (prebuilt). Also WeasyPrint's
 # native deps (pango/cairo/gdk-pixbuf/ffi + fonts) so worker-side PDF rendering works.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nmap masscan libpcap0.8 ca-certificates curl unzip \
+        nmap masscan libpcap0.8 ca-certificates curl unzip gnupg \
         libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
         libffi8 shared-mime-info fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+# mongodump/mongorestore for scripts/backup.py. These were referenced by
+# docs/DEPLOYMENT.md and by the backup script but installed in NO image, so backups
+# could not run at all. Not in Debian's repos — MongoDB ships its own.
+RUN ARCH="$(dpkg --print-architecture)" \
+    && curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
+         | gpg --dearmor -o /usr/share/keyrings/mongodb.gpg \
+    && echo "deb [arch=${ARCH} signed-by=/usr/share/keyrings/mongodb.gpg] \
+https://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" \
+         > /etc/apt/sources.list.d/mongodb.list \
+    && apt-get update && apt-get install -y --no-install-recommends mongodb-database-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # feroxbuster (content discovery). Arch-aware AND non-fatal: if the download fails

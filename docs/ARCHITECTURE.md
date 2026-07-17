@@ -230,10 +230,14 @@ just enough of motor; every tool wrapper takes an injectable runner.
   latency (finding first-seen → notified) *is* instrumented
   (`vantari_alert_latency_seconds`), but that is only the notify hop — it is not
   the signup→first-alert figure §15 asks for.
-- **Phase G is part-done.** Observability is wired end to end (see above); still
-  outstanding: verified encrypted Mongo backups, scope-feed auto-update,
-  rate-limit graceful degradation, deploy guides, Helm chart, and the 7-day
-  unattended run itself — which is the exit gate and can only be run, not coded.
+- **Phase G is part-done.** Observability, rate-limit degradation (ADR-0012) and
+  encrypted backups are wired; still outstanding: scope-feed auto-update *job* (the
+  script exists, nothing schedules it), a real prod compose file, and the 7-day
+  unattended run itself — the exit gate, which can only be run, not coded.
+- **No backup has ever been restored.** The dump/encrypt/restore paths shell out to
+  `mongodump`/`age`/`mongorestore`; only the pure command builders and the retention
+  policy are tested. An untested backup is a hypothesis — restore one into a scratch
+  database before relying on it.
 - **The alert thresholds in `docker/alerts.yml` are duplicated from app config**
   because Prometheus cannot read `Settings`. `test_dashboard_queries.py` pins the
   politeness cap against `global_rate_per_target`; the others are unguarded.

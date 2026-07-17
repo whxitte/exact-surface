@@ -43,8 +43,46 @@ at managed instances (Atlas M10+, managed Redis) or in-cluster StatefulSets.
 
 ## Datastore sizing
 - **Dev:** self-hosted Mongo container / Atlas M0.
-- **Prod:** Atlas **M10+** or self-hosted with backups (`python -m scripts.backup`).
-- Redis: small managed instance (queue + rate-limit buckets).
+- **Prod:** Atlas **M10+** or self-hosted with backups (see below).
+- Redis: small managed instance (queue + rate-limit buckets). **Not optional in
+  prod** — it carries the shared politeness ceiling, and a worker that cannot reach
+  it refuses to start (ADR-0012).
+
+## Backups
+
+The database is a map of every customer's external attack surface — hosts, open
+ports, unfixed findings. A plaintext dump of it is arguably a better target than
+the live system, so backups are encrypted with **`age` to a public recipient key**:
+
+```bash
+age-keygen -o vantari-backup-identity.txt     # DO THIS OFF THE SERVER
+# public key → VANTARI_BACKUP_AGE_RECIPIENT (safe to ship anywhere)
+# identity file → a vault/offline store. NOT on the scanning host.
+```
+
+The point of the asymmetry: the scanning host holds only the **public** key, so it
+can write backups and cannot read them. Someone who owns that host does not thereby
+own your backup history. Keep the identity file somewhere else, and **prod refuses
+to start a backup without a recipient** rather than quietly writing plaintext.
+
+```bash
+python -m scripts.backup run                  # dump | age > archive, then prune
+python -m scripts.backup restore <archive> --identity id.txt [--drop]
+```
+
+`mongodump --archive` is piped straight into `age`, so the plaintext never touches
+disk. Retention is `VANTARI_BACKUP_RETENTION_DAYS` (default 30) and always keeps at
+least the newest archive, so a run of silent failures cannot age out the last good
+copy. Cron `run` daily.
+
+> **Shipping offsite is on you, and it matters.** A backup on the same host as the
+> database is not a backup — the failure it protects against destroys both. Sync
+> `VANTARI_BACKUP_DIR` with whatever the deployment already uses (rclone, aws-cli,
+> restic). Deliberately not bundled: it would mean either a new SDK dependency or
+> bucket credentials sitting on the host we just assumed could be compromised.
+
+> **Restore is the only thing that proves a backup.** Test it into a scratch
+> database before you need it: an untested backup is a hypothesis.
 
 ## Observability
 
@@ -92,4 +130,4 @@ host, bind loopback rather than publishing 9100.
   `GET :9100/health` on worker/scheduler (they serve nothing else).
 - Pre-flight: `python -m daemon.main --dry-run` (binaries + config + scope feeds).
 - Refresh scope feeds: `python -m scripts.update_scope_feeds` (cron, daily).
-- Backups: `python -m scripts.backup` (cron; retention per §9).
+- Backups: `python -m scripts.backup run` (cron, daily) — see Backups above.

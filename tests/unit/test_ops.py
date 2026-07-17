@@ -36,12 +36,13 @@ async def test_seed_creates_usable_demo_tenant():
 
 
 # -- backup ------------------------------------------------------------------
-def test_backup_command():
-    cmd = build_mongodump_cmd("mongodb://x:27017", "vantari", "/out")
-    assert cmd == [
-        "mongodump", "--uri=mongodb://x:27017", "--out=/out", "--db=vantari", "--gzip",
-    ]
-    assert "--gzip" not in build_mongodump_cmd("uri", "db", "/o", gzip=False)
+def test_backup_command_streams_to_stdout():
+    """`--archive` with no value means stdout. That is what lets the dump pipe
+    straight into age, so the plaintext never lands on disk."""
+    cmd = build_mongodump_cmd("mongodb://x:27017", "vantari")
+    assert cmd == ["mongodump", "--uri=mongodb://x:27017", "--archive", "--db=vantari", "--gzip"]
+    assert not any(a.startswith("--out") for a in cmd), "writing to a directory leaks plaintext"
+    assert "--gzip" not in build_mongodump_cmd("uri", "db", gzip=False)
 
 
 # -- scope feeds -------------------------------------------------------------

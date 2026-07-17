@@ -61,6 +61,12 @@ ignore = ["S101", "UP042", "ASYNC109"]
 "tests/**" = ["S", "B"]
 # HTML template strings are more readable unwrapped than line-broken.
 "modules/reporting/html_report.py" = ["E501"]
+# ASYNC230/240 guard against blocking a loop that has other work to do. backup.py is
+# a one-shot CLI (`asyncio.run(main())`) whose loop has nothing else pending; it is
+# async only because it drives subprocesses. Adding anyio to open a file here would
+# be ceremony. The big I/O — the dump itself — never passes through Python at all:
+# it goes kernel-side through an os.pipe() between mongodump and age.
+"scripts/backup.py" = ["ASYNC230", "ASYNC240"]
 
 [tool.ruff.lint.flake8-bugbear]
 # FastAPI dependency-injection idiom: calling these in argument defaults is correct.

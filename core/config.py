@@ -157,6 +157,14 @@ class Settings(BaseSettings):
     email_verification_ttl_seconds: int = Field(default=86400)  # 24h
     email_resend_cooloff_seconds: int = Field(default=60)
 
+    # -- backups (§7 Phase G, §9 retention) ------------------------------
+    backup_dir: str = Field(default="./backups")
+    # An age PUBLIC key (age1...). Public on purpose: this host encrypts to it and
+    # cannot decrypt, so owning the scanning host does not yield the backup history.
+    # Prod refuses to write a backup without it (scripts/backup.resolve_recipient).
+    backup_age_recipient: str | None = Field(default=None)
+    backup_retention_days: int = Field(default=30, ge=1)
+
     # -- observability ---------------------------------------------------
     sentry_dsn: SecretStr | None = Field(default=None)
     metrics_enabled: bool = Field(default=True)
