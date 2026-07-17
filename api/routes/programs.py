@@ -16,6 +16,7 @@ from api.deps import (
     get_principal,
     require_owner,
     require_program,
+    require_verified_email,
 )
 from api.schemas import (
     AuthorizationCreate,
@@ -80,7 +81,7 @@ async def list_programs(
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_program(
     body: ProgramCreate,
-    principal: Principal = Depends(get_principal),
+    principal: Principal = Depends(require_verified_email),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
     program = Program(

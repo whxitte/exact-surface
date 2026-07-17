@@ -14,11 +14,14 @@ from typing import Any
 from fastapi import Depends, Header, HTTPException, status
 
 from api.auth import InvalidToken, decode_token, hash_api_key
+from core.config import get_settings
+from core.email import EmailSender, get_email_sender
 from core.models import Role
 from core.verification import DomainVerifier
 from db.apikeys import ApiKeyRepo
 from db.mongo import get_mongo
 from db.programs import ProgramRepo
+from db.users import UserRepo
 
 _domain_verifier = DomainVerifier()
 
@@ -26,6 +29,11 @@ _domain_verifier = DomainVerifier()
 async def get_domain_verifier() -> DomainVerifier:
     """The domain verifier. Overridden in tests to avoid real DNS/HTTP."""
     return _domain_verifier
+
+
+async def get_email_sender_dep() -> EmailSender:
+    """The transactional-email sender. Overridden in tests to capture messages."""
+    return get_email_sender()
 
 
 @dataclass(frozen=True)
@@ -96,6 +104,24 @@ def require_role(*allowed: Role):
 # destroy a program, create the legal scanning-authorization record, manage
 # integration secrets). Owners and admins only; members are read/operate.
 require_owner = require_role(Role.OWNER, Role.ADMIN)
+
+
+async def require_verified_email(
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> Principal:
+    """Gate an action on the caller's email being verified — but only when
+    ``require_email_verification`` is configured on (off in dev). API-key callers
+    are exempt (keys are minted by an already-authenticated owner)."""
+    if not get_settings().require_email_verification or principal.method == "apikey":
+        return principal
+    if principal.user_id:
+        user = await UserRepo.from_mongo(mongo).get_by_id(principal.user_id)
+        if user and user.get("email_verified"):
+            return principal
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN, "verify your email address to perform this action"
+    )
 
 
 async def require_program(

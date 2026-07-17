@@ -2,15 +2,33 @@
 
 from __future__ import annotations
 
+import secrets
 import uuid
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.auth import create_access_token, generate_api_key, hash_password, verify_password
-from api.deps import Principal, get_mongo_dep, get_principal, require_owner
+from api.deps import (
+    Principal,
+    get_email_sender_dep,
+    get_mongo_dep,
+    get_principal,
+    require_owner,
+)
 from api.rate_limit import limiter
-from api.schemas import ApiKeyCreate, ApiKeyCreated, LoginRequest, SignupRequest, TokenResponse
+from api.schemas import (
+    ApiKeyCreate,
+    ApiKeyCreated,
+    LoginRequest,
+    SignupRequest,
+    TokenResponse,
+    VerifyEmailRequest,
+)
+from core.config import get_settings
+from core.email import EmailSender, build_verification_email
+from core.logging import logger
 from core.models import ApiKey, Role, Tenant, User
 from db.apikeys import ApiKeyRepo
 from db.tenants import TenantRepo
@@ -19,10 +37,33 @@ from db.users import UserRepo
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
+async def _issue_and_send_verification(
+    mongo: Any, sender: EmailSender, *, user_id: str, email: str
+) -> None:
+    """Mint a one-time token, persist it, and send the verification email.
+    Best-effort: a send failure is logged, never raised (signup must not fail on
+    email). The log transport always succeeds in dev."""
+    settings = get_settings()
+    token = secrets.token_urlsafe(32)
+    now = datetime.now(UTC)
+    exp = now + timedelta(seconds=settings.email_verification_ttl_seconds)
+    await UserRepo.from_mongo(mongo).set_verification(
+        user_id, token=token, expires_at=exp, sent_at=now
+    )
+    link = f"{settings.app_base_url.rstrip('/')}/verify-email?token={token}"
+    try:
+        await sender.send(build_verification_email(to=email, link=link))
+    except Exception as exc:  # noqa: BLE001 - defensive; senders already swallow errors
+        logger.warning("verification email to {} not sent: {}", email, type(exc).__name__)
+
+
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("60/minute")
 async def signup(
-    request: Request, body: SignupRequest, mongo: Any = Depends(get_mongo_dep)
+    request: Request,
+    body: SignupRequest,
+    mongo: Any = Depends(get_mongo_dep),
+    sender: EmailSender = Depends(get_email_sender_dep),
 ) -> TokenResponse:
     users = UserRepo.from_mongo(mongo)
     if await users.get_by_email(body.email):
@@ -40,8 +81,43 @@ async def signup(
             role=Role.OWNER,
         )
     )
+    await _issue_and_send_verification(mongo, sender, user_id=user_id, email=body.email.lower())
     token = create_access_token(user_id=user_id, tenant_id=tenant_id, role=Role.OWNER.value)
     return TokenResponse(access_token=token, tenant_id=tenant_id)
+
+
+@router.post("/verify-email")
+async def verify_email(body: VerifyEmailRequest, mongo: Any = Depends(get_mongo_dep)) -> dict:
+    """Consume a verification token (from the emailed link). One-time: a used or
+    expired token returns 400 so a stale link can't silently 're-verify'."""
+    doc = await UserRepo.from_mongo(mongo).verify_by_token(body.token, now=datetime.now(UTC))
+    if not doc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid or expired verification token")
+    return {"verified": True, "email": doc["email"]}
+
+
+@router.post("/resend-verification", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit("10/minute")
+async def resend_verification(
+    request: Request,
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+    sender: EmailSender = Depends(get_email_sender_dep),
+) -> None:
+    if not principal.user_id:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "no user to verify")
+    user = await UserRepo.from_mongo(mongo).get_by_id(principal.user_id)
+    if not user:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "user not found")
+    if user.get("email_verified"):
+        return  # already verified — a harmless no-op
+    # Per-user cool-off so the endpoint can't be used to spam someone's inbox.
+    last = user.get("verification_sent_at")
+    now = datetime.now(UTC)
+    cooloff = get_settings().email_resend_cooloff_seconds
+    if last is not None and (now - last).total_seconds() < cooloff:
+        raise HTTPException(status.HTTP_429_TOO_MANY_REQUESTS, "please wait before resending")
+    await _issue_and_send_verification(mongo, sender, user_id=user["user_id"], email=user["email"])
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -59,12 +135,23 @@ async def login(
 
 
 @router.get("/me")
-async def me(principal: Principal = Depends(get_principal)) -> dict:
+async def me(
+    principal: Principal = Depends(get_principal), mongo: Any = Depends(get_mongo_dep)
+) -> dict:
+    email_verified: bool | None = None
+    email: str | None = None
+    if principal.user_id:
+        user = await UserRepo.from_mongo(mongo).get_by_id(principal.user_id)
+        if user:
+            email_verified = bool(user.get("email_verified"))
+            email = user.get("email")
     return {
         "tenant_id": principal.tenant_id,
         "user_id": principal.user_id,
         "role": principal.role.value,
         "auth": principal.method,
+        "email": email,
+        "email_verified": email_verified,
     }
 
 

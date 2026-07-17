@@ -20,6 +20,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"  # noqa: S105 - OAuth token type, not a secret

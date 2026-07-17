@@ -336,7 +336,17 @@ export const api = {
     request<TokenResponse>("/auth/signup", json({ email, password, tenant_name })),
   login: (email: string, password: string) =>
     request<TokenResponse>("/auth/login", json({ email, password })),
-  me: () => request<{ tenant_id: string; role: string; auth: string }>("/auth/me"),
+  me: () =>
+    request<{
+      tenant_id: string;
+      role: string;
+      auth: string;
+      email: string | null;
+      email_verified: boolean | null;
+    }>("/auth/me"),
+  verifyEmail: (token: string) =>
+    request<{ verified: boolean; email: string }>("/auth/verify-email", json({ token })),
+  resendVerification: () => request<void>("/auth/resend-verification", { method: "POST" }),
   createApiKey: (name: string) =>
     request<{ key_id: string; name: string; api_key: string; prefix: string }>(
       "/auth/api-keys",

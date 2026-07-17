@@ -352,6 +352,30 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: "account",
+    title: "Account & email verification",
+    icon: Lock,
+    keywords: "email verification verify signup account link expired resend confirm inbox",
+    body: (
+      <>
+        <p>
+          Signing up sends a <Term>verification email</Term> with a single-use link. The link expires
+          after <Term>24 hours</Term>, and using it once consumes it — an old link will report
+          &quot;couldn&apos;t verify&quot;. You can request a fresh one from the verification page
+          (rate-limited to one per minute).
+        </p>
+        <p>
+          Whether verification is <em>required</em> before you can add a program is a deployment
+          setting (<Code>REQUIRE_EMAIL_VERIFICATION</Code>) — it is off in local/dev so you aren&apos;t
+          blocked, and on in production. Self-hosting? Email delivery is provider-agnostic: the
+          default <Code>log</Code> transport just prints the link into the server log (no account
+          needed), and any SMTP provider (Resend, Brevo, SES, Postmark, Mailgun) works by setting
+          <Code>EMAIL_TRANSPORT=smtp</Code> plus SMTP credentials.
+        </p>
+      </>
+    ),
+  },
+  {
     id: "faq",
     title: "FAQ & caveats",
     icon: HelpCircle,

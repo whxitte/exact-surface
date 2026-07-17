@@ -21,6 +21,9 @@ PUBLIC_PATHS = {
     "/metrics",
     "/auth/signup",
     "/auth/login",
+    # Public by design: the caller proves identity with the emailed one-time token,
+    # not a session — the user has no credentials to verify with yet.
+    "/auth/verify-email",
     "/docs",
     "/redoc",
     "/openapi.json",

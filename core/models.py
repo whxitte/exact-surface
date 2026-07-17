@@ -87,6 +87,13 @@ class User(TenantScopedModel):
     email: str
     password_hash: str
     role: Role = Role.OWNER
+    email_verified: bool = False
+    # One-time verification token (random, hashed at rest would be ideal; kept opaque
+    # and cleared on use). ``verification_expires_at`` bounds its life; ``…_sent_at``
+    # rate-limits resend.
+    verification_token: str | None = None
+    verification_expires_at: datetime | None = None
+    verification_sent_at: datetime | None = None
 
 
 class ApiKey(TenantScopedModel):

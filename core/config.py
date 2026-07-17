@@ -125,6 +125,30 @@ class Settings(BaseSettings):
         ),
     )
 
+    # -- email (transactional: verification, etc.) -----------------------
+    # Provider-agnostic: "log" prints the message (dev default, no account needed);
+    # "smtp" sends via any provider's SMTP creds (Resend/Brevo/SES/Postmark/Mailgun).
+    email_transport: str = Field(default="log", description="log | smtp")
+    email_from: str = Field(default="Vantari <no-reply@vantari.local>")
+    smtp_host: str | None = Field(default=None)
+    smtp_port: int = Field(default=587)
+    smtp_user: str | None = Field(default=None)
+    smtp_password: SecretStr | None = Field(default=None)
+    smtp_starttls: bool = Field(default=True)
+    app_base_url: str = Field(
+        default="http://localhost:3000",
+        description="Public frontend URL — used to build verification links.",
+    )
+    require_email_verification: bool = Field(
+        default=False,
+        description=(
+            "When true, a program cannot be created until the owner's email is verified "
+            "(§7 Phase C). Off in dev so the local flow isn't blocked; on in prod."
+        ),
+    )
+    email_verification_ttl_seconds: int = Field(default=86400)  # 24h
+    email_resend_cooloff_seconds: int = Field(default=60)
+
     # -- observability ---------------------------------------------------
     sentry_dsn: SecretStr | None = Field(default=None)
     metrics_enabled: bool = Field(default=True)
@@ -135,6 +159,13 @@ class Settings(BaseSettings):
     def _known_env(cls, v: str) -> str:
         if v not in {"dev", "staging", "prod"}:
             raise ValueError("env must be one of dev|staging|prod")
+        return v
+
+    @field_validator("email_transport")
+    @classmethod
+    def _known_email_transport(cls, v: str) -> str:
+        if v not in {"log", "smtp"}:
+            raise ValueError("email_transport must be one of log|smtp")
         return v
 
     @property
