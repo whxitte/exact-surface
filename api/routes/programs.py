@@ -45,6 +45,7 @@ from core.models import (
     ScanStatus,
     VerificationMethod,
 )
+from core.plans import max_domains
 from core.severity import Severity
 from core.verification import dns_instructions, http_instructions
 from db.assets import AssetRepo
@@ -56,7 +57,13 @@ from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
 from db.leaks import LeakRepo
 from db.ports import PortRepo
-from db.programs import ProgramRepo, delete_program_and_data
+from db.programs import (
+    ProgramRepo,
+    delete_program_and_data,
+    program_within_plan,
+    tenant_can_add_domain,
+    tenant_plan,
+)
 from db.schedule import ScheduleRepo
 from db.secrets import SecretRepo
 from db.tenants import TenantRepo
@@ -84,6 +91,12 @@ async def create_program(
     principal: Principal = Depends(require_verified_email),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
+    if not await tenant_can_add_domain(mongo, principal.tenant_id):
+        cap = max_domains(await tenant_plan(mongo, principal.tenant_id))
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"your plan allows {cap} domain(s) — upgrade to add another",
+        )
     program = Program(
         tenant_id=principal.tenant_id,
         program_id="prog_" + uuid.uuid4().hex[:12],
@@ -457,6 +470,16 @@ async def trigger_scan(
 ) -> dict:
     if not program.get("verified"):
         raise HTTPException(status.HTTP_409_CONFLICT, "verify the domain first")
+    # §13: plan limits are checked before a scan consumes resources. A program
+    # outside the allowance (e.g. after a downgrade) is refused explicitly rather
+    # than silently skipped, so the user sees why.
+    if not await program_within_plan(mongo, principal.tenant_id, program["program_id"]):
+        cap = max_domains(await tenant_plan(mongo, principal.tenant_id))
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"your plan covers {cap} domain(s); this one is outside that allowance — "
+            "upgrade or remove another domain to scan it",
+        )
     auth = await AuthorizationRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
     if not (auth and auth.get("apex_verified") and not auth.get("revoked")):
         raise HTTPException(

@@ -20,7 +20,7 @@ from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
-from db.programs import ProgramRepo
+from db.programs import ProgramRepo, program_within_plan
 from pipelines.content_discovery import run_content_discovery
 from pipelines.correlate import run_correlate
 from pipelines.crawl import run_crawl
@@ -357,6 +357,13 @@ async def run_program(
             "program {} is paused (monitoring off) — skipping scheduled full run", program_id
         )
         return {"skipped": True, "note": "monitoring paused"}
+
+    # §13 plan quota, re-checked here as well as at enqueue: a job that was queued
+    # before a downgrade (or reaches the worker by any other path) must not burn
+    # scan resources the tenant is no longer entitled to.
+    if not await program_within_plan(mongo, tenant.tenant_id, program_id):
+        logger.info("program {} is outside the tenant's plan allowance — skipping", program_id)
+        return {"skipped": True, "note": "outside plan allowance"}
 
     auth = await AuthorizationRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not _auth_is_current(auth):

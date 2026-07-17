@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, Search, Workflow, Radar, RefreshCw, Activity, ShieldAlert, KeyRound,
-  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle,
+  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -348,6 +348,33 @@ const SECTIONS: Section[] = [
             tier. If a key is present but empty results come back, the scan log shows the reason.
           </li>
         </ul>
+      </>
+    ),
+  },
+  {
+    id: "plans",
+    title: "Plans & domain limits",
+    icon: CreditCard,
+    keywords: "plan limit domains quota free pro business enterprise upgrade downgrade 402 billing",
+    body: (
+      <>
+        <p>
+          Your plan caps how many <Term>domains</Term> (programs) you can scan:{" "}
+          <Code>Free</Code> 1 · <Code>Pro</Code> 5 · <Code>Business</Code> 25 ·{" "}
+          <Code>Enterprise</Code> unlimited. Adding one past the cap is refused with a
+          &quot;plan allows N domain(s)&quot; message.
+        </p>
+        <p>
+          Limits are checked <em>both</em> when you add a domain <em>and</em> before any scan
+          starts — so a plan change takes effect immediately, with no restart or re-login.
+        </p>
+        <p>
+          <Term>Downgrading never deletes anything.</Term> If you drop from Pro to Free with 5
+          domains, all 5 keep their history and stay readable — but only the allowance (the{" "}
+          <em>oldest</em> domain first) continues to be scanned. The rest are skipped by the
+          scheduler and report &quot;outside that allowance&quot; if you try to scan them by hand.
+          Upgrade again and they resume on the next tick.
+        </p>
       </>
     ),
   },

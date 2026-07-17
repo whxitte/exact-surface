@@ -22,6 +22,7 @@ from typing import Any
 
 from core.config import Settings, get_settings
 from core.logging import logger
+from core.plans import allowed_program_ids
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
@@ -74,13 +75,33 @@ class Scheduler:
             out[t["tenant_id"]] = t.get("cadence_overrides") or {}
         return out
 
+    async def _plan_allowed(self, programs: list[dict]) -> set[str]:
+        """Program ids inside each tenant's plan allowance (§13 — enforced at enqueue,
+        so a downgrade takes effect on the next tick without deleting anything)."""
+        by_tenant: dict[str, list[dict]] = {}
+        for prog in programs:
+            by_tenant.setdefault(prog["tenant_id"], []).append(prog)
+        plans = {
+            t["tenant_id"]: t.get("plan", "free")
+            for t in await self._mongo.collection("tenants").find({}).to_list(None)
+        }
+        allowed: set[str] = set()
+        for tid, progs in by_tenant.items():
+            allowed |= allowed_program_ids(plans.get(tid, "free"), progs)
+        return allowed
+
     async def _ready_programs(self) -> list[dict]:
-        """Programs eligible to scan: enabled, verified, and currently authorized."""
+        """Programs eligible to scan: enabled, verified, currently authorized, and
+        inside the tenant's plan allowance."""
+        all_programs = await ProgramRepo.from_mongo(self._mongo).list_all()
+        allowed = await self._plan_allowed(all_programs)
         ready: list[dict] = []
         auth_repo = AuthorizationRepo.from_mongo(self._mongo)
-        for prog in await ProgramRepo.from_mongo(self._mongo).list_all():
+        for prog in all_programs:
             if not (prog.get("enabled", True) and prog.get("verified")):
                 continue
+            if prog["program_id"] not in allowed:
+                continue  # over plan quota — never enqueue work for it
             auth = await auth_repo.get(prog["tenant_id"], prog["program_id"])
             if _auth_current(auth):
                 ready.append(prog)
