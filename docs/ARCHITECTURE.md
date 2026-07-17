@@ -3,45 +3,174 @@
 Continuous external attack-surface intelligence — **detection only**. Outside-in,
 agentless, multi-tenant, state-aware.
 
+Start here, then read `docs/SECURITY.md` (the control model — the part that will
+bite you if you get it wrong) and `docs/API.md`. Design decisions live in
+`docs/ADRs/`.
+
+---
+
 ## The loop
+
 ```
-scheduler (state-aware, per-cadence)
-   → enqueue jobs (Redis / arq, per-tenant fair)
+scheduler (state-aware, per-cadence, per-tenant fair)
+   → enqueue jobs (Redis / arq)
        → worker pulls job
-           → authorization gate + scope decision (core/scope.py)
-               → pipeline runs a module within its permitted action set
+           → authorization gate  (a current authorization record, or refuse)
+           → plan-quota gate     (§13 — checked at enqueue AND here)
+           → ip-scope confirmation (asnmap → what is really "dedicated")
+           → scope decision      (core/scope.py — per host, per action)
+               → pipeline runs modules within the permitted action set
                    → idempotent upsert by content-hash (is_new fires once)
-                       → correlate → notify channels → export reports
+                       → correlate → notify (alert policy) → reports
 ```
+
+Every gate is re-checked on the worker, not only at the API. A job can arrive
+from a stale Redis queue, a retry, or a direct call — the API is UX, the worker
+is the boundary.
+
+## Runtime roles
+
+| Role | Image | Notes |
+|---|---|---|
+| **api** | slim python | no scan toolchain — §3.8 keeps it separate. Consequence: anything needing a tool (e.g. `asnmap`) must run on the worker. |
+| **worker** | `pipeline` (all recon tools) | stateless; scale horizontally |
+| **scheduler** | slim | singleton enqueuer |
+| **mongo / redis** | — | Redis backs both the queue and the rate-limit buckets |
+
+---
 
 ## Layers
-- **core/** — pure logic, no I/O: `scope` (the safety control), `hashing`
-  (idempotency keys), `ratelimit` (politeness), `severity`, `lifecycle`,
-  `secrets_policy` (masking), `cpe`, `fingerprint`, `config`, `models`.
+
+- **core/** — pure logic, no I/O. Unit-testable with zero mocks.
+  - `scope` — **the safety control** (§9b). Classify IP → decide actions.
+  - `plans` — §13 tier limits. Fails closed to FREE.
+  - `signal` — actionable-vs-informational + the §15 false-positive rate.
+  - `ratelimit` — token bucket **and** `subprocess_rate_for` (ADR-0009).
+  - `hashing` (idempotency keys) · `severity` · `lifecycle` (finding state
+    machine) · `alert_policy` · `secrets_policy` (masking) · `liveness`
+    (live-vs-gone) · `cpe` · `fingerprint` · `email` · `config` · `models`.
 - **db/** — one repo per collection, all tenant-scoped; `base.Repository` does the
   `$setOnInsert`/`$set` idempotent upsert.
-- **modules/** — tool wrappers (recon/probing/scanning/crawling/ports/
-  content_discovery/dorking/osint/intelligence/notification/reporting), each with
-  an injectable runner so it's testable offline.
+- **modules/** — tool wrappers, each with an **injectable runner** so it is
+  testable offline (no binaries in CI).
 - **pipelines/** — orchestrators that compose modules, enforce scope per target,
-  and persist results.
+  and persist.
 - **taskqueue/** — cadence policy, the state-aware scheduler, dispatch, arq client.
-- **daemon/** — health, metrics, and the scheduler supervisor (`--dry-run` gate).
-- **api/** — FastAPI: auth (JWT + API keys), tenant-scoped routes, ws stream,
-  per-tenant rate limiting.
+- **daemon/** — health, metrics registry, scheduler supervisor (`--dry-run`).
+- **api/** — FastAPI: auth, tenant-scoped routes, ws stream, per-tenant limits.
 - **frontend/** — Next.js 14 dashboard.
 
-## Non-negotiable principles
-State-awareness · idempotency · multi-tenancy from line one · async everywhere ·
-central scope enforcement · detection-only. See `docs/SECURITY.md` and the ADRs
-in `docs/ADRs/` (MongoDB choice, PD toolchain, task queue, masscan-disabled,
-scope engine, secret handling, taskqueue naming).
+**Dependency direction:** `api`/`pipelines`/`taskqueue` → `db` → `core`. `core`
+depends on nothing internal. (Known wrinkle: `pipelines/port_scan.py` imports
+`daemon.metrics`; `core` deliberately does **not** — which is why the rate
+limiter has no counters yet. See "Known gaps".)
+
+---
+
+## The five control points
+
+If you're changing scan behaviour, one of these is probably the thing you need to
+respect. All are re-enforced worker-side.
+
+1. **Authorization record** — no record, no scan (`AuthorizationRequired`).
+2. **Plan quota** — Free 1 / Pro 5 / Business 25 / Enterprise ∞. Over-quota
+   programs are never enqueued and `run_program` refuses them. Unknown plan →
+   FREE, never unlimited.
+3. **IP-scope confirmation** — a customer-listed CIDR is a *request*. Only
+   `asnmap`-confirmed ranges become `dedicated`. ADR-0008.
+4. **Scope decision** — hard-deny classes (RFC1918/metadata/…) are never
+   overridable; CDN/cloud-shared get HTTP-layer only; full actions require
+   confirmed-dedicated.
+5. **Politeness** — ≤10 rps/target. In-process I/O via the token bucket;
+   subprocesses get a derived `-rate` (ADR-0009), published to `/metrics`.
+
+---
 
 ## Data model
-Every model extends `TenantScopedModel` (carries `tenant_id`). Observed entities
-extend `StatefulModel` (adds `program_id`, `fingerprint`, `first_seen`/`last_seen`,
-`is_new`). The content-hash `fingerprint` is the unique upsert key per
-`(tenant_id, fingerprint)`.
+
+Every model extends `TenantScopedModel` (`tenant_id`). Observed entities extend
+`StatefulModel` (`program_id`, `fingerprint`, `first_seen`/`last_seen`, `is_new`).
+The content-hash `fingerprint` is the unique upsert key per
+`(tenant_id, fingerprint)` — see `core/hashing.py` for exactly what goes into each
+(volatile fields are excluded on purpose; a changed response body is the same
+finding).
+
+**Findings** additionally carry a lifecycle state (`core/lifecycle.py`):
+`NEW → TRIAGED → CONFIRMED → RESOLVED`, plus `FALSE_POSITIVE` / `ACCEPTED_RISK`,
+and `REGRESSED` when a resolved finding reappears (alerts once).
+
+### State-awareness: `is_new` and "gone"
+
+- `is_new` fires **exactly once** per genuine insert, and is cleared only when a
+  notification is actually delivered — so an alert fires once per real
+  appearance, not once per scan.
+- **Live vs gone** (`core/liveness.py`): nothing is deleted. An item is marked
+  `gone` only when a *full-coverage re-run of the module that produced it*
+  stopped reporting it. A partial/failed scan therefore can't mass-mark
+  everything gone.
+
+---
+
+## Configuration resolution
+
+Cadence, timeouts, and alert policy all resolve the same way:
+
+```
+built-in defaults  ←  tenant defaults  ←  program overrides     (most specific wins)
+```
+
+Values are clamped server-side (sub-floor cadence raised, absurd timeouts capped),
+so persisted config can never break a stage.
+
+---
+
+## Alerting
+
+`pipelines/notify.py` delivers only `is_new` items, gated by the program's
+**alert policy**: a severity floor (default `medium`), per-family toggles
+(findings/secrets/leaks/CVEs), a CVSS floor for CVEs, and opt-in change events
+(new subdomain / new open port) that fire **only after the baseline scan** — so
+the first enumeration doesn't page for every subdomain.
+
+Secrets/leaks are formatted from **masked** fields only; a plaintext secret
+cannot reach a channel (§9c).
+
+Signal quality is a first-class metric, not a nicety: `/stats` reports
+`open_actionable` vs `informational` and the §15 `false_positive_rate`. A scan
+emitting 700 info-level detections and 3 real issues should read as "3".
+
+---
+
+## Testing shape
+
+| Suite | Proves |
+|---|---|
+| `tests/unit/` | pure logic — scope deny-list, hashing, plans, signal, lifecycle, rate derivation |
+| `tests/integration/` | pipelines actually consult the controls (scope enforcement, authorization gate, plan quota at enqueue, ip-scope confirmation) |
+| `tests/security/` | the adversarial view — JWT forgery, cross-tenant IDOR, route-auth coverage, NoSQL injection, secret-leak-in-notification, authorization self-grant |
+| `tests/e2e/` | the self-serve workflow through the real app |
+
+Everything runs offline: no binaries, no DB, no network. `FakeMongo` implements
+just enough of motor; every tool wrapper takes an injectable runner.
+
+---
+
+## Known gaps (keep honest)
+
+- **Rate limiter emits no counters.** `core` must not import `daemon.metrics`
+  (wrong direction). Needs an injected observer or moving the registry.
+- **Orphaned modules**: `cloud_buckets` (18) and `nuclei_watch` (22) are written
+  and unit-tested but **no pipeline calls them**. Passing tests make them look
+  done.
+- **Dork** ships Google CSE only; Brave/SerpAPI settings exist without wrappers.
+- **`preview_env`** is advertised in `modules/registry.py` but has no module file
+  — the detection lives in `core/fingerprint.is_ephemeral_host`. The registry is
+  declarative, so `--dry-run` over-promises.
+- **Latency metrics** (§15 time-to-first-finding, KEV-match latency) are not
+  instrumented.
+- **Phase G** is largely stubbed: `daemon/metrics.py` is a hand-rolled registry,
+  Sentry is a placeholder, no verified encrypted backups, no 7-day unattended run.
+- **Never run at multi-tenant scale**; the fairness cap is coded but unexercised.
 
 Build phases: A foundation · B core pipeline · C API/auth · D attacker's edge ·
-scheduler cadence · E frontend · F notifications+reports · G hardening.
+E frontend · F notifications+reports · G hardening.

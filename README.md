@@ -8,8 +8,22 @@ It runs the tooling real attackers use (subfinder, httpx, nuclei, katana, naabu,
 wordlist fuzzing), is state-aware (one alert per genuinely new fact, not per
 re-scan), multi-tenant from line one, and **never exploits — only detects**.
 
-> Full design: [`VANTARI_BUILD_SPEC.md`](VANTARI_BUILD_SPEC.md). Decisions:
-> [`docs/ADRs/`](docs/ADRs/).
+### Documentation map
+
+| Read this | For |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | **start here** — the loop, layers, the five control points, data model, known gaps |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | the control model: authorisation chain, scope enforcement, tenant isolation, politeness/AUP, secret handling |
+| [`docs/API.md`](docs/API.md) | endpoint reference + the rules a schema can't show (why cross-tenant is 404, why `ip_scope` is strings) |
+| [`docs/ADRs/`](docs/ADRs/) | why things are the way they are — read before changing a control |
+| [`docs/TESTING.md`](docs/TESTING.md) | run it end-to-end against a target you own |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | roles, images, sizing |
+| [`VANTARI_BUILD_SPEC.md`](VANTARI_BUILD_SPEC.md) | the full original design spec (authoritative) |
+| [`context.md`](context.md) | running engineering log: what's done, what's known-broken, and why |
+
+New to the codebase? `ARCHITECTURE.md` → `SECURITY.md` §2 (why domain control ≠
+scanning authorisation) → ADR-0005 and ADR-0008. Those explain the constraints
+that shape everything else.
 
 ## Status
 
