@@ -20,10 +20,12 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Any
 
 from core.alert_policy import effective_alert_policy, meets_severity_floor, port_matches
 from core.logging import logger
+from core.metrics import REGISTRY
 from core.severity import Severity
 from core.tenant import TenantContext
 from db.assets import AssetRepo
@@ -55,6 +57,27 @@ DELIVER_TIMEOUT = 20.0
 MAX_ALERTS_PER_SOURCE = 100
 
 _SEV_RANK = {s: i for i, s in enumerate(Severity)}  # critical=0 … info last
+
+
+def _observe_alert_latency(first_seen: Any) -> None:
+    """Record detection→alert seconds for one delivered item (§15).
+
+    Defensive: a missing or tz-naive ``first_seen`` (legacy doc) is skipped rather
+    than logged as a bogus latency — a wrong metric is worse than a missing one.
+    """
+    if first_seen is None:
+        return
+    try:
+        seconds = (datetime.now(UTC) - first_seen).total_seconds()
+    except TypeError:
+        return
+    if seconds < 0:  # clock skew — don't pollute the histogram
+        return
+    REGISTRY.observe(
+        "vantari_alert_latency_seconds",
+        seconds,
+        help="Seconds from a signal being first seen to its alert being delivered (§15)",
+    )
 
 
 def _by_severity(doc: dict) -> int:
@@ -190,10 +213,17 @@ async def run_notify(
         outcomes = await asyncio.gather(*(coro for _, coro in plan))
 
         delivered_fps: set[str] = set()
+        first_seen_by_fp = {d["fingerprint"]: d.get("first_seen") for d in items}
         for (fp, _), ok in zip(plan, outcomes, strict=True):
             if ok:
                 delivered += 1
                 delivered_fps.add(fp)
+        # §15 alert latency: detection → delivered. This is the measurable half of
+        # "time to first finding"; we cannot know when an exposure appeared on the
+        # internet, only when we saw it, so measuring from first_seen is the honest
+        # bound. Recorded once per fingerprint, not once per channel.
+        for fp in delivered_fps:
+            _observe_alert_latency(first_seen_by_fp.get(fp))
         if delivered_fps:
             await repo.clear_is_new(tenant.tenant_id, list(delivered_fps))
 

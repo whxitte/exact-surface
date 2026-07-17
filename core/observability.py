@@ -2,7 +2,7 @@
 
 Sentry is optional and lazily imported — no DSN configured (or the SDK absent)
 means it is silently skipped, never a startup failure. Prometheus metrics live in
-``daemon/metrics.py`` and are instrumented at the call sites.
+``core/metrics.py`` and are instrumented at the call sites.
 """
 
 from __future__ import annotations

@@ -26,8 +26,8 @@ from api.routes import stats as stats_routes
 from api.ws import stream as ws_stream
 from core.config import get_settings
 from core.logging import configure_logging, logger
+from core.metrics import REGISTRY
 from daemon.health import run_health_checks
-from daemon.metrics import REGISTRY
 
 
 @asynccontextmanager

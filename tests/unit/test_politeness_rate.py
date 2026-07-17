@@ -52,10 +52,10 @@ def test_old_default_would_have_violated_the_cap():
 @pytest.mark.asyncio
 async def test_port_scan_passes_derived_rate_and_publishes_metrics():
     from core.config import get_settings
+    from core.metrics import REGISTRY
     from core.models import Asset
     from core.scope import ProgramScope, ScopeEngine
     from core.tenant import TenantContext
-    from daemon.metrics import REGISTRY
     from db.assets import AssetRepo
     from pipelines.port_scan import run_port_scan
     from tests.fakes import FakeMongo

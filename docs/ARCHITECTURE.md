@@ -46,6 +46,8 @@ is the boundary.
   - `plans` — §13 tier limits. Fails closed to FREE.
   - `signal` — actionable-vs-informational + the §15 false-positive rate.
   - `ratelimit` — token bucket **and** `subprocess_rate_for` (ADR-0009).
+  - `metrics` — the Prometheus registry (counters/gauges/histograms). In `core`, not
+    `daemon`, so the limiter can instrument itself — ADR-0010.
   - `hashing` (idempotency keys) · `severity` · `lifecycle` (finding state
     machine) · `alert_policy` · `secrets_policy` (masking) · `liveness`
     (live-vs-gone) · `cpe` · `fingerprint` · `email` · `config` · `models`.
@@ -56,14 +58,14 @@ is the boundary.
 - **pipelines/** — orchestrators that compose modules, enforce scope per target,
   and persist.
 - **taskqueue/** — cadence policy, the state-aware scheduler, dispatch, arq client.
-- **daemon/** — health, metrics registry, scheduler supervisor (`--dry-run`).
+- **daemon/** — health checks + the scheduler supervisor (`--dry-run`). Metrics moved
+  to `core/metrics.py` (ADR-0010); `/metrics` is rendered by `api/main.py`.
 - **api/** — FastAPI: auth, tenant-scoped routes, ws stream, per-tenant limits.
 - **frontend/** — Next.js 14 dashboard.
 
 **Dependency direction:** `api`/`pipelines`/`taskqueue` → `db` → `core`. `core`
-depends on nothing internal. (Known wrinkle: `pipelines/port_scan.py` imports
-`daemon.metrics`; `core` deliberately does **not** — which is why the rate
-limiter has no counters yet. See "Known gaps".)
+depends on nothing internal — which is why the metrics registry had to move into
+it before the rate limiter could be instrumented (ADR-0010).
 
 ---
 
@@ -157,8 +159,9 @@ just enough of motor; every tool wrapper takes an injectable runner.
 
 ## Known gaps (keep honest)
 
-- **Rate limiter emits no counters.** `core` must not import `daemon.metrics`
-  (wrong direction). Needs an injected observer or moving the registry.
+- **CVE/KEV match latency is not measured** (§15 target <60 min). `CveRecord` has
+  no `published` field, so the NVD parser must carry it first. Alert latency
+  (detection→delivered) *is* measured: `vantari_alert_latency_seconds`.
 - **`nuclei_watch` has no default template lister.** The pipeline is wired and
   tested, but nuclei's `-tl` output contract has not been verified against the
   pinned binary, so the lister must be injected. Without one the stage reports

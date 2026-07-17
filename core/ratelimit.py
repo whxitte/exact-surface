@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from core.errors import RateLimited
+from core.metrics import REGISTRY
 
 
 @dataclass(frozen=True)
@@ -167,9 +168,22 @@ class PolitenessLimiter:
         limit: RateLimit | None = None,
     ) -> bool:
         """Return True and consume budget if the op is within the ceiling."""
-        return await self._store.take(
-            self.target_key(ip, asn), limit or self._default, cost, time.monotonic()
+        eff = limit or self._default
+        ok = await self._store.take(self.target_key(ip, asn), eff, cost, time.monotonic())
+        # Aggregate only — a per-target label would mint a time series per scanned
+        # IP and blow up cardinality. The ratio of throttled:allowed is what tells
+        # an operator the ceiling is doing work.
+        REGISTRY.inc(
+            "vantari_politeness_decisions_total",
+            help="Politeness limiter decisions (§3.8b)",
+            decision="allowed" if ok else "throttled",
         )
+        REGISTRY.set(
+            "vantari_politeness_rate_limit_pps",
+            eff.rate,
+            help="Configured max packets/requests per second per target IP (§3.8b)",
+        )
+        return ok
 
     async def require(
         self,

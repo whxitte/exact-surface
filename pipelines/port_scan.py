@@ -13,11 +13,11 @@ from typing import Any
 from core.config import get_settings
 from core.hashing import port_fingerprint
 from core.logging import logger
+from core.metrics import REGISTRY
 from core.models import Port
 from core.ratelimit import subprocess_rate_for
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.tenant import TenantContext
-from daemon.metrics import REGISTRY
 from db.assets import AssetRepo
 from db.ports import PortRepo
 from modules.ports.naabu import scan_ports
