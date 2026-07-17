@@ -120,6 +120,34 @@ async def test_nuclei_aggressive_drops_tag_restriction_but_keeps_excludes():
     assert "-etags" in args  # but still excludes harmful tags
 
 
+async def test_nuclei_extra_tags_are_added_to_the_safe_baseline_not_replacing_it():
+    """Tech-derived product tags widen coverage on a safe scan; they must never drop
+    a baseline tag or the harmful-tag exclusion (§7, core.tech_tags)."""
+    cap = []
+    await scan(
+        ["https://a"],
+        10,
+        aggressive=False,
+        extra_tags={"wordpress", "jenkins"},
+        runner=make_runner([], cap),
+    )
+    args = cap[0]["args"]
+    tags = args[args.index("-tags") + 1].split(",")
+    assert {"wordpress", "jenkins"} <= set(tags)  # added
+    assert {"exposure", "misconfig", "cve"} <= set(tags)  # baseline preserved
+    assert "-etags" in args  # exclusion untouched
+
+
+async def test_nuclei_extra_tags_are_ignored_when_aggressive():
+    """Aggressive already runs the full library, so tech hints are a no-op there —
+    they must not sneak a -tags restriction onto an aggressive run."""
+    cap = []
+    await scan(
+        ["https://a"], 10, aggressive=True, extra_tags={"wordpress"}, runner=make_runner([], cap)
+    )
+    assert "-tags" not in cap[0]["args"]
+
+
 # -- stream_tool: live streaming + partial-on-timeout (nuclei's runner) -------
 async def test_stream_tool_streams_lines_and_calls_back():
     from modules.exec import stream_tool
@@ -188,8 +216,11 @@ async def test_nuclei_on_finding_called_per_finding():
 
     async def runner(binary, args, *, timeout, stdin=None):
         return [
-            {"template-id": "exposed-env", "matched-at": "https://a.com/.env",
-             "info": {"name": "Exposed .env", "severity": "high"}},
+            {
+                "template-id": "exposed-env",
+                "matched-at": "https://a.com/.env",
+                "info": {"name": "Exposed .env", "severity": "high"},
+            },
             {"template-id": "waf", "host": "a.com", "info": {"severity": "info"}},
         ]
 

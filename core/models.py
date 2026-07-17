@@ -227,6 +227,9 @@ class Endpoint(StatefulModel):
     tech: list[str] = Field(default_factory=list)
     source: str = ""  # discovering module: probe | crawl | feroxbuster
     content_hash: str | None = None  # body/title hash for delta detection
+    #: risk categories from core.endpoint_risk (admin/api/idor/ssrf/payment/…) —
+    #: which of the crawled URLs are worth a human's attention.
+    risk_tags: list[str] = Field(default_factory=list)
 
 
 class Port(StatefulModel):

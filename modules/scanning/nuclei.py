@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterable
 
 from core.logging import logger
 from modules.exec import stream_tool
@@ -105,21 +105,32 @@ async def _default_runner(
     return rows
 
 
+#: The passive-leaning baseline for HTTP-layer-only targets. Tech-specific product
+#: tags (core.tech_tags) are unioned onto this per run, never replacing it.
+SAFE_BASE_TAGS = ("exposure", "misconfig", "tech", "ssl", "cve", "default-login")
+
+
 async def scan(
     urls: list[str],
     timeout: float,
     *,
     aggressive: bool = False,
     rate: int = DEFAULT_RATE,
+    extra_tags: Iterable[str] = (),
     runner: Runner = _default_runner,
     on_finding=None,
 ) -> list[dict]:
     """Scan *urls* and return normalised findings.
 
     Non-aggressive runs restrict to passive/safe template tags; aggressive runs
-    allow the broader set but still exclude the harmful tags above. ``on_finding``
-    (async) is invoked per finding as nuclei emits it, for real-time persistence
-    (only wired for the real runner; injected test runners get the batch return)."""
+    allow the broader set but still exclude the harmful tags above. ``extra_tags``
+    (from :func:`core.tech_tags.nuclei_tags_for`) are product tags for the detected
+    tech stack; they are *added* to the safe baseline on non-aggressive runs so a
+    WordPress/Jenkins/… host gets its relevant templates without widening to the full
+    library. They never touch the harmful-tag exclusion, and are a no-op on aggressive
+    runs (which already run the full library). ``on_finding`` (async) is invoked per
+    finding as nuclei emits it, for real-time persistence (only wired for the real
+    runner; injected test runners get the batch return)."""
     urls = [u for u in urls if u]
     if not urls:
         return []
@@ -146,8 +157,11 @@ async def scan(
         ",".join(SAFE_EXCLUDE_TAGS),
     ]
     if not aggressive:
-        # HTTP-layer-only targets: passive-leaning tags, no active exploitation attempts.
-        args += ["-tags", "exposure,misconfig,tech,ssl,cve,default-login"]
+        # HTTP-layer-only targets: passive-leaning baseline, plus any tech-specific
+        # product tags for what httpx fingerprinted — added, never replacing the
+        # baseline, so coverage only grows. Sorted for a deterministic command.
+        tags = list(SAFE_BASE_TAGS) + sorted(set(extra_tags) - set(SAFE_BASE_TAGS))
+        args += ["-tags", ",".join(tags)]
 
     if runner is _default_runner:
         rows = await runner(

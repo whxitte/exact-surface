@@ -99,6 +99,7 @@ export interface Endpoint {
   title?: string | null;
   tech: string[];
   source?: string; // probe | crawl | feroxbuster
+  risk_tags?: string[]; // auth | admin | api | idor | ssrf | payment | exposure | …
   first_seen?: string;
   last_seen?: string; // last scan that re-confirmed it live
   gone?: boolean; // not re-observed in the latest sweep

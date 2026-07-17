@@ -793,6 +793,15 @@ export default function ProgramDetail() {
                 >
                   {ep.url}
                 </a>
+                {ep.risk_tags?.map((t) => (
+                  <span
+                    key={t}
+                    title="Risk category — worth a closer look"
+                    className="rounded bg-severity-high/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-severity-high"
+                  >
+                    {t}
+                  </span>
+                ))}
                 {ep.source && (
                   <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize text-muted-foreground sm:inline">
                     {ep.source}

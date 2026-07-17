@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from core.config import get_settings
+from core.endpoint_risk import classify_endpoint
 from core.hashing import endpoint_fingerprint
 from core.logging import logger
 from core.models import Endpoint
@@ -133,6 +134,7 @@ async def run_crawl(
             url=u,
             method="GET",
             source="crawl",
+            risk_tags=classify_endpoint(u),  # flag the auth/admin/idor/ssrf URLs
         )
         for u in in_scope_urls
     ]

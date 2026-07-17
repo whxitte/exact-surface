@@ -58,7 +58,9 @@ async def fake_probe(hosts, _timeout, *, rate=None):
 
 
 def make_fake_scan(capture):
-    async def fake_scan(urls, _timeout, aggressive=False, rate=None, on_finding=None):
+    async def fake_scan(
+        urls, _timeout, aggressive=False, rate=None, extra_tags=(), on_finding=None
+    ):
         capture.append({"urls": list(urls), "aggressive": aggressive})
         return [
             {
@@ -291,7 +293,7 @@ async def test_full_pipeline_isolates_failing_stage_and_continues():
     # must not sink the whole scan (losing secrets/notify after it).
     mongo = FakeMongo()
 
-    async def boom_scan(_urls, _t, aggressive=False):
+    async def boom_scan(_urls, _t, aggressive=False, **_kw):
         raise RuntimeError("scanner exploded")
 
     injected = _injected([]) | {"scan": boom_scan}

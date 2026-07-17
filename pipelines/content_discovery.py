@@ -13,6 +13,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from core.config import get_settings
+from core.endpoint_risk import classify_endpoint
 from core.errors import ToolNotFound
 from core.hashing import endpoint_fingerprint
 from core.logging import logger
@@ -157,6 +158,7 @@ async def run_content_discovery(
             method="GET",
             status_code=hit.get("status"),
             source="feroxbuster",
+            risk_tags=classify_endpoint(hit["url"]),  # content discovery finds the /admin, .bak, …
         )
         for hits in per_host_hits
         for hit in hits

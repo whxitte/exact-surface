@@ -21,6 +21,7 @@ from core.models import Finding
 from core.ratelimit import derive_subprocess_rate
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.severity import Severity
+from core.tech_tags import nuclei_tags_for
 from core.tenant import TenantContext
 from db.assets import AssetRepo
 from db.endpoints import EndpointRepo
@@ -57,6 +58,7 @@ async def run_scan(
     # the same host N times — massively slower for no extra coverage. Scanning the
     # host root gives full per-subdomain coverage. (Prefer an https endpoint's scheme.)
     scheme_by_host: dict[str, str] = {}
+    tech_by_host: dict[str, set[str]] = {}
     for ep in endpoints:
         parts = urlsplit(ep["url"])
         host = parts.hostname or ""
@@ -64,15 +66,27 @@ async def run_scan(
             continue
         if host not in scheme_by_host or parts.scheme == "https":
             scheme_by_host[host] = parts.scheme or "https"
+        tech_by_host.setdefault(host, set()).update(ep.get("tech") or [])
 
     safe_urls: list[str] = []
     aggressive_urls: list[str] = []
+    safe_hosts: list[str] = []
+    safe_tech: set[str] = set()
     for host, scheme in scheme_by_host.items():
         decision = engine.evaluate(host, ips_by_host.get(host, []), scope)
         if not decision.permits(Action.HTTP_PROBE):
             continue
         url = f"{scheme}://{host}"
-        (aggressive_urls if decision.permits(Action.ACTIVE_SCAN) else safe_urls).append(url)
+        if decision.permits(Action.ACTIVE_SCAN):
+            aggressive_urls.append(url)
+        else:
+            safe_urls.append(url)
+            # Collect tech + hostnames of the safe (HTTP-only) hosts so the non-
+            # aggressive scan can add their product templates. Aggressive runs already
+            # use the full library, so they need no tag hints (§7, core.tech_tags).
+            safe_hosts.append(host)
+            safe_tech |= tech_by_host.get(host, set())
+    safe_extra_tags = nuclei_tags_for(safe_tech, safe_hosts)
 
     if not safe_urls and not aggressive_urls:
         logger.info("scan {}: nothing to scan (no endpoints yet)", program_id)
@@ -142,7 +156,12 @@ async def run_scan(
     if safe_urls:
         rate = derive_subprocess_rate(len(safe_urls), cap, tool="nuclei")
         raw += await scan(
-            safe_urls, nuclei_timeout, aggressive=False, rate=rate.aggregate, on_finding=on_finding
+            safe_urls,
+            nuclei_timeout,
+            aggressive=False,
+            rate=rate.aggregate,
+            extra_tags=safe_extra_tags,
+            on_finding=on_finding,
         )
     if aggressive_urls:
         rate = derive_subprocess_rate(len(aggressive_urls), cap, tool="nuclei")
