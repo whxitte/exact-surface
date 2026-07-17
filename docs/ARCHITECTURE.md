@@ -59,7 +59,8 @@ is the boundary.
   and persist.
 - **taskqueue/** — cadence policy, the state-aware scheduler, dispatch, arq client.
 - **daemon/** — health checks + the scheduler supervisor (`--dry-run`). Metrics moved
-  to `core/metrics.py` (ADR-0010); `/metrics` is rendered by `api/main.py`.
+  to `core/metrics.py` (ADR-0010); `metrics_server.py` exposes a headless process's
+  registry over HTTP (ADR-0011).
 - **api/** — FastAPI: auth, tenant-scoped routes, ws stream, per-tenant limits.
 - **frontend/** — Next.js 14 dashboard.
 
@@ -143,6 +144,51 @@ emitting 700 info-level detections and 3 real issues should read as "3".
 
 ---
 
+## Observability
+
+**The registry is per-process.** `core/metrics.py` is plain in-memory state, so
+there is no shared store — each process holds only the samples it emitted itself.
+This has one consequence that catches everyone: *the metrics that describe
+scanning are not emitted by the API*. Stage outcomes, run durations, politeness
+decisions and port-scan rates all happen in the **worker**; scheduler liveness
+happens in the **scheduler**. Neither runs an HTTP server of its own, so
+`daemon/metrics_server.py` gives them one (ADR-0011) and Prometheus scrapes all
+three roles separately (`docker/prometheus.yml`). Scraping only the API shows you
+HTTP counters and nothing about scanning.
+
+What is emitted, and why each earns its place:
+
+| Metric | Role | Answers |
+| --- | --- | --- |
+| `vantari_scheduler_last_success_timestamp` | scheduler | Is scanning still happening? |
+| `vantari_scheduler_ticks_total{status}` · `..._jobs_enqueued_total` | scheduler | Ticking but enqueueing nothing? |
+| `vantari_scan_stage_total{stage,status}` · `..._duration_seconds` | worker | Which stage is failing, timing out, or slowing? |
+| `vantari_scan_run_total{pipeline,status}` · `..._duration_seconds` | worker | Are whole runs completing? |
+| `vantari_port_scan_per_target_pps` · `..._rate_pps` | worker | §15: does naabu stay under the cap? |
+| `vantari_politeness_decisions_total{decision}` · `..._rate_limit_pps` | worker | Is the limiter throttling? |
+| `vantari_alert_latency_seconds` | worker | §15 notify-hop latency. |
+| `vantari_http_requests_total{method,status}` | api | API traffic/errors. |
+
+**No metric carries a tenant, program, or host label** — deliberately. It bounds
+cardinality (a per-target label grows without limit in hosts ever scanned) and it
+keeps the listener free of tenant data, which is what lets it bind the container
+network without being an exposure.
+
+`vantari_scheduler_last_success_timestamp` deserves specific mention: `run_forever`
+swallows tick exceptions so one bad tick cannot kill the loop, which means a
+scheduler failing *every* tick still has a live process and an answering port
+while never enqueueing again. A liveness probe cannot see that; the gauge can.
+
+Dashboards (`docker/grafana/dashboards/`) and alerts (`docker/alerts.yml`) are
+provisioned from git, not click-ops. `tests/unit/test_dashboard_queries.py` asserts
+every panel/rule references a metric something actually emits — a renamed metric
+otherwise leaves a permanently empty panel that looks like "no problems".
+
+Sentry (`core/observability.py`) is DSN-optional and initialised by **all three**
+entrypoints. `send_default_pii=False`.
+
+---
+
 ## Testing shape
 
 | Suite | Proves |
@@ -174,10 +220,19 @@ just enough of motor; every tool wrapper takes an injectable runner.
 - **Search-engine response shapes are from vendor docs, not a live key.** Brave
   and SerpAPI wrappers are unit-tested against fixtures; verify against a real key
   before relying on them.
-- **Latency metrics** (§15 time-to-first-finding, KEV-match latency) are not
-  instrumented.
-- **Phase G** is largely stubbed: `daemon/metrics.py` is a hand-rolled registry,
-  Sentry is a placeholder, no verified encrypted backups, no 7-day unattended run.
+- **CVE/KEV match latency (§15, target <60min) is still not measurable.**
+  `CveRecord` has no `published` field, so there is no origin timestamp to measure
+  from; `parse_nvd` must carry it before the metric can mean anything. Alert
+  latency (finding first-seen → notified) *is* instrumented
+  (`vantari_alert_latency_seconds`), but that is only the notify hop — it is not
+  the signup→first-alert figure §15 asks for.
+- **Phase G is part-done.** Observability is wired end to end (see above); still
+  outstanding: verified encrypted Mongo backups, scope-feed auto-update,
+  rate-limit graceful degradation, deploy guides, Helm chart, and the 7-day
+  unattended run itself — which is the exit gate and can only be run, not coded.
+- **The alert thresholds in `docker/alerts.yml` are duplicated from app config**
+  because Prometheus cannot read `Settings`. `test_dashboard_queries.py` pins the
+  politeness cap against `global_rate_per_target`; the others are unguarded.
 - **Never run at multi-tenant scale**; the fairness cap is coded but unexercised.
 
 Build phases: A foundation · B core pipeline · C API/auth · D attacker's edge ·

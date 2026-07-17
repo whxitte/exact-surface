@@ -10,6 +10,15 @@ spec:
   template:
     metadata:
       labels: { app.kubernetes.io/component: worker, app.kubernetes.io/instance: {{ .Release.Name }} }
+      {{- if .Values.metrics.enabled }}
+      # The worker emits every scan/politeness metric into its own in-process
+      # registry (ADR-0011) and runs no other HTTP server. Without these it is
+      # never scraped and the scanning dashboards stay empty.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
     spec:
       containers:
         - name: worker
@@ -21,6 +30,15 @@ spec:
           env:
             - name: VANTARI_ENV
               value: {{ .Values.env | quote }}
+            - name: VANTARI_METRICS_ENABLED
+              value: {{ .Values.metrics.enabled | quote }}
+            - name: VANTARI_METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+          {{- if .Values.metrics.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          {{- end }}
           resources: {{- toYaml .Values.worker.resources | nindent 12 }}
 ---
 # Singleton scheduler — enqueues due jobs onto the shared queue.
@@ -37,6 +55,16 @@ spec:
   template:
     metadata:
       labels: { app.kubernetes.io/component: scheduler, app.kubernetes.io/instance: {{ .Release.Name }} }
+      {{- if .Values.metrics.enabled }}
+      # Scrape this one especially: run_forever swallows tick errors, so a
+      # scheduler that has stopped enqueueing anything still passes a liveness
+      # probe. vantari_scheduler_last_success_timestamp is the only thing that
+      # distinguishes it from healthy-and-idle (ADR-0011).
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.metrics.port | quote }}
+        prometheus.io/path: /metrics
+      {{- end }}
     spec:
       containers:
         - name: scheduler
@@ -48,4 +76,20 @@ spec:
           env:
             - name: VANTARI_ENV
               value: {{ .Values.env | quote }}
+            - name: VANTARI_METRICS_ENABLED
+              value: {{ .Values.metrics.enabled | quote }}
+            - name: VANTARI_METRICS_PORT
+              value: {{ .Values.metrics.port | quote }}
+          {{- if .Values.metrics.enabled }}
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.metrics.port }}
+          # The metrics listener runs on its own thread, so it answers even while
+          # the event loop is blocked in a scan — which makes it a usable probe
+          # target for a process that serves nothing else.
+          livenessProbe:
+            httpGet: { path: /health, port: metrics }
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          {{- end }}
           resources: {{- toYaml .Values.scheduler.resources | nindent 12 }}

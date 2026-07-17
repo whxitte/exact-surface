@@ -1,0 +1,10 @@
+# Auto-provisioned so the stack comes up with a working datasource — no click-ops.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    uid: vantari-prometheus
+    editable: false

@@ -36,8 +36,21 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
     from core.logging import configure_logging
 
     configure_logging(level=settings.log_level, json_logs=settings.is_prod)
+    # The worker is where scanning actually happens, so it is where errors that
+    # matter actually occur. Only the API used to initialise Sentry, which meant
+    # every pipeline/tool failure on an unattended run was invisible.
+    from core.observability import init_sentry
+
+    init_sentry(settings)
     ctx["settings"] = settings
     ctx["limiter"] = build_limiter(settings)
+    # The worker emits the metrics that actually describe scanning (stage
+    # outcomes, run durations, politeness throttles) into a per-process registry.
+    # arq gives it no HTTP server, so without this listener nothing can scrape it.
+    if settings.metrics_enabled:
+        from daemon.metrics_server import start_metrics_server
+
+        ctx["metrics_server"] = start_metrics_server(settings.metrics_port)
     from db.mongo import get_mongo
 
     mongo = get_mongo()
@@ -56,6 +69,9 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
 
 
 async def shutdown(ctx: dict) -> None:  # arq lifecycle hook
+    from daemon.metrics_server import stop_metrics_server
+
+    stop_metrics_server(ctx.get("metrics_server"))
     mongo = ctx.get("mongo")
     if mongo is not None:
         await mongo.close()

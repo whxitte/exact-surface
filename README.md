@@ -17,7 +17,7 @@ re-scan), multi-tenant from line one, and **never exploits — only detects**.
 | [`docs/API.md`](docs/API.md) | endpoint reference + the rules a schema can't show (why cross-tenant is 404, why `ip_scope` is strings) |
 | [`docs/ADRs/`](docs/ADRs/) | why things are the way they are — read before changing a control |
 | [`docs/TESTING.md`](docs/TESTING.md) | run it end-to-end against a target you own |
-| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | roles, images, sizing |
+| [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | roles, images, sizing, observability (scraping only the api shows you nothing about scanning) |
 | [`VANTARI_BUILD_SPEC.md`](VANTARI_BUILD_SPEC.md) | the full original design spec (authoritative) |
 | [`context.md`](context.md) | running engineering log: what's done, what's known-broken, and why |
 

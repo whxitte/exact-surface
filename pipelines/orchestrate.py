@@ -15,6 +15,7 @@ from typing import Any
 
 from core.errors import AuthorizationRequired
 from core.logging import bind_context, logger
+from core.metrics import REGISTRY
 from core.models import ScanRun, ScanStage, ScanStatus
 from core.scope import ProgramScope, ScopeEngine, confirm_ip_scope, is_asn_confirmed
 from core.tenant import TenantContext
@@ -123,6 +124,51 @@ async def _default_asn_ranges(apex: str, timeout: float) -> list[str]:
     from modules.osint.asn_mapper import map_domain
 
     return await map_domain(apex, timeout)
+
+
+#: Buckets (seconds) for per-stage duration. Stages range from a sub-second
+#: correlate to a 60-minute nuclei, so the spread is deliberately wide.
+STAGE_DURATION_BUCKETS: tuple[float, ...] = (1, 5, 15, 60, 300, 900, 1800, 3600, 7200)
+
+
+def _observe_stage(name: str, status: str, stage: ScanStage) -> None:
+    """Record one stage's outcome + duration.
+
+    This is the signal that catches a silent stall on an unattended run: a stage
+    quietly flipping to ``timeout``, or its duration creeping toward its budget,
+    is visible here long before a human notices missing findings.
+    """
+    REGISTRY.inc(
+        "vantari_scan_stage_total",
+        help="Scan stages by outcome",
+        stage=name,
+        status=status,
+    )
+    if stage.started_at and stage.finished_at:
+        REGISTRY.observe(
+            "vantari_scan_stage_duration_seconds",
+            (stage.finished_at - stage.started_at).total_seconds(),
+            help="Per-stage wall-clock duration",
+            buckets=STAGE_DURATION_BUCKETS,
+            stage=name,
+        )
+
+
+def _observe_run(run: ScanRun) -> None:
+    REGISTRY.inc(
+        "vantari_scan_run_total",
+        help="Completed scan runs by pipeline and outcome",
+        pipeline=run.pipeline,
+        status=run.status.value,
+    )
+    if run.started_at and run.finished_at:
+        REGISTRY.observe(
+            "vantari_scan_run_duration_seconds",
+            (run.finished_at - run.started_at).total_seconds(),
+            help="Full-pipeline wall-clock duration",
+            buckets=STAGE_DURATION_BUCKETS,
+            pipeline=run.pipeline,
+        )
 
 
 #: how often to re-save a running ScanRun so its ``updated_at`` reflects liveness.
@@ -401,6 +447,7 @@ async def run_full_pipeline(
                     )
                     failed.append(name)
                     results[name] = {"failed": True, "note": stage_obj.note}
+                    _observe_stage(name, "timeout" if timed_out else "failed", stage_obj)
                     await audit.save(run)
                     # TimeoutError (and some cancellations) stringify to "", which made
                     # the log read "... failed (continuing): " — surface the type + note.
@@ -414,6 +461,7 @@ async def run_full_pipeline(
                     stage_obj.status = ScanStatus.SUCCESS
                     stage_obj.stats = {k: v for k, v in res.items() if isinstance(v, int)}
                 results[name] = res
+                _observe_stage(name, stage_obj.status.value, stage_obj)
                 await audit.save(run)  # flip to done (+ stats/note) after the stage completes
 
         # The run is SUCCESS even if a non-fatal stage failed — every other stage ran
@@ -422,6 +470,7 @@ async def run_full_pipeline(
         run.finished_at = datetime.now(UTC)
         if failed:
             run.error = "stage(s) failed: " + ", ".join(failed)
+        _observe_run(run)
 
         def _stat(stage: str, key: str) -> int:
             return int((results.get(stage) or {}).get(key, 0) or 0)

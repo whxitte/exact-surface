@@ -1,0 +1,228 @@
+{
+  "uid": "vantari-ops",
+  "title": "Vantari — Operations",
+  "description": "Is scanning alive, is it polite, and is it healthy? Ordered by what an operator checks first during the §7 Phase G unattended run. Every query here matches a metric name emitted in core/, pipelines/, or taskqueue/.",
+  "tags": ["vantari"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": true,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "type": "row",
+      "title": "Liveness — is scanning still happening at all?",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Time since last successful scheduler tick",
+      "description": "The scheduler swallows tick exceptions to keep the loop alive, so a broken one still looks 'up'. This is the number that exposes it. Should sit under the 60s tick interval.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "time() - vantari_scheduler_last_success_timestamp",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 180 },
+              { "color": "red", "value": 600 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Jobs enqueued",
+      "description": "Flat at zero while programs are due means the scheduler is running but deciding nothing is worth doing — a different failure from not ticking.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 6, "w": 9, "x": 6, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(vantari_scheduler_jobs_enqueued_total[5m])) * 60",
+          "legendFormat": "jobs/min"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Scheduler ticks by outcome",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 6, "w": 9, "x": 15, "y": 1 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(vantari_scheduler_ticks_total[5m])) * 60",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "Politeness — the AUP-breach surface (§3.8b, §15)",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 7 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Port scan rate vs the per-target cap",
+      "description": "§15 exit criterion: naabu never exceeds the global rate cap, verified by metrics. The per-target line crossing the cap is an AUP breach against a third party — a token bucket cannot govern a subprocess, so this is the only thing that proves the derived --rate was right.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "vantari_port_scan_per_target_pps",
+          "legendFormat": "per-target pps — {{instance}}"
+        },
+        {
+          "refId": "B",
+          "expr": "vantari_politeness_rate_limit_pps",
+          "legendFormat": "configured cap"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "reqps", "min": 0 },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "configured cap" },
+            "properties": [
+              { "id": "custom.lineStyle", "value": { "dash": [8, 8], "fill": "dash" } },
+              { "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Politeness decisions",
+      "description": "Aggregate only — there is deliberately no per-target label, which would make cardinality unbounded in the number of hosts ever scanned.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (decision) (rate(vantari_politeness_decisions_total[5m]))",
+          "legendFormat": "{{decision}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "Pipeline health",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 15 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Stage failure + timeout rate by stage",
+      "description": "'timeout' and 'failed' are separated at the source: too-slow and broken need different fixes. A stage quietly climbing here is the Phase G failure mode — scans still 'succeed' with missing data.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (stage) (rate(vantari_scan_stage_total{status=~\"failed|timeout\"}[1h])) / clamp_min(sum by (stage) (rate(vantari_scan_stage_total[1h])), 0.001)",
+          "legendFormat": "{{stage}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Stage duration p95",
+      "description": "Watch for a stage creeping toward its timeout budget before it starts actually timing out.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (stage, le) (rate(vantari_scan_stage_duration_seconds_bucket[1h])))",
+          "legendFormat": "{{stage}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Scan runs by outcome",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 23 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(vantari_scan_run_total[1h])) * 3600",
+          "legendFormat": "{{status}}/hr"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Full run duration p95",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 23 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (pipeline, le) (rate(vantari_scan_run_duration_seconds_bucket[6h])))",
+          "legendFormat": "{{pipeline}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "timeseries",
+      "title": "Alert latency p95 (finding first seen → notified)",
+      "description": "§15 tracks time-to-first-alert. This measures the notify hop only, not signup→alert end to end.",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 23 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(vantari_alert_latency_seconds_bucket[6h])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s", "min": 0 }, "overrides": [] }
+    },
+    {
+      "type": "row",
+      "title": "API",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 30 }
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP requests by status",
+      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "gridPos": { "h": 7, "w": 24, "x": 0, "y": 31 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(vantari_http_requests_total[5m]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "reqps", "min": 0 }, "overrides": [] }
+    }
+  ]
+}

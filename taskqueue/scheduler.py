@@ -22,6 +22,7 @@ from typing import Any
 
 from core.config import Settings, get_settings
 from core.logging import logger
+from core.metrics import REGISTRY
 from core.plans import allowed_program_ids
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
@@ -44,6 +45,35 @@ BOOTSTRAP_RETRY_SECONDS = 30 * 60
 
 def _auth_current(auth: dict | None) -> bool:
     return bool(auth and auth.get("apex_verified") and not auth.get("revoked"))
+
+
+def _observe_tick(status: str, *, jobs: int = 0, now: datetime | None = None) -> None:
+    """Record the outcome of one scheduler tick.
+
+    ``run_forever`` deliberately swallows tick exceptions so one bad tick cannot
+    kill the loop — which means a scheduler failing *every* tick is externally
+    indistinguishable from a healthy idle one. ``vantari_scheduler_last_success_
+    timestamp`` is the fix: alert when ``time() - <gauge>`` exceeds a few ticks and
+    you catch both a crashed loop and a silently-failing one.
+    """
+    REGISTRY.inc(
+        "vantari_scheduler_ticks_total",
+        help="Scheduler loop iterations by outcome.",
+        status=status,
+    )
+    if status != "ok":
+        return
+    REGISTRY.set(
+        "vantari_scheduler_last_success_timestamp",
+        (now or datetime.now(UTC)).timestamp(),
+        help="Unix time of the last scheduler tick that completed without error.",
+    )
+    if jobs:
+        REGISTRY.inc(
+            "vantari_scheduler_jobs_enqueued_total",
+            value=float(jobs),
+            help="Jobs enqueued by the scheduler.",
+        )
 
 
 class Scheduler:
@@ -199,6 +229,7 @@ class Scheduler:
             await schedule.mark_enqueued(job.tenant_id, job.program_id, job.pipeline, now)
         if jobs:
             logger.info("scheduler enqueued {} job(s)", len(jobs))
+        _observe_tick("ok", jobs=len(jobs), now=now)
         return len(jobs)
 
     async def run_forever(self) -> None:  # pragma: no cover - infinite loop
@@ -209,4 +240,5 @@ class Scheduler:
                 await self.run_once()
             except Exception as exc:  # noqa: BLE001 - a tick failure must not kill the loop
                 logger.error("scheduler tick failed: {}", exc)
+                _observe_tick("failed")
             await asyncio.sleep(tick)

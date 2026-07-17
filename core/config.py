@@ -152,6 +152,9 @@ class Settings(BaseSettings):
     # -- observability ---------------------------------------------------
     sentry_dsn: SecretStr | None = Field(default=None)
     metrics_enabled: bool = Field(default=True)
+    # The registry is per-process and the worker/scheduler serve no HTTP, so
+    # without their own listener their metrics can never be scraped.
+    metrics_port: int = Field(default=9100, description="worker/scheduler /metrics port")
     log_level: str = Field(default="INFO")
 
     @field_validator("env")

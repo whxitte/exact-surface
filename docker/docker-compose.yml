@@ -100,6 +100,47 @@ services:
     depends_on:
       api: { condition: service_started }
 
+  # -- observability (§7 Phase G) --------------------------------------------
+  # Each process keeps its own in-memory registry, so Prometheus scrapes each one
+  # separately: the API from its own app, the scheduler and every worker replica
+  # from daemon.metrics_server. Neither of these publishes a port to the host —
+  # reach them through Grafana, which is the only exposed entry point.
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 15d of local TSDB is enough to investigate an unattended run without
+      # unbounded disk growth on a single box.
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api: { condition: service_started }
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      # Dev-stack default. Change it (or set it in ../.env) before exposing this
+      # anywhere reachable — Grafana can query every metric the platform emits.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    depends_on:
+      prometheus: { condition: service_started }
+
 volumes:
   mongo_data:
   redis_data:
+  prometheus_data:
+  grafana_data:

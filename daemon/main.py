@@ -64,6 +64,11 @@ async def _supervise() -> int:
     settings = get_settings()
     configure_logging(json_logs=settings.is_prod)
     settings.assert_prod_safe()
+    # The scheduler runs unattended for days; a crash here silently stops ALL
+    # scanning, so its errors must reach Sentry too (not just the API's).
+    from core.observability import init_sentry
+
+    init_sentry(settings)
     logger.info("vantari daemon starting (scheduler)")
 
     report = await run_health_checks(check_services=True)
@@ -79,6 +84,13 @@ async def _supervise() -> int:
     mongo = get_mongo()
     await mongo.connect()
     pool = await create_pool()
+    # Serve this process's registry: the scheduler's tick metrics are the ones
+    # that tell an operator scanning has quietly stopped, and nothing else in the
+    # process listens on HTTP.
+    if settings.metrics_enabled:
+        from daemon.metrics_server import start_metrics_server
+
+        start_metrics_server(settings.metrics_port)
     scheduler = Scheduler(mongo, make_enqueuer(pool))
     await scheduler.run_forever()
     return 0

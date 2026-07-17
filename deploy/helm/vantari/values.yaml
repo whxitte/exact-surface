@@ -32,6 +32,15 @@ scheduler:
     requests: { cpu: "50m", memory: "128Mi" }
     limits: { cpu: "200m", memory: "256Mi" }
 
+# Each process serves its own registry (ADR-0011) — there is no shared store, so
+# the worker/scheduler must be scraped directly or every scanning metric is lost.
+# Annotation-based discovery is used for portability; if you run the Prometheus
+# Operator, add a PodMonitor selecting `app.kubernetes.io/component in
+# (worker, scheduler)` on the `metrics` port instead.
+metrics:
+  enabled: true
+  port: 9100
+
 ingress:
   enabled: true
   className: nginx
