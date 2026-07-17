@@ -30,3 +30,11 @@ class AuthorizationRepo:
             upsert=True,
         )
         return doc
+
+    async def set_ip_scope(self, tenant_id: str, program_id: str, entries: list[dict]) -> None:
+        """Record the server's ASN-confirmation verdict for the requested CIDRs
+        (§5d: the confirmation is part of the auditable authorization artifact)."""
+        await self._c.update_one(
+            {"tenant_id": tenant_id, "program_id": program_id},
+            {"$set": {"ip_scope": entries}},
+        )

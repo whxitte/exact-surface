@@ -39,6 +39,7 @@ from core.liveness import (
 )
 from core.models import (
     Authorization,
+    IpScopeEntry,
     Program,
     ScanRun,
     ScanStage,
@@ -46,6 +47,7 @@ from core.models import (
     VerificationMethod,
 )
 from core.plans import max_domains
+from core.scope import HTTP_LAYER_ACTIONS, PENDING, IpClass
 from core.severity import Severity
 from core.verification import dns_instructions, http_instructions
 from db.assets import AssetRepo
@@ -401,13 +403,27 @@ async def create_authorization(
         raise HTTPException(
             status.HTTP_409_CONFLICT, "domain must be verified before authorization"
         )
+    # §9b step 3: the client only REQUESTS CIDRs. They are recorded as pending,
+    # HTTP-layer-only, and are promoted to DEDICATED solely by the worker after
+    # asnmap confirms them against the verified apex's announced ASN ranges — the
+    # API host has no asnmap (§3.8 keeps it separate), and self-attestation must
+    # never grant aggressive scanning of infrastructure the customer may not own.
+    requested = [
+        IpScopeEntry(
+            cidr=cidr,
+            ip_class=IpClass.PUBLIC.value,
+            action_set=sorted(a.value for a in HTTP_LAYER_ACTIONS),
+            confirmed_via=PENDING,
+        )
+        for cidr in body.ip_scope
+    ]
     auth = Authorization(
         tenant_id=principal.tenant_id,
         program_id=program["program_id"],
         authorized_by=principal.user_id or "apikey",
         apex_verified=True,
         verification_method=program.get("verification_method"),
-        ip_scope=body.ip_scope,
+        ip_scope=requested,
         tos_version=body.tos_version,
     )
     await AuthorizationRepo.from_mongo(mongo).save(auth)

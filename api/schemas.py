@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, EmailStr, Field
 
-from core.models import ChannelType, IpScopeEntry, Role, VerificationMethod
+from core.models import ChannelType, Role, VerificationMethod
 from core.severity import Severity
 
 
@@ -62,7 +62,11 @@ class VerifyCheckResponse(BaseModel):
 
 # -- authorization -----------------------------------------------------------
 class AuthorizationCreate(BaseModel):
-    ip_scope: list[IpScopeEntry] = Field(default_factory=list)
+    #: CIDRs the customer *requests* be treated as their own dedicated infra.
+    #: Plain strings by design: the class/action-set/confirmed_via are decided by
+    #: the server against real ASN data (§9b step 3) and can never be asserted by
+    #: the client — otherwise "dedicated" would be self-granted.
+    ip_scope: list[str] = Field(default_factory=list, max_length=64)
     tos_version: str = "v1"
 
 

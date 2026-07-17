@@ -311,15 +311,33 @@ const SECTIONS: Section[] = [
     id: "scope",
     title: "Scope & safety",
     icon: Lock,
-    keywords: "scope safety authorization verification dedicated shared cidr consent politeness",
+    keywords:
+      "scope safety authorization verification dedicated shared cidr consent politeness asn asnmap confirmed unconfirmed ip scope",
     body: (
-      <p>
-        Before any active scanning, you must <Term>verify ownership</Term> of the domain (DNS/HTTP token)
-        and grant <Term>authorization</Term>. A central scope engine then gates every action: shared
-        cloud/CDN IPs get HTTP-only checks, only infrastructure confirmed as dedicated to you is
-        port-scanned or actively probed, and a hard deny-list is never overridable. Scanning is
-        rate-limited for politeness.
-      </p>
+      <>
+        <p>
+          Before any active scanning, you must <Term>verify ownership</Term> of the domain (DNS/HTTP token)
+          and grant <Term>authorization</Term>. A central scope engine then gates every action: shared
+          cloud/CDN IPs get HTTP-only checks, only infrastructure confirmed as dedicated to you is
+          port-scanned or actively probed, and a hard deny-list is never overridable. Scanning is
+          rate-limited for politeness.
+        </p>
+        <p>
+          <Term>Why a CIDR you list isn&apos;t automatically port-scanned.</Term> Proving you control a
+          domain doesn&apos;t prove you own every IP its subdomains point at — so listing a range in your
+          authorization only <em>requests</em> it. Before each scan we look up the ASN actually announcing
+          your verified apex and check the range against it. Confirmed → <Code>dedicated</Code>, full
+          scanning, recorded on the authorization record as <Code>asnmap:&lt;range&gt;</Code>. Not
+          confirmed → <Code>unconfirmed</Code>, HTTP-layer checks only. A third-party CDN edge is{" "}
+          <em>never</em> promoted, even if the ASN matches — that hardware is Cloudflare&apos;s, not yours.
+        </p>
+        <p>
+          This is re-checked on every run, so a range you stop announcing drops back to HTTP-only
+          automatically. If ASN data is unavailable we confirm nothing rather than guess. Own the cloud
+          your domain runs on and want its shared ranges scanned? Use the explicit{" "}
+          <Term>scan shared infra</Term> opt-in on the program instead.
+        </p>
+      </>
     ),
   },
   {

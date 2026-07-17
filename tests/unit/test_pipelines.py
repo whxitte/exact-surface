@@ -366,30 +366,58 @@ async def test_run_program_requires_authorization():
         await run_program(mongo=mongo, engine=ENGINE, tenant=TENANT, program_id="p1", timeout=10)
 
 
-async def test_build_program_scope_extracts_dedicated_cidrs():
-    program = Program(
+def _program_doc() -> dict:
+    return Program(
         tenant_id="t1",
         program_id="p1",
         apex_domain="customer.com",
         excluded_hosts=["legacy.customer.com"],
     ).model_dump(mode="json")
-    auth = Authorization(
+
+
+def _auth_doc(entry: IpScopeEntry) -> dict:
+    return Authorization(
         tenant_id="t1",
         program_id="p1",
         authorized_by="u1",
         apex_verified=True,
-        ip_scope=[
-            IpScopeEntry(
-                cidr="45.55.0.0/16",
-                ip_class="dedicated",
-                action_set=["port_scan"],
-                confirmed_via="whois:AS14061",
-            )
-        ],
+        ip_scope=[entry],
     ).model_dump(mode="json")
-    scope = build_program_scope(program, auth)
+
+
+async def test_build_program_scope_honours_asn_confirmed_cidrs():
+    """Only a CIDR the SERVER confirmed via asnmap becomes authorized-dedicated."""
+    auth = _auth_doc(
+        IpScopeEntry(
+            cidr="45.55.0.0/16",
+            ip_class="dedicated",
+            action_set=["port_scan"],
+            confirmed_via="asnmap:45.55.0.0/16",
+        )
+    )
+    scope = build_program_scope(_program_doc(), auth)
     assert scope.authorized_dedicated_cidrs == ("45.55.0.0/16",)
     assert "legacy.customer.com" in scope.excluded_hosts
+
+
+async def test_build_program_scope_ignores_self_declared_dedicated_cidr():
+    """§9b: a client-attested 'dedicated' entry must NOT grant full scanning.
+
+    This is the regression guard for the P0 — previously any ip_class="dedicated"
+    entry in the request body was honoured verbatim, so a tenant could unlock
+    aggressive scanning of infrastructure they don't own.
+    """
+    for bogus in ("whois:AS14061", "acknowledged_shared", "", "asnmap-ish", "pending"):
+        auth = _auth_doc(
+            IpScopeEntry(
+                cidr="8.8.8.0/24",
+                ip_class="dedicated",  # claimed, but never server-confirmed
+                action_set=["port_scan"],
+                confirmed_via=bogus,
+            )
+        )
+        scope = build_program_scope(_program_doc(), auth)
+        assert scope.authorized_dedicated_cidrs == (), f"{bogus!r} was trusted"
 
 
 async def test_paused_program_skips_automated_full_run():

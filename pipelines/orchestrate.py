@@ -16,7 +16,7 @@ from typing import Any
 from core.errors import AuthorizationRequired
 from core.logging import bind_context, logger
 from core.models import ScanRun, ScanStage, ScanStatus
-from core.scope import ProgramScope, ScopeEngine
+from core.scope import ProgramScope, ScopeEngine, confirm_ip_scope, is_asn_confirmed
 from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
@@ -40,11 +40,18 @@ from pipelines.uncover import run_uncover
 
 
 def build_program_scope(program: dict, authorization: dict | None) -> ProgramScope:
-    """Assemble the immutable scope object the engine evaluates against."""
+    """Assemble the immutable scope object the engine evaluates against.
+
+    Only ip_scope entries the **server** confirmed against real ASN data are
+    honoured (§9b step 3). A ``dedicated`` class alone is not enough — an entry
+    must also carry the ``asnmap:`` confirmation marker, which the API can never
+    set from client input. An unconfirmed CIDR therefore grants HTTP-layer access
+    only, no matter what the request body claimed.
+    """
     dedicated: tuple[str, ...] = ()
     if authorization:
         dedicated = tuple(
-            e["cidr"] for e in authorization.get("ip_scope", []) if e.get("ip_class") == "dedicated"
+            e["cidr"] for e in authorization.get("ip_scope", []) if is_asn_confirmed(e)
         )
     return ProgramScope(
         verified_apexes=(program["apex_domain"],),
@@ -57,6 +64,63 @@ def build_program_scope(program: dict, authorization: dict | None) -> ProgramSco
 
 def _auth_is_current(auth: dict | None) -> bool:
     return bool(auth and auth.get("apex_verified") and not auth.get("revoked"))
+
+
+#: How long asnmap gets to confirm the authorization's IP scope.
+ASN_CONFIRM_TIMEOUT = 60.0
+
+
+async def confirm_authorization_ip_scope(
+    mongo: Any,
+    program: dict,
+    auth: dict,
+    *,
+    engine: ScopeEngine,
+    asn_ranges=None,
+) -> dict:
+    """Confirm the authorization's requested CIDRs against real ASN data (§9b step 3).
+
+    Runs on the **worker**, which is the only host with ``asnmap`` (§3.8 keeps the
+    API slim). The verdict is written back into the authorization record so the
+    confirmation is auditable (§5d), then the scope is built from it.
+
+    Fails safe: if asnmap is missing, times out, or errors, nothing is confirmed —
+    every CIDR stays HTTP-layer only. Losing ASN data must never *grant* access.
+    """
+    requested = [e.get("cidr") for e in auth.get("ip_scope", []) if e.get("cidr")]
+    if not requested:
+        return auth
+
+    ranges: list[str] = []
+    try:
+        lookup = asn_ranges or _default_asn_ranges
+        ranges = await lookup(program["apex_domain"], ASN_CONFIRM_TIMEOUT)
+    except Exception as exc:  # noqa: BLE001 - no ASN data ⇒ confirm nothing
+        logger.warning(
+            "asnmap confirmation unavailable for {} ({}) — IP scope stays unconfirmed",
+            program["apex_domain"],
+            type(exc).__name__,
+        )
+
+    entries = confirm_ip_scope(requested, ranges, engine=engine)
+    await AuthorizationRepo.from_mongo(mongo).set_ip_scope(
+        auth["tenant_id"], auth["program_id"], entries
+    )
+    confirmed = [e["cidr"] for e in entries if is_asn_confirmed(e)]
+    logger.info(
+        "ip-scope confirmation for {}: {} requested → {} confirmed dedicated {}",
+        program["apex_domain"],
+        len(requested),
+        len(confirmed),
+        confirmed or "",
+    )
+    return {**auth, "ip_scope": entries}
+
+
+async def _default_asn_ranges(apex: str, timeout: float) -> list[str]:
+    from modules.osint.asn_mapper import map_domain
+
+    return await map_domain(apex, timeout)
 
 
 #: how often to re-save a running ScanRun so its ``updated_at`` reflects liveness.
@@ -341,6 +405,7 @@ async def run_program(
     timeout: float,
     scan_id: str | None = None,
     force: bool = False,
+    asn_ranges=None,
 ) -> dict:
     """Load program + authorization, enforce authorization, then run the pipeline.
 
@@ -371,6 +436,9 @@ async def run_program(
             f"no current authorization for program {program_id}; refusing to scan"
         )
 
+    auth = await confirm_authorization_ip_scope(
+        mongo, program, auth, engine=engine, asn_ranges=asn_ranges
+    )
     scope = build_program_scope(program, auth)
     # resolve per-stage timeouts: built-ins ← tenant defaults ← program overrides
     from db.tenants import TenantRepo

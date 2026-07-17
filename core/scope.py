@@ -155,6 +155,23 @@ def _parse_networks(cidrs: tuple[str, ...] | list[str]):
     return nets
 
 
+#: Marker prefix written into ``IpScopeEntry.confirmed_via`` when — and only when —
+#: the server itself confirmed a CIDR against the apex's announced ASN ranges.
+#: ``build_program_scope`` trusts nothing else, so a client-supplied string can
+#: never promote a CIDR to DEDICATED (§9b step 3).
+ASN_CONFIRMED_PREFIX = "asnmap:"
+UNCONFIRMED = "unconfirmed"
+PENDING = "pending"
+CDN_NEVER_DEDICATED = "cdn_edge_never_dedicated"
+
+
+def is_asn_confirmed(entry: dict) -> bool:
+    """True only for an entry the server confirmed against real ASN data."""
+    return str(entry.get("ip_class")) == IpClass.DEDICATED.value and str(
+        entry.get("confirmed_via", "")
+    ).startswith(ASN_CONFIRMED_PREFIX)
+
+
 class ScopeEngine:
     """Holds the CDN/cloud feeds and evaluates scope decisions.
 
@@ -285,11 +302,15 @@ class ScopeEngine:
                 IpClass.CLOUD_SHARED,
                 IpClass.PUBLIC,
             )
-            is_dedicated = (
-                lab_private
-                or shared_ok
-                or any(addr.version == n.version and addr in n for n in dedicated_nets)
+            # A third-party CDN edge is NEVER promotable to dedicated, even if it
+            # falls inside an authorized CIDR — that infrastructure belongs to
+            # Cloudflare/Akamai/Fastly, not the customer (§9b). Defence in depth:
+            # authorized_dedicated_cidrs should already be ASN-confirmed, but a bad
+            # or stale entry must not unlock aggressive scanning of a CDN.
+            in_dedicated_cidr = cls != IpClass.CDN and any(
+                addr.version == n.version and addr in n for n in dedicated_nets
             )
+            is_dedicated = lab_private or shared_ok or in_dedicated_cidr
             if is_dedicated:
                 classes.append(IpClass.DEDICATED)
             else:
@@ -351,3 +372,64 @@ async def assert_in_scope(
     if not decision.allowed:
         raise OutOfScope(decision.host, decision.reason)
     return decision
+
+
+def confirm_ip_scope(
+    requested_cidrs: list[str],
+    apex_asn_ranges: list[str],
+    *,
+    engine: ScopeEngine | None = None,
+) -> list[dict]:
+    """Decide, **server-side**, what each requested CIDR is actually allowed (§9b step 3).
+
+    A customer proving DNS control over an apex does not authorise scanning every
+    IP that apex's subdomains resolve to. So the client only ever *requests* CIDRs;
+    this function assigns the class, action set, and ``confirmed_via`` — the client
+    never supplies them.
+
+    A CIDR is promoted to ``DEDICATED`` (full actions) only when it sits inside a
+    range genuinely announced by the ASN behind the customer's verified apex
+    (*apex_asn_ranges*, from ``asnmap``). Otherwise it stays HTTP-layer only.
+    Non-routable/internal ranges are rejected outright, and a CDN edge is never
+    dedicated even if the ASN matches — that range belongs to the CDN.
+
+    Returns ``IpScopeEntry``-shaped dicts. Invalid CIDRs are dropped.
+    """
+    engine = engine or default_engine()
+    apex_nets = _parse_networks(apex_asn_ranges)
+    out: list[dict] = []
+
+    for cidr in requested_cidrs:
+        try:
+            net = ipaddress.ip_network(cidr, strict=False)
+        except ValueError:
+            continue  # not a CIDR — silently dropped rather than trusted
+
+        cls = engine.classify_ip(str(net.network_address))
+        if cls in HARD_DENY:
+            continue  # never authorisable, at any tier — don't even record it
+
+        containing = next(
+            (n for n in apex_nets if n.version == net.version and net.subnet_of(n)),
+            None,
+        )
+        if cls == IpClass.CDN:
+            decided_class, actions, via = cls, HTTP_LAYER_ACTIONS, CDN_NEVER_DEDICATED
+        elif containing is not None:
+            decided_class, actions, via = (
+                IpClass.DEDICATED,
+                FULL_ACTIONS,
+                f"{ASN_CONFIRMED_PREFIX}{containing}",
+            )
+        else:
+            decided_class, actions, via = cls, HTTP_LAYER_ACTIONS, UNCONFIRMED
+
+        out.append(
+            {
+                "cidr": str(net),
+                "ip_class": decided_class.value,
+                "action_set": sorted(a.value for a in actions),
+                "confirmed_via": via,
+            }
+        )
+    return out
