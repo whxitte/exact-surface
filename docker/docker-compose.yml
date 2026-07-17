@@ -64,7 +64,12 @@ services:
     image: vantari/pipeline:latest
     command: ["arq", "taskqueue.worker.WorkerSettings"]
     env_file: ../.env
-    environment: *backend-env
+    environment:
+      <<: *backend-env
+      # Must track `replicas` below. If Redis is down each worker falls back to a
+      # local bucket at 1/this of the per-target ceiling; set it under the real
+      # replica count and a degraded fleet scans over the cap (ADR-0012).
+      VANTARI_WORKER_FLEET_SIZE: "2"
     restart: unless-stopped
     deploy:
       replicas: 2

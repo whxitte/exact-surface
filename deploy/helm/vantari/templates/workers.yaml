@@ -30,6 +30,12 @@ spec:
           env:
             - name: VANTARI_ENV
               value: {{ .Values.env | quote }}
+            # Derived from replicas, not configured separately: if Redis is down each
+            # worker enforces 1/fleet_size of the ceiling locally, so a fleet_size
+            # below the real replica count means the degraded fleet exceeds the
+            # per-target cap (ADR-0012). Templating it removes that footgun here.
+            - name: VANTARI_WORKER_FLEET_SIZE
+              value: {{ .Values.worker.replicas | quote }}
             - name: VANTARI_METRICS_ENABLED
               value: {{ .Values.metrics.enabled | quote }}
             - name: VANTARI_METRICS_PORT

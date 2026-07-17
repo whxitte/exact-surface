@@ -14,6 +14,7 @@ from typing import Any
 from core.hashing import finding_fingerprint
 from core.logging import logger
 from core.models import Finding
+from core.ratelimit import PolitenessLimiter, throttled_fetch
 from core.scope import ProgramScope, ScopeEngine
 from core.severity import Severity
 from core.tenant import TenantContext
@@ -35,8 +36,14 @@ async def run_takeover(
     timeout: float,
     fetch=default_fetch,
     resolve=dnsx_resolve_one,
+    limiter: PolitenessLimiter | None = None,
 ) -> dict:
     tid = tenant.tenant_id
+    # This stage makes in-process HTTP requests straight at customer hosts, and ran
+    # unthrottled until ADR-0012 — the limiter existed but nothing ever called it.
+    # Wrapping the injected fetch paces every probe without touching the module.
+    if limiter is not None:
+        fetch = throttled_fetch(fetch, limiter)
     assets = await AssetRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
     # Check any host that resolves — a CNAME (dangling / claimable target) OR an A record
     # (S3 fronted by CloudFront has no telltale CNAME but its body says "NoSuchBucket").

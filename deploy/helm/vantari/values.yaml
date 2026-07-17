@@ -19,6 +19,10 @@ api:
     port: 8000
 
 # Stateless scan workers — scale to concurrent-scan load (§3.8).
+# VANTARI_WORKER_FLEET_SIZE is templated from `replicas`, so scaling here stays
+# safe. If you add an HPA, that breaks: set VANTARI_WORKER_FLEET_SIZE to maxReplicas
+# explicitly, or a scaled-out fleet in Redis-down mode exceeds the per-target
+# politeness cap (ADR-0012).
 worker:
   replicas: 3
   resources:

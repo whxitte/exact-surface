@@ -17,6 +17,7 @@ from core.errors import AuthorizationRequired
 from core.logging import bind_context, logger
 from core.metrics import REGISTRY
 from core.models import ScanRun, ScanStage, ScanStatus
+from core.ratelimit import PolitenessLimiter
 from core.scope import ProgramScope, ScopeEngine, confirm_ip_scope, is_asn_confirmed
 from core.tenant import TenantContext
 from db.audit import ScanRunRepo
@@ -256,6 +257,9 @@ async def run_full_pipeline(
     scan_id: str | None = None,
     enabled_modules: tuple[str, ...] = (),
     timeouts: dict[str, int] | None = None,
+    # Explicit, NOT left to **injected: a swallowed kwarg here would silently mean
+    # unthrottled requests at customer hosts, which is the failure ADR-0012 fixes.
+    limiter: PolitenessLimiter | None = None,
     **injected: Any,
 ) -> dict:
     """Run the full outside-in pipeline: discover → probe → (tls) → crawl → content
@@ -319,7 +323,7 @@ async def run_full_pipeline(
         ),
         ("probe", lambda t: run_probe(**common, timeout=t, **inj("probe"))),
         ("tls", optional("tls", lambda t: run_tls_scan(**common, timeout=t, **inj("tlsinspect")))),
-        ("takeover", lambda t: run_takeover(**common, timeout=t)),
+        ("takeover", lambda t: run_takeover(**common, timeout=t, limiter=limiter)),
         (
             "crawl",
             lambda t: run_crawl(**common, timeout=t, apex=apex, **inj("gau", "wayback", "katana")),
@@ -344,6 +348,7 @@ async def run_full_pipeline(
                 scope=scope,
                 tenant=tenant,
                 program_id=program_id,
+                limiter=limiter,
                 **inj("fetch"),
             ),
         ),
@@ -500,6 +505,7 @@ async def run_program(
     scan_id: str | None = None,
     force: bool = False,
     asn_ranges=None,
+    limiter: PolitenessLimiter | None = None,
 ) -> dict:
     """Load program + authorization, enforce authorization, then run the pipeline.
 
@@ -553,6 +559,7 @@ async def run_program(
         scan_id=scan_id,
         enabled_modules=tuple(program.get("enabled_modules", [])),
         timeouts=timeouts,
+        limiter=limiter,
     )
     # Once the first full run finishes, the scheduler switches this program from
     # bootstrap to per-phase cadence. Set only on the first completion.

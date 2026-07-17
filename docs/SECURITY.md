@@ -125,9 +125,30 @@ cloud account terminated. Two *different* mechanisms enforce the ≤10 requests/
 per-target ceiling (`settings.global_rate_per_target`), because they cover
 different kinds of I/O:
 
-**In-process I/O** (`core/ratelimit.py`) — a token bucket keyed on
-`(target-ip, asn)`, backed by Redis in production so the ceiling holds across the
-whole worker fleet, not per process.
+**In-process I/O** (`core/ratelimit.py`) — a token bucket, backed by Redis in
+production so the ceiling holds across the whole worker fleet, not per process.
+This governs the requests Vantari itself makes at customer hosts: the takeover
+body-fetch and the secret fetcher. Pipelines pace them with
+`throttled_fetch(fetch, limiter)` wrapped around their injected fetch function, so
+the ceiling applies by construction rather than by each module remembering to ask.
+Scan traffic uses `acquire()` (wait) rather than `allow()` (drop) — politeness must
+cost time, not coverage.
+
+> This was a live bug, and a total one: **the limiter was never called at all.**
+> `RedisBucketStore` was never constructed, `allow()` had no callers, and
+> `RunContext` — the object meant to carry the limiter to modules — is never
+> instantiated. So takeover and secret fetches went out unthrottled, and even if
+> they had not, `build_limiter` defaulted to an in-memory store, which with 2–3
+> worker replicas means 2–3× the per-target cap. Every unit test passed the whole
+> time: they tested the bucket math, which was correct. Nothing tested that the
+> control was reachable. See ADR-0012.
+
+**When Redis is down** the limiter degrades to a local bucket at
+`rate ÷ worker_fleet_size` rather than failing open (which would silently remove
+the ceiling) or failing closed (which would stop all scanning). The divisor means
+that even if every worker degrades at once, the aggregate stays within the cap —
+so `VANTARI_WORKER_FLEET_SIZE` **must be ≥ your real replica count**. In prod, a
+worker that cannot reach a shared store refuses to start.
 
 **Scanner subprocesses** (`core.ratelimit.subprocess_rate_for`) — a token bucket
 **cannot** govern naabu: it is a subprocess that sends its own packets, so our

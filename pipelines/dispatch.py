@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Any
 
 from core.errors import AuthorizationRequired
+from core.ratelimit import PolitenessLimiter
 from core.scope import ScopeEngine
 from core.tenant import TenantContext
 from db.authorizations import AuthorizationRepo
@@ -44,6 +45,7 @@ async def run_pipeline(
     timeout: float,
     hmac_key: bytes | None = None,
     targets: tuple[str, ...] = (),
+    limiter: PolitenessLimiter | None = None,
 ) -> dict:
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
@@ -100,7 +102,7 @@ async def run_pipeline(
         if pipeline == "port_scan":
             return await run_port_scan(**common, targets=tset)
         if pipeline == "takeover":
-            return await run_takeover(**common)
+            return await run_takeover(**common, limiter=limiter)
         if pipeline == "secrets":
             return await run_secret_scan(
                 mongo=mongo,
@@ -110,6 +112,7 @@ async def run_pipeline(
                 program_id=program_id,
                 hmac_key=hmac_key,
                 targets=tset,
+                limiter=limiter,
             )
         if pipeline == "cve_watch":
             return await run_cve_watch(mongo=mongo, tenant=tenant, program_id=program_id)

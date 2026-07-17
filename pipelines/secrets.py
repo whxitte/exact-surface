@@ -14,6 +14,7 @@ from core.config import get_settings
 from core.hashing import keyed_hash, secret_fingerprint
 from core.logging import logger
 from core.models import ExposedSecret
+from core.ratelimit import PolitenessLimiter, throttled_fetch
 from core.scope import Action, ProgramScope, ScopeEngine
 from core.secrets_policy import mask
 from core.tenant import TenantContext
@@ -33,9 +34,15 @@ async def run_secret_scan(
     hmac_key: bytes | None = None,
     targets: set[str] | None = None,
     fetch=_default_fetch,
+    limiter: PolitenessLimiter | None = None,
 ) -> dict:
     hmac_key = hmac_key or get_settings().secret_hash_key_bytes()
     tid = tenant.tenant_id
+    # Fetches JS/config URLs from customer hosts in-process. Ran unthrottled until
+    # ADR-0012; this stage can pull many URLs per host, so it is the one most likely
+    # to look like abuse from the target's side.
+    if limiter is not None:
+        fetch = throttled_fetch(fetch, limiter)
 
     assets = await AssetRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
     ips_by_host = {a["hostname"]: a.get("resolved_ips", []) for a in assets}

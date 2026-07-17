@@ -48,6 +48,14 @@ class Settings(BaseSettings):
         default=10.0, description="Max packets/requests per second per target IP"
     )
     scan_cooloff_seconds: float = Field(default=2.0)
+    # Only used when the shared (Redis) rate-limit store is unreachable: each worker
+    # falls back to a local bucket at 1/worker_fleet_size of the ceiling, so even if
+    # the whole fleet degrades at once the aggregate stays within the cap
+    # (ADR-0012). MUST be >= the real worker replica count or that guarantee is
+    # void — set it when you scale workers. Default matches the Helm chart's 3.
+    worker_fleet_size: int = Field(
+        default=3, ge=1, description="Worker replicas; divides the local ceiling when degraded"
+    )
     masscan_enabled: bool = Field(
         default=False, description="Hard-off in v1; needs dedicated netblocks (ADR-0004)"
     )

@@ -1,32 +1,23 @@
 """Worker entrypoint — pulls jobs, enforces scope + rate limits, runs pipelines.
 
-The worker is the *only* place a job becomes real network activity, and it is the
-choke point where safety is enforced: before running any pipeline it (1) confirms a
-current authorization record exists for the program, (2) resolves the target and
-obtains a :class:`~core.scope.ScopeDecision`, and (3) hands the module a
-``RunContext`` carrying that decision + the shared politeness limiter. A module can
-only act within the permitted action set.
+The worker is the *only* place a job becomes real network activity, so it is where
+the safety controls are assembled: it builds the fleet-shared politeness limiter
+(§3.8b) and hands it to the pipelines, which enforce authorization and scope per
+target and pace their in-process requests through it.
+
+This docstring used to describe the worker handing modules a ``RunContext``
+carrying the decision and limiter. It never did — nothing constructs a
+``RunContext``, and until ADR-0012 nothing called the limiter at all. The real
+paths are ``pipelines/dispatch.py`` and ``pipelines/orchestrate.py``.
 
 arq is imported lazily so this module imports without the dependency present.
-Phase A ships the context-assembly contract; the arq wiring lands in Phase B.
 """
 
 from __future__ import annotations
 
-from core.config import Settings, get_settings
+from core.config import get_settings
 from core.logging import logger
-from core.ratelimit import InMemoryBucketStore, PolitenessLimiter, RateLimit
-
-
-def build_limiter(settings: Settings, store=None) -> PolitenessLimiter:
-    """Construct the process's politeness limiter from settings.
-
-    Uses an in-memory store by default; the worker fleet passes a
-    :class:`~core.ratelimit.RedisBucketStore` so the ceiling is shared across
-    workers (§3.8b).
-    """
-    limit = RateLimit.per_second(settings.global_rate_per_target)
-    return PolitenessLimiter(store or InMemoryBucketStore(), default_limit=limit)
+from core.ratelimit import build_limiter
 
 
 async def startup(ctx: dict) -> None:  # arq lifecycle hook
@@ -43,7 +34,22 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
 
     init_sentry(settings)
     ctx["settings"] = settings
-    ctx["limiter"] = build_limiter(settings)
+    # arq assigns ctx["redis"] before invoking on_startup. If that ever stops being
+    # true, a silent fall back to the in-memory store would hand every replica its
+    # own bucket and multiply the per-target rate by the replica count — the exact
+    # bug ADR-0012 fixes. In prod, refuse to start instead: not scanning is
+    # recoverable, an AUP breach that terminates the cloud account is not. This is
+    # the same fail-closed stance as Settings.assert_prod_safe().
+    redis = ctx.get("redis")
+    if redis is None and settings.is_prod:
+        raise RuntimeError(
+            "no redis in worker ctx — refusing to start: the politeness ceiling "
+            "would be per-process and every replica would multiply the target rate "
+            "(§3.8b, ADR-0012)"
+        )
+    if redis is None:
+        logger.warning("no shared rate-limit store — local ceiling only (dev/single-process)")
+    ctx["limiter"] = build_limiter(settings, redis=redis)
     # The worker emits the metrics that actually describe scanning (stage
     # outcomes, run durations, politeness throttles) into a per-process registry.
     # arq gives it no HTTP server, so without this listener nothing can scrape it.
@@ -106,6 +112,7 @@ async def run_program_task(
         timeout=settings.tool_default_timeout,
         scan_id=scan_id,
         force=force,
+        limiter=ctx["limiter"],
     )
 
 
@@ -136,6 +143,7 @@ async def run_pipeline_task(
         timeout=settings.tool_default_timeout,
         hmac_key=settings.secret_hash_key_bytes(),
         targets=tuple(targets or ()),
+        limiter=ctx["limiter"],
     )
     await _emit_cascade(ctx, tenant_id, program_id, pipeline, result)
     return result

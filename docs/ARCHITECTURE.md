@@ -84,8 +84,12 @@ respect. All are re-enforced worker-side.
 4. **Scope decision** — hard-deny classes (RFC1918/metadata/…) are never
    overridable; CDN/cloud-shared get HTTP-layer only; full actions require
    confirmed-dedicated.
-5. **Politeness** — ≤10 rps/target. In-process I/O via the token bucket;
-   subprocesses get a derived `-rate` (ADR-0009), published to `/metrics`.
+5. **Politeness** — ≤10 rps/target. In-process requests at customer hosts are paced
+   by the token bucket, shared across the fleet via Redis and degrading to a
+   divided local share if Redis dies (ADR-0012); subprocesses get a derived `-rate`
+   (ADR-0009). Both published to `/metrics`. Note what this does **not** cover:
+   httpx/katana/feroxbuster/ffuf/nuclei are subprocesses bounded only by their own
+   rate flags.
 
 ---
 
@@ -233,6 +237,17 @@ just enough of motor; every tool wrapper takes an injectable runner.
 - **The alert thresholds in `docker/alerts.yml` are duplicated from app config**
   because Prometheus cannot read `Settings`. `test_dashboard_queries.py` pins the
   politeness cap against `global_rate_per_target`; the others are unguarded.
+- **Most scanner subprocesses have unaudited rate flags.** ADR-0012 made the token
+  bucket real for in-process requests, and ADR-0009 caps naabu. But httpx, katana,
+  feroxbuster, ffuf and nuclei send their own packets and are bounded only by
+  whatever their own flags say — nobody has checked them against
+  `global_rate_per_target`. This is the largest remaining AUP surface.
+- **`worker_fleet_size` is duplicated config.** It must be ≥ the real worker replica
+  count or the degraded-mode guarantee is void; nothing enforces that.
+- **The Redis rate-limit Lua is untested against a real Redis** — including
+  `redis.call('TIME')`. Verify against live redis 7 before the unattended run.
+- **`modules.base.RunContext` is dead code.** Nothing constructs it. It is the
+  design that let the limiter rot (see ADR-0012); either wire it or delete it.
 - **Never run at multi-tenant scale**; the fairness cap is coded but unexercised.
 
 Build phases: A foundation · B core pipeline · C API/auth · D attacker's edge ·
