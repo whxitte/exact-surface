@@ -84,6 +84,25 @@ copy. Cron `run` daily.
 > **Restore is the only thing that proves a backup.** Test it into a scratch
 > database before you need it: an untested backup is a hypothesis.
 
+## Scope feeds
+
+`core/data/cloud_ranges.json` is what tells the engine an IP belongs to
+Cloudflare/AWS/Akamai/… and therefore gets **HTTP-layer probing only** (§3.9). It is
+a safety control, not a cache: a range that falls out of the feed stops being
+recognised as shared infrastructure.
+
+`python -m scripts.update_scope_feeds` refreshes the Cloudflare and AWS ranges. It
+merges rather than rewrites (it does not fetch akamai/fastly/google_cloud_lb/
+azure_front_door and must not delete them), refuses a feed whose providers vanish
+or collapse, and writes atomically. A rejected update leaves the previous feed in
+place — stale beats empty.
+
+> **It is not yet an automatic job, and running it on a live host does nothing.**
+> The feed ships inside the image (`core/data/`) and `default_engine()` caches the
+> parsed engine for the process's lifetime, so a running worker never re-reads it.
+> Today: run the script, rebuild, redeploy. Wiring a real auto-update needs the feed
+> on a shared volume (or in Mongo) plus cache invalidation — not yet built.
+
 ## Observability
 
 **Scraping only the API tells you nothing about scanning.** Each process keeps its
@@ -129,5 +148,6 @@ host, bind loopback rather than publishing 9100.
 - Health: `GET /healthz` (liveness), `GET /readyz` (deps) on the api;
   `GET :9100/health` on worker/scheduler (they serve nothing else).
 - Pre-flight: `python -m daemon.main --dry-run` (binaries + config + scope feeds).
-- Refresh scope feeds: `python -m scripts.update_scope_feeds` (cron, daily).
+- Refresh scope feeds: `python -m scripts.update_scope_feeds`. **Redeploy afterwards**
+  — see below; running it against a live worker does nothing.
 - Backups: `python -m scripts.backup run` (cron, daily) — see Backups above.
