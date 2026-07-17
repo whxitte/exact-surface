@@ -164,10 +164,13 @@ just enough of motor; every tool wrapper takes an injectable runner.
   pinned binary, so the lister must be injected. Without one the stage reports
   `skipped` honestly rather than silently finding nothing. Verify against a real
   nuclei build, then add the default.
-- **Dork** ships Google CSE only; Brave/SerpAPI settings exist without wrappers.
-- **`preview_env`** is advertised in `modules/registry.py` but has no module file
-  — the detection lives in `core/fingerprint.is_ephemeral_host`. The registry is
-  declarative, so `--dry-run` over-promises.
+- **`cloud_buckets` implements only the permutation half of §6 module 18.** The
+  `cloudlist` half (enumerating a customer's cloud assets via provider APIs) is
+  not built — it needs the customer's cloud credentials, a trust escalation we
+  have not taken.
+- **Search-engine response shapes are from vendor docs, not a live key.** Brave
+  and SerpAPI wrappers are unit-tested against fixtures; verify against a real key
+  before relying on them.
 - **Latency metrics** (§15 time-to-first-finding, KEV-match latency) are not
   instrumented.
 - **Phase G** is largely stubbed: `daemon/metrics.py` is a hand-rolled registry,

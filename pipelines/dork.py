@@ -17,6 +17,48 @@ from db.findings import FindingRepo
 from modules.dorking.templates import category_severity, render
 
 
+async def _resolve_engine(mongo: Any, tenant_id: str):
+    """Pick the first configured search engine, returning ``(search, name)``.
+
+    Order is deliberate: Google CSE (a free tier exists), then Brave (cheap), then
+    SerpAPI last because it is metered per search (§13 budgeting). Tenant-stored
+    keys win over env defaults — see ``db.integrations.resolve_secret``.
+    Returns ``(None, "")`` when nothing is configured, so the stage can skip
+    honestly rather than report a misleading "0 hits".
+    """
+    from db.integrations import resolve_secret
+
+    key = await resolve_secret(mongo, tenant_id, "google_cse_key")
+    cx = await resolve_secret(mongo, tenant_id, "google_cse_cx")
+    if key and cx:
+        from modules.dorking.google import search as google_search
+
+        async def google(query: str) -> list[dict]:
+            return await google_search(query, key=key, cx=cx)
+
+        return google, "google_cse"
+
+    brave_key = await resolve_secret(mongo, tenant_id, "brave_api_key")
+    if brave_key:
+        from modules.dorking.brave import search as brave_search
+
+        async def brave(query: str) -> list[dict]:
+            return await brave_search(query, key=brave_key)
+
+        return brave, "brave"
+
+    serp_key = await resolve_secret(mongo, tenant_id, "serpapi_key")
+    if serp_key:
+        from modules.dorking.serpapi import search as serp_search
+
+        async def serpapi(query: str) -> list[dict]:
+            return await serp_search(query, key=serp_key)
+
+        return serpapi, "serpapi"
+
+    return None, ""
+
+
 async def run_dork(
     *,
     mongo: Any,
@@ -25,24 +67,20 @@ async def run_dork(
     domain: str,
     search=None,
 ) -> dict:
-    # Default search = Google CSE (tenant key first, then env); skip if unconfigured.
+    engine = ""
     if search is None:
-        from db.integrations import resolve_secret
-        from modules.dorking.google import search as google_search
-
-        key = await resolve_secret(mongo, tenant.tenant_id, "google_cse_key")
-        cx = await resolve_secret(mongo, tenant.tenant_id, "google_cse_cx")
-        if not key or not cx:
+        search, engine = await _resolve_engine(mongo, tenant.tenant_id)
+        if search is None:
             logger.info("dork {}: skipped (no search API key configured)", domain)
             return {
                 "hits": 0,
                 "new": 0,
                 "skipped": True,
-                "note": "needs a Google CSE API key — add one in Settings",
+                "note": (
+                    "needs a search API key — add a Google CSE, Brave, or SerpAPI key in Settings"
+                ),
             }
-
-        async def search(query: str) -> list[dict]:  # noqa: A001 - shadow is intentional
-            return await google_search(query, key=key, cx=cx)
+        logger.info("dork {}: using {}", domain, engine)
 
     models: list[Finding] = []
     seen: set[str] = set()

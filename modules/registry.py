@@ -51,7 +51,11 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
         note="safe policy: exclude dos,intrusive,fuzz",
     ),
     ModuleSpec(
-        "secretfinder", "scanning", None, "1", Action.HTTP_PROBE,
+        "secretfinder",
+        "scanning",
+        None,
+        "1",
+        Action.HTTP_PROBE,
         note="regex-based JS/content secret detection (no external binary)",
     ),
     ModuleSpec("katana", "crawling", "katana", "1", Action.HTTP_PROBE),
@@ -78,16 +82,37 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
     ModuleSpec("wordlist_selector", "content_discovery", None, "2", Action.CONTENT_DISCOVERY),
     ModuleSpec("github_leaks", "osint", None, "2", Action.PASSIVE_RECON),
     ModuleSpec("asn_mapper", "osint", "asnmap", "2", Action.PASSIVE_RECON),
-    ModuleSpec("cloud_buckets", "osint", "cloudlist", "2", Action.PASSIVE_RECON),
+    ModuleSpec(
+        "cloud_buckets",
+        "osint",
+        # No binary: the permutation half of §6 module 18 is pure HTTP against the
+        # providers' public endpoints. The `cloudlist` half (enumerating a customer's
+        # cloud assets via provider APIs) is NOT implemented — it would require the
+        # customer's cloud credentials, a trust escalation we have not taken.
+        None,
+        "2",
+        Action.PASSIVE_RECON,
+        note="name permutation over S3/GCS/Azure; publicly-listable buckets only",
+    ),
     ModuleSpec(
         "preview_env",
         "osint",
         None,
         "2",
         Action.PASSIVE_RECON,
-        note="detect Vercel/Netlify/CF-Pages/staging envs",
+        # Implemented as a classifier in core, not a modules/osint/ wrapper: it needs
+        # no tool and no I/O of its own. Applied to every host at ingest + uncover,
+        # surfaced as Asset.is_ephemeral.
+        note="core.fingerprint.is_ephemeral_host — Vercel/Netlify/CF-Pages/staging envs",
     ),
-    ModuleSpec("dork", "dorking", None, "2", Action.PASSIVE_RECON),
+    ModuleSpec(
+        "dork",
+        "dorking",
+        None,
+        "2",
+        Action.PASSIVE_RECON,
+        note="engines: Google CSE → Brave → SerpAPI (first configured wins)",
+    ),
     ModuleSpec(
         "cve_feed",
         "intelligence",
@@ -96,7 +121,14 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
         Action.PASSIVE_RECON,
         note="NVD+KEV+GHSA, confidence-scored matches",
     ),
-    ModuleSpec("nuclei_watch", "intelligence", "nuclei", "2", Action.PASSIVE_RECON),
+    ModuleSpec(
+        "nuclei_watch",
+        "intelligence",
+        "nuclei",
+        "2",
+        Action.PASSIVE_RECON,
+        note="template lister is injected — nuclei -tl contract unverified against the pin",
+    ),
     ModuleSpec("delta_monitor", "intelligence", None, "2", Action.HTTP_PROBE),
     ModuleSpec("correlator", "intelligence", None, "2", Action.PASSIVE_RECON),
     # -- Phase 3: expansion ------------------------------------------------
