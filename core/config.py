@@ -165,6 +165,13 @@ class Settings(BaseSettings):
     backup_age_recipient: str | None = Field(default=None)
     backup_retention_days: int = Field(default=30, ge=1)
 
+    # -- scope-feed auto-update (§7 Phase G, ADR-0014) -------------------
+    # The scheduler refreshes the shared Mongo copy of the CDN/cloud feed this often.
+    # Provider ranges change slowly, so daily is ample; 0 disables the auto-refresh
+    # (then run `python -m scripts.update_scope_feeds` by cron instead). Workers load
+    # the refreshed feed on their next restart.
+    scope_feed_refresh_hours: float = Field(default=24.0, ge=0)
+
     # -- observability ---------------------------------------------------
     sentry_dsn: SecretStr | None = Field(default=None)
     metrics_enabled: bool = Field(default=True)

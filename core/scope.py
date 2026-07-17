@@ -194,17 +194,32 @@ class ScopeEngine:
 
     # -- construction ----------------------------------------------------
     @classmethod
-    def from_data_file(
-        cls, path: Path | None = None, *, allow_private: bool = False
-    ) -> ScopeEngine:
-        path = path or _DATA_FILE
-        raw = json.loads(path.read_text())
+    def from_feed(cls, feed: dict, *, allow_private: bool = False) -> ScopeEngine:
+        """Build from an in-memory feed dict (``{"providers": [...]}``).
+
+        Pure — no I/O — so the feed can come from the bundled file, from Mongo, or
+        from a test fixture without this module knowing or caring which. That is
+        what lets the feed be distributed via Mongo (ADR-0014) while ``core`` stays
+        dependency-free.
+        """
         buckets: dict[IpClass, list] = {IpClass.CDN: [], IpClass.CLOUD_SHARED: []}
-        for provider in raw.get("providers", []):
+        for provider in feed.get("providers", []):
             cls_name = provider.get("class", "cdn")
             ip_class = IpClass.CDN if cls_name == "cdn" else IpClass.CLOUD_SHARED
             buckets[ip_class].extend(_parse_networks(provider.get("cidrs", [])))
         return cls(buckets, allow_private=allow_private)
+
+    @classmethod
+    def from_data_file(
+        cls, path: Path | None = None, *, allow_private: bool = False
+    ) -> ScopeEngine:
+        path = path or _DATA_FILE
+        return cls.from_feed(json.loads(path.read_text()), allow_private=allow_private)
+
+    @staticmethod
+    def bundled_feed() -> dict:
+        """The feed shipped inside the image — the always-available fallback."""
+        return json.loads(_DATA_FILE.read_text())
 
     # -- classification --------------------------------------------------
     def classify_ip(self, ip: str) -> IpClass:

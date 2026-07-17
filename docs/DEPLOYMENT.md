@@ -91,17 +91,25 @@ Cloudflare/AWS/Akamai/… and therefore gets **HTTP-layer probing only** (§3.9)
 a safety control, not a cache: a range that falls out of the feed stops being
 recognised as shared infrastructure.
 
-`python -m scripts.update_scope_feeds` refreshes the Cloudflare and AWS ranges. It
-merges rather than rewrites (it does not fetch akamai/fastly/google_cloud_lb/
-azure_front_door and must not delete them), refuses a feed whose providers vanish
-or collapse, and writes atomically. A rejected update leaves the previous feed in
-place — stale beats empty.
+The refresh merges rather than rewrites (it does not fetch akamai/fastly/
+google_cloud_lb/azure_front_door and must not delete them), refuses a feed whose
+providers vanish or collapse, and writes atomically. A rejected update leaves the
+previous feed in place — stale beats empty.
 
-> **It is not yet an automatic job, and running it on a live host does nothing.**
-> The feed ships inside the image (`core/data/`) and `default_engine()` caches the
-> parsed engine for the process's lifetime, so a running worker never re-reads it.
-> Today: run the script, rebuild, redeploy. Wiring a real auto-update needs the feed
-> on a shared volume (or in Mongo) plus cache invalidation — not yet built.
+**It is automatic.** The scheduler refreshes a shared copy of the feed in Mongo
+every `VANTARI_SCOPE_FEED_REFRESH_HOURS` (default 24; set 0 to disable and cron the
+script instead). Workers load that Mongo copy at startup, falling back to the feed
+bundled in the image, and **never** load a Mongo copy smaller than the bundled
+baseline — a corrupt or partial write cannot silently un-classify ranges (ADR-0014).
+
+> **Workers pick up a feed change on their next restart, not mid-run.** Provider
+> ranges change on the order of weeks, so this is fine — every deploy does a rolling
+> restart, and you can trigger one (`kubectl rollout restart` / `docker compose
+> restart worker`) to apply a refresh sooner. There is deliberately no in-process
+> hot-reload of the scope engine.
+
+`python -m scripts.update_scope_feeds` still exists to refresh the **bundled file**
+(for a rebuild) if you prefer that to the Mongo path.
 
 ## Observability
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from core.config import Settings, get_settings
@@ -97,6 +97,9 @@ class Scheduler:
             if max_per_tenant is not None
             else self._settings.scheduler_max_jobs_per_tenant
         )
+        #: When the next scope-feed refresh is due. None → refresh on the first tick,
+        #: so a fresh deployment publishes the merged feed to Mongo immediately.
+        self._next_feed_refresh: datetime | None = None
 
     async def _tenant_defaults(self) -> dict[str, dict]:
         """tenant_id -> its account-level cadence overrides (empty if none)."""
@@ -232,12 +235,36 @@ class Scheduler:
         _observe_tick("ok", jobs=len(jobs), now=now)
         return len(jobs)
 
+    async def maybe_refresh_scope_feed(self, now: datetime | None = None) -> bool:
+        """Refresh the shared Mongo scope feed if it is due (ADR-0014). Returns True
+        if a refresh ran. The scheduler is the natural owner: a singleton that is
+        always up, so exactly one process fetches. Fully guarded — a feed refresh
+        failing (network down, provider 500, a collapsed feed rejected) must never
+        touch scan scheduling; the previous feed simply stays in place.
+        """
+        hours = self._settings.scope_feed_refresh_hours
+        if hours <= 0:
+            return False
+        now = now or datetime.now(UTC)
+        if self._next_feed_refresh is not None and now < self._next_feed_refresh:
+            return False
+        self._next_feed_refresh = now + timedelta(hours=hours)
+        try:
+            from scripts.update_scope_feeds import update_scope_feeds_to_mongo
+
+            await update_scope_feeds_to_mongo(self._mongo)
+            return True
+        except Exception as exc:  # noqa: BLE001 - never let a feed refresh break scheduling
+            logger.warning("scope feed refresh failed ({}); keeping the current feed", exc)
+            return False
+
     async def run_forever(self) -> None:  # pragma: no cover - infinite loop
         tick = self._settings.scheduler_tick_seconds
         logger.info("scheduler loop starting (tick={}s)", tick)
         while True:
             try:
                 await self.run_once()
+                await self.maybe_refresh_scope_feed()
             except Exception as exc:  # noqa: BLE001 - a tick failure must not kill the loop
                 logger.error("scheduler tick failed: {}", exc)
                 _observe_tick("failed")

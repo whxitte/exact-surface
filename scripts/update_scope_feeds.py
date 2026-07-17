@@ -148,23 +148,51 @@ def load_current(path: Path) -> dict | None:
         return None
 
 
-async def update_scope_feeds(path: Path | None = None, *, fetch=None) -> dict:
-    """Fetch → merge → validate → write. Returns the feed that was written.
-
-    ``fetch`` is injectable so this is testable without network (house style).
-    """
-    from core.logging import logger
-
-    path = path or _DATA_FILE
+async def compute_updated_feed(current: dict | None, *, fetch=None) -> dict:
+    """Fetch → merge onto *current* → validate. Returns the new feed; raises
+    :class:`FeedRejected` if it would remove protection. Does not persist —
+    persistence (file or Mongo) is the caller's, so this one function backs both the
+    CLI and the scheduled Mongo job. ``fetch`` is injectable for offline tests."""
     aws_payload, cloudflare_text = await (fetch or _default_fetch)()
-    current = load_current(path)
     feed = build_feed(
         aws=parse_aws(aws_payload), cloudflare=parse_cloudflare(cloudflare_text), current=current
     )
     validate_feed(feed, current)
+    return feed
+
+
+async def update_scope_feeds(path: Path | None = None, *, fetch=None) -> dict:
+    """CLI path: fetch → merge → validate → write the bundled JSON file."""
+    from core.logging import logger
+
+    path = path or _DATA_FILE
+    feed = await compute_updated_feed(load_current(path), fetch=fetch)
     write_feed(feed, path)
     total = sum(len(p["cidrs"]) for p in feed["providers"])
     logger.info("scope feeds updated: {} ranges across {} providers", total, len(feed["providers"]))
+    return feed
+
+
+async def update_scope_feeds_to_mongo(mongo, *, fetch=None) -> dict:
+    """Scheduled-job path: fetch → merge onto the *Mongo* copy → validate → write it
+    back. This is what makes an update reach the fleet without a rebuild (ADR-0014).
+
+    Merges onto whichever is more protective of the Mongo copy and the bundled file,
+    so the very first run (empty Mongo) still preserves the hand-maintained providers
+    that ship in the image rather than starting from only what it fetched.
+    """
+    from core.logging import logger
+    from core.scope import ScopeEngine
+    from db.scope_feed import ScopeFeedRepo, feed_cidr_count
+
+    repo = ScopeFeedRepo.from_mongo(mongo)
+    current = await repo.get()
+    baseline = ScopeEngine.bundled_feed()
+    if current is None or feed_cidr_count(current) < feed_cidr_count(baseline):
+        current = baseline  # seed from the image on first run / recover from a thin copy
+    feed = await compute_updated_feed(current, fetch=fetch)
+    await repo.set(feed)
+    logger.info("scope feed (Mongo) updated: {} ranges", feed_cidr_count(feed))
     return feed
 
 

@@ -233,15 +233,15 @@ just enough of motor; every tool wrapper takes an injectable runner.
   latency (finding first-seen → notified) *is* instrumented
   (`vantari_alert_latency_seconds`), but that is only the notify hop — it is not
   the signup→first-alert figure §15 asks for.
-- **Phase G is part-done.** Observability, rate-limit degradation (ADR-0012) and
-  encrypted backups are wired; still outstanding: a real prod compose file, and the
-  7-day unattended run itself — the exit gate, which can only be run, not coded.
-- **The scope-feed refresh is not an automatic job.** The updater is now safe
-  (merges, validates, atomic), but the feed ships inside the image and
-  `default_engine()` is `@lru_cache`d for the process's life, so running the script
-  cannot reach a live worker — it needs a rebuild+redeploy. Real auto-update means
-  putting the feed on a shared volume (or in Mongo) and invalidating that cache;
-  that is a design decision, not a TODO.
+- **Phase G is nearly done.** Observability, rate-limit degradation (ADR-0012),
+  encrypted backups, per-tool subprocess caps (ADR-0013) and scope-feed auto-update
+  (ADR-0014) are wired; still outstanding: a real prod compose file, and the 7-day
+  unattended run itself — the exit gate, which can only be run, not coded.
+- **Scope-feed updates reach workers only on restart.** The feed is distributed via
+  Mongo now (ADR-0014) and the scheduler refreshes it daily, but a running worker
+  builds its engine once at startup — so a refresh lands on the next rolling restart,
+  not mid-process. Deliberate (ranges change monthly; no hot-reload of a safety
+  control), but it is a staleness window to know about.
 - **No backup has ever been restored.** The dump/encrypt/restore paths shell out to
   `mongodump`/`age`/`mongorestore`; only the pure command builders and the retention
   policy are tested. An untested backup is a hypothesis — restore one into a scratch

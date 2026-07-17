@@ -62,6 +62,12 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
     mongo = get_mongo()
     await mongo.connect()
     ctx["mongo"] = mongo
+    # Build the scope engine from the shared Mongo feed (ADR-0014), falling back to
+    # the bundled file. Held on ctx and passed to every task, so a scope-feed update
+    # reaches this worker on its next restart — running the updater no longer no-ops.
+    from db.scope_feed import build_scope_engine
+
+    ctx["engine"] = await build_scope_engine(mongo, allow_private=settings.lab_allow_private)
     # Publish ScanRun updates + per-scan logs to the live bus so /activity reflects
     # scans advancing in real time. Best-effort — never block startup.
     try:
@@ -99,14 +105,13 @@ async def run_program_task(
     set for an explicit user scan so it runs even if monitoring is paused; the
     scheduler's bootstrap leaves it False so a paused program is skipped.
     """
-    from core.scope import default_engine
     from core.tenant import TenantContext
     from pipelines.orchestrate import run_program
 
     settings = ctx["settings"]
     return await run_program(
         mongo=ctx["mongo"],
-        engine=default_engine(),
+        engine=ctx["engine"],  # built from the shared Mongo feed at startup (ADR-0014)
         tenant=TenantContext(tenant_id=tenant_id, actor_id=actor_id),
         program_id=program_id,
         timeout=settings.tool_default_timeout,
@@ -129,14 +134,13 @@ async def run_pipeline_task(
     event-driven cascade so a newly discovered host flows straight through the
     downstream phases. After the run, new discoveries fan out to the next phases.
     """
-    from core.scope import default_engine
     from core.tenant import TenantContext
     from pipelines.dispatch import run_pipeline
 
     settings = ctx["settings"]
     result = await run_pipeline(
         mongo=ctx["mongo"],
-        engine=default_engine(),
+        engine=ctx["engine"],  # shared Mongo feed (ADR-0014)
         tenant=TenantContext(tenant_id=tenant_id),
         program_id=program_id,
         pipeline=pipeline,
