@@ -85,6 +85,8 @@ export interface Asset {
   ip_class?: string | null;
   is_ephemeral: boolean;
   monitored?: boolean;
+  interest?: string; // critical | high | medium | low | noise — attacker-interest triage
+  interest_reasons?: string[]; // why it was flagged (e.g. "Jenkins CI/CD exposed")
   dns_records?: Record<string, string[]>; // a/aaaa/cname/ns/mx/txt
   takeover_risk?: string | null; // service name if takeover-vulnerable
   first_seen?: string; // when the subdomain first appeared on the internet

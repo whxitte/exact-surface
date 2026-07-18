@@ -215,6 +215,10 @@ class Asset(StatefulModel):
     #: User can mute an individual asset — unmonitored hosts are skipped by crawl /
     #: content-discovery / port-scan. Preserved across re-scans (see AssetRepo).
     monitored: bool = True
+    #: attacker-interest triage from core.fingerprint.classify_interest, set by the
+    #: probe stage: one of critical/high/medium/low/noise + the reasons for it.
+    interest: str = "low"
+    interest_reasons: list[str] = Field(default_factory=list)
 
 
 class Endpoint(StatefulModel):

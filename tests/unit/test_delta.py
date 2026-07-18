@@ -109,3 +109,45 @@ async def test_probe_emits_delta_on_status_change():
     deltas = await DeltaRepo(mongo.collection("deltas")).list("t1", "p1")
     assert deltas[0]["kind"] == "status_change"
     assert deltas[0]["before"] == "200" and deltas[0]["after"] == "403"
+
+
+async def test_probe_stores_asset_interest():
+    """Probe triages each host and records interest + reasons on the asset, so the
+    UI can surface the ones worth a look (ZeroPoint-inspired, §4)."""
+    mongo = FakeMongo()
+    await AssetRepo(mongo.collection("assets")).upsert(
+        Asset(
+            tenant_id="t1",
+            program_id="p1",
+            fingerprint=asset_fingerprint("p1", "jenkins.customer.com"),
+            hostname="jenkins.customer.com",
+            resolved_ips=["45.55.1.1"],
+        )
+    )
+
+    async def probe(hosts, _timeout, *, rate=None):
+        return [
+            {
+                "url": f"https://{h}",
+                "input": h,
+                "status_code": 200,
+                "title": "",
+                "tech": ["Jenkins"],
+            }
+            for h in hosts
+        ]
+
+    await run_probe(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        timeout=10,
+        probe=probe,
+    )
+    doc = await AssetRepo(mongo.collection("assets")).get(
+        "t1", asset_fingerprint("p1", "jenkins.customer.com")
+    )
+    assert doc["interest"] == "critical"
+    assert any("Jenkins" in r for r in doc["interest_reasons"])

@@ -45,13 +45,17 @@ is the boundary.
   - `scope` — **the safety control** (§9b). Classify IP → decide actions.
   - `plans` — §13 tier limits. Fails closed to FREE.
   - `signal` — actionable-vs-informational + the §15 false-positive rate.
+  - `tech_tags` — detected-tech → Nuclei product tags (ADR-0013 companion).
+  - `endpoint_risk` — tags a crawled URL's path/params (idor/ssrf/admin/…).
+  - `fingerprint` — `is_ephemeral_host` + `classify_interest` (host triage →
+    critical/high/… with reasons; the three above are the signal-quality layer).
   - `ratelimit` — token bucket, fleet-shared+degrading store (ADR-0012), **and**
     `derive_subprocess_rate` for every scanner subprocess (ADR-0009 + ADR-0013).
   - `metrics` — the Prometheus registry (counters/gauges/histograms). In `core`, not
     `daemon`, so the limiter can instrument itself — ADR-0010.
   - `hashing` (idempotency keys) · `severity` · `lifecycle` (finding state
     machine) · `alert_policy` · `secrets_policy` (masking) · `liveness`
-    (live-vs-gone) · `cpe` · `fingerprint` · `email` · `config` · `models`.
+    (live-vs-gone) · `cpe` · `email` · `config` · `models`.
 - **db/** — one repo per collection, all tenant-scoped; `base.Repository` does the
   `$setOnInsert`/`$set` idempotent upsert.
 - **modules/** — tool wrappers, each with an **injectable runner** so it is

@@ -203,6 +203,39 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: "triage",
+    title: "What to look at first — interest & risk tags",
+    icon: ShieldAlert,
+    keywords:
+      "interest triage critical high priority attention asset endpoint risk tag idor ssrf admin login jenkins auth bypass 401 403 what to look at first",
+    body: (
+      <>
+        <p>
+          A scan finds hundreds of hosts and endpoints. Two lightweight signals mark the handful worth a
+          human&apos;s attention first — both are triage hints, not findings: they never trigger a scan or an
+          alert on their own.
+        </p>
+        <p>
+          <Term>Asset interest.</Term> Each probed host is triaged{" "}
+          <Term>critical / high / medium / low</Term> from what httpx saw — its technology, page title,
+          HTTP status, and hostname. An exposed Jenkins or Grafana, an{" "}
+          <Code>Admin Dashboard</Code> page title, a <Code>401</Code> auth boundary, or a forgotten{" "}
+          <Code>staging.</Code> host all raise it. Hosts flagged <Term>critical</Term> or <Term>high</Term>{" "}
+          carry a coloured badge on the Assets tab; hover it to see <em>why</em> (e.g. &quot;Jenkins CI/CD
+          exposed&quot;). It even infers a product hidden behind a reverse proxy from the hostname —{" "}
+          <Code>kibana.</Code> behind nginx still gets flagged.
+        </p>
+        <p>
+          <Term>Endpoint risk tags.</Term> Crawled and brute-forced URLs are tagged by the attack surface
+          they expose — <Code>auth</Code>, <Code>admin</Code>, <Code>api</Code>, <Code>idor</Code>,{" "}
+          <Code>ssrf</Code>, <Code>payment</Code>, <Code>exposure</Code> — read from the URL path and its
+          query parameters (a <Code>?user_id=</Code> is an IDOR surface, a <Code>?url=</Code> an SSRF one).
+          The tags show as badges next to each endpoint.
+        </p>
+      </>
+    ),
+  },
+  {
     id: "takeover",
     title: "Subdomain takeover detection",
     icon: Bug,

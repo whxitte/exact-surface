@@ -707,6 +707,18 @@ export default function ProgramDetail() {
                   {ep?.status_code != null && (
                     <span className="font-mono text-xs text-muted-foreground">{ep.status_code}</span>
                   )}
+                  {(a.interest === "critical" || a.interest === "high") && (
+                    <span
+                      title={a.interest_reasons?.join(" · ") || "worth a closer look"}
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${
+                        a.interest === "critical"
+                          ? "bg-severity-critical/15 text-severity-critical"
+                          : "bg-severity-high/15 text-severity-high"
+                      }`}
+                    >
+                      {a.interest}
+                    </span>
+                  )}
                   {a.is_ephemeral && (
                     <span className="rounded-full bg-severity-medium/15 px-2 py-0.5 text-xs text-severity-medium">
                       ephemeral

@@ -12,7 +12,8 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from core.config import get_settings
-from core.hashing import canonical_hash, endpoint_fingerprint
+from core.fingerprint import classify_interest
+from core.hashing import asset_fingerprint, canonical_hash, endpoint_fingerprint
 from core.logging import logger
 from core.models import Endpoint
 from core.ratelimit import derive_subprocess_rate
@@ -103,6 +104,22 @@ async def run_probe(
 
     res = await endpoint_repo.upsert_all(models)
     await delta_repo.record_all(deltas)
+
+    # Triage each probed host's attacker-interest from what httpx saw (tech, title,
+    # status) and record it on the asset, so the UI can surface the handful worth a
+    # look first — an exposed Jenkins, an admin panel, a 401 auth boundary.
+    asset_repo = AssetRepo.from_mongo(mongo)
+    for r in results:
+        host = urlsplit(r["url"]).hostname or ""
+        if not host:
+            continue
+        level, reasons = classify_interest(
+            host, tech=r.get("tech") or [], title=r.get("title"), status=r.get("status_code")
+        )
+        await asset_repo.set_interest(
+            tenant.tenant_id, asset_fingerprint(program_id, host), level, reasons
+        )
+
     new_urls = [m.url for m, x in zip(models, res, strict=True) if x.inserted]
     # cascade: hosts that just came alive → crawl + port-scan them next
     cascade_targets = sorted({urlsplit(u).hostname or "" for u in new_urls} - {""})
