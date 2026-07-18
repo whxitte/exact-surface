@@ -64,17 +64,23 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libffi8 shared-mime-info fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# mongodump/mongorestore for scripts/backup.py. These were referenced by
-# docs/DEPLOYMENT.md and by the backup script but installed in NO image, so backups
-# could not run at all. Not in Debian's repos — MongoDB ships its own.
+# mongodump/mongorestore for scripts/backup.py — used ONLY by the backup job, never
+# by scanning. Non-fatal by design: a failure to install these (e.g. the MongoDB apt
+# repo not resolving the tools for this arch/suite) must never block the scanning
+# image, exactly like feroxbuster below. If it doesn't install, backups are
+# unavailable and every scan path is unaffected. MongoDB ships these outside Debian's
+# repos, so we add its repo; the whole block is wrapped so any step failing just logs
+# a warning and the build continues.
 RUN ARCH="$(dpkg --print-architecture)" \
-    && curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
-         | gpg --dearmor -o /usr/share/keyrings/mongodb.gpg \
-    && echo "deb [arch=${ARCH} signed-by=/usr/share/keyrings/mongodb.gpg] \
+    && ( curl -fsSL https://pgp.mongodb.com/server-7.0.asc \
+           | gpg --dearmor -o /usr/share/keyrings/mongodb.gpg \
+         && echo "deb [arch=${ARCH} signed-by=/usr/share/keyrings/mongodb.gpg] \
 https://repo.mongodb.org/apt/debian bookworm/mongodb-org/7.0 main" \
-         > /etc/apt/sources.list.d/mongodb.list \
-    && apt-get update && apt-get install -y --no-install-recommends mongodb-database-tools \
-    && rm -rf /var/lib/apt/lists/*
+           > /etc/apt/sources.list.d/mongodb.list \
+         && apt-get update \
+         && apt-get install -y --no-install-recommends mongodb-database-tools ) \
+       || echo "WARNING: mongodb-database-tools not installed — backups (scripts/backup.py) unavailable; scanning is unaffected" ; \
+    rm -rf /var/lib/apt/lists/* /etc/apt/sources.list.d/mongodb.list
 
 # feroxbuster (content discovery). Arch-aware AND non-fatal: if the download fails
 # the image still builds — ffuf (installed via Go above) covers content-discovery.
