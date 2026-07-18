@@ -119,13 +119,21 @@ async def run_content_discovery(
     ferox_rate = derive_subprocess_rate(1, cap, tool="feroxbuster")
     ffuf_rate = derive_subprocess_rate(1, cap, tool="ffuf")
 
+    def _tag(hits: list[dict], tool: str) -> list[dict]:
+        # Record which tool actually found each path so the endpoint's source is
+        # honest — a host that fell back to ffuf must not be attributed to feroxbuster.
+        for h in hits:
+            h["_tool"] = tool
+        return hits
+
     async def _ffuf(target: str, wordlist: str, reason: str) -> list[dict]:
         # ffuf uses Go's HTTP stack (the same one httpx probed this host with), so it
         # connects where feroxbuster's client can't (IPv6/TLS quirks).
         try:
             from modules.content_discovery.ffuf import fuzz as ffuf_fuzz
 
-            return await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host, rate=ffuf_rate.aggregate)
+            hits = await ffuf_fuzz(f"{target}/FUZZ", wordlist, per_host, rate=ffuf_rate.aggregate)
+            return _tag(hits, "ffuf")
         except ToolNotFound:
             logger.warning("content-discovery: {} ({}), and ffuf not installed", target, reason)
             return []
@@ -137,7 +145,8 @@ async def run_content_discovery(
         wordlist = wordlist_for(tech_by_host.get(host, []))
         async with sem:
             try:
-                return await discover(target, wordlist, per_host, rate=ferox_rate.aggregate)
+                hits = await discover(target, wordlist, per_host, rate=ferox_rate.aggregate)
+                return _tag(hits, "feroxbuster")
             except ToolNotFound:  # feroxbuster missing entirely
                 return await _ffuf(target, wordlist, "feroxbuster not installed")
             except TargetUnreachable as exc:  # feroxbuster's client couldn't connect
@@ -157,7 +166,7 @@ async def run_content_discovery(
             url=hit["url"],
             method="GET",
             status_code=hit.get("status"),
-            source="feroxbuster",
+            source=hit.get("_tool", "feroxbuster"),  # ffuf or feroxbuster — whichever found it
             risk_tags=classify_endpoint(hit["url"]),  # content discovery finds the /admin, .bak, …
         )
         for hits in per_host_hits

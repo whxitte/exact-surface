@@ -252,3 +252,58 @@ multi-tenant launch.)
 - **`map_org` (org-name ASN lookup) is built but unwired** — a CDN-fronted apex won't
   auto-confirm its real origin ASN; use the `scan_shared_infra` opt-in there.
 - **No load suite yet** (Layer 7).
+
+---
+
+## UI completeness checklist
+
+Walk every page and tick each item. This is what "the dashboard is complete" means
+concretely — surface each control, confirm it does what it says, and note anything
+missing. (Reflects the app as of the 2026-07-18 review.)
+
+**Auth**
+- [ ] Sign up creates a tenant + owner; login works; wrong password rejected.
+- [ ] `/verify-email` — the resend button hits the real endpoint (dev prints the link
+      in the API logs).
+
+**Overview**
+- [ ] Stat tiles (programs / assets / actionable / secrets / new) populate after a scan.
+- [ ] "Findings by severity" + the **false-positive rate** (`—` until you triage one).
+
+**Programs → detail**
+- [ ] Add domain (blocked with a 402 past the plan limit — see Settings › Plan).
+- [ ] Verify + Authorize buttons; "Run scan"; **Scan my cloud infra** toggle (§9b).
+- [ ] **Optional modules** toggles: uncover, tls, service_scan, dork, **cloud_buckets**,
+      **nuclei_watch** (the last two were added 2026-07-18).
+- [ ] Tabs: surface, priorities, findings, cves, assets, endpoints, ports, secrets, leaks.
+- [ ] **Assets** show interest badges (critical/high) with reasons on hover.
+- [ ] **Endpoints** show risk tags (auth/admin/idor/…) and the correct **source**
+      (feroxbuster *or* ffuf — whichever found it).
+- [ ] A **dork** finding shows the exact **Dork query** + **Indexed snippet** +
+      a "Search Google for: …" reproduction (not a misleading `curl`).
+- [ ] Schedule card: cadence, last/next run.
+
+**Findings / Changes / DNS / Activity**
+- [ ] Findings list + detail (description, matched-at, references, raw request/response).
+- [ ] Changes = the state-delta feed (status/tech/title/new-port).
+- [ ] DNS page: records, CNAMEs, takeover-risk flags.
+- [ ] Activity: live scan-run log (2s poll).
+
+**Settings**
+- [ ] Account (tenant, role) and **Plan** (tier + `used / limit` bar) — added 2026-07-18.
+- [ ] API-key generation (shown once); notification channels; alert-policy;
+      schedule/timeout defaults.
+
+**Knowledge**
+- [ ] Search works; the **"Those § numbers explained"** and **"What to look at first"**
+      sections are present.
+
+**Grafana** (`:3001`, admin / `GRAFANA_ADMIN_PASSWORD`, default `admin` in dev)
+- [ ] The `Vantari — Operations` dashboard loads and its panels populate during a scan
+      (scheduler liveness, per-target rate, stage outcomes). Nothing to configure —
+      datasource + dashboard are auto-provisioned.
+
+**Known UI gaps to log (not yet built):**
+- No billing/plan-upgrade flow (the plan is a display; there's no Stripe).
+- No in-UI way to *change* a tenant's plan (set it in the `tenants` collection).
+- No self-serve DNS-verification status poller beyond the check button.

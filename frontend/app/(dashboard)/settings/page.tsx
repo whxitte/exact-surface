@@ -13,7 +13,13 @@ import { TimeoutDefaultsSettings } from "@/components/timeout-defaults-settings"
 import { AlertPolicySettings } from "@/components/alert-policy-settings";
 
 export default function SettingsPage() {
-  const [me, setMe] = useState<{ tenant_id: string; role: string } | null>(null);
+  const [me, setMe] = useState<{
+    tenant_id: string;
+    role: string;
+    plan?: string;
+    domain_limit?: number | null;
+    domains_used?: number;
+  } | null>(null);
   const [keyName, setKeyName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -51,6 +57,47 @@ export default function SettingsPage() {
             <dt className="text-muted-foreground">Role</dt>
             <dd className="capitalize">{me?.role ?? "—"}</dd>
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-5">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-sm font-semibold">Plan</h2>
+            <span className="rounded-full bg-primary/10 px-2.5 py-0.5 text-xs font-medium capitalize text-primary">
+              {me?.plan ?? "—"}
+            </span>
+          </div>
+          {(() => {
+            const used = me?.domains_used ?? 0;
+            const limit = me?.domain_limit; // undefined until loaded, null = unlimited
+            const cap = limit == null ? Infinity : limit;
+            const pct = cap === Infinity ? 0 : Math.min(100, (used / Math.max(cap, 1)) * 100);
+            const atLimit = used >= cap;
+            return (
+              <>
+                <div className="flex items-baseline justify-between text-sm">
+                  <span className="text-muted-foreground">Domains</span>
+                  <span className="font-mono">
+                    {used} / {limit == null ? "∞" : limit}
+                  </span>
+                </div>
+                {limit != null && (
+                  <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                    <div
+                      className={`h-full rounded-full ${atLimit ? "bg-severity-high" : "bg-primary"}`}
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {atLimit
+                    ? "You've used your plan's domain allowance. Remove a domain or upgrade to add another."
+                    : "Free 1 · Pro 5 · Business 25 · Enterprise unlimited. The limit is enforced when you add a domain."}
+                </p>
+              </>
+            );
+          })()}
         </CardContent>
       </Card>
 

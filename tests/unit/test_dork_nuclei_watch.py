@@ -32,7 +32,13 @@ async def test_run_dork_stores_findings_and_dedupes():
     async def search(query):
         # one indexed hit for env-file dorks, deduped across queries by link
         if "ext:env" in query:
-            return [{"title": "leaked env", "link": "https://customer.com/.env"}]
+            return [
+                {
+                    "title": "leaked env",
+                    "link": "https://customer.com/.env",
+                    "snippet": "DB_PASSWORD=…",
+                }
+            ]
         return []
 
     res = await run_dork(
@@ -40,7 +46,13 @@ async def test_run_dork_stores_findings_and_dedupes():
     )
     assert res["new"] == 1
     docs = await FindingRepo(mongo.collection("findings")).list("t1", "p1")
-    assert docs[0]["module"] == "dork" and docs[0]["severity"] == "high"
+    f = docs[0]
+    assert f["module"] == "dork" and f["severity"] == "high"
+    # Full transparency: the exact dork query + snippet + a reproduction are all on
+    # the finding, nothing hidden (the user must see WHY it was flagged).
+    assert "ext:env" in f["locator"]  # the exact dork
+    assert "DB_PASSWORD" in f["description"]  # the indexed snippet
+    assert f["raw"]["dork_query"] == f["locator"] and f["reproduction"].startswith("Search Google")
 
 
 # -- nuclei watch ------------------------------------------------------------

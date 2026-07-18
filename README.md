@@ -99,3 +99,77 @@ fingerprint (idempotent, state-aware). New/changed facts fan out to
   confirmed-dedicated ownership.
 - **Exposed secrets are never stored in plaintext** (ADR-0006).
 - **Detection only** — nuclei runs with `dos,intrusive,fuzz` excluded.
+
+---
+### Local testing - clean everything and fresh start guide:
+
+1 · Complete wipe
+From the repo root:
+
+```bash
+docker compose -f docker/docker-compose.yml down -v
+```
+
+The -v is the important part — it deletes the named volumes (mongo_data, redis_data, grafana_data, …), so every tenant, program (example.com + your other one), finding, and scan is gone. Containers and networks go too.
+
+(Optional, if you also changed code and want an image rebuild from scratch: add --rmi local.)
+
+2 · Brand-new up
+
+```bash
+docker compose -f docker/docker-compose.yml up --build -d
+docker compose -f docker/docker-compose.yml ps        # wait until mongo/redis are "healthy"
+```
+--build rebuilds the images so any code changes are in. Give it ~30–60s.
+
+3 · Sign up + add the program (UI)
+Open http://localhost:3000 →
+
+Create account (this makes your fresh tenant + user).
+Go to Programs → add quipohealth.com.
+Stop there — don't try to verify in the UI. (Email verification is off in dev by default, so signup + add-program won't be blocked. If your .env set VANTARI_REQUIRE_EMAIL_VERIFICATION=true, the verification link is printed in the API logs: docker compose -f docker/docker-compose.yml logs api | grep verify.)
+
+4 · Bypass DNS verification (one command)
+
+```bash
+docker compose -f docker/docker-compose.yml exec api python - <<'PY'
+import asyncio
+from db.mongo import get_mongo
+from db.programs import ProgramRepo
+from db.authorizations import AuthorizationRepo
+from core.models import Authorization
+
+async def main():
+    m = get_mongo(); await m.connect()
+    progs = await ProgramRepo.from_mongo(m).list_all()
+    match = [p for p in progs if p["apex_domain"] == "quipohealth.com"]
+    if not match:
+        print("!! add quipohealth.com in the UI first"); return
+    p = match[0]; tid, pid = p["tenant_id"], p["program_id"]
+    await ProgramRepo.from_mongo(m).set_verified(tid, pid, True)
+    await AuthorizationRepo.from_mongo(m).save(Authorization(
+        tenant_id=tid, program_id=pid, authorized_by="dev-bypass", apex_verified=True))
+    print(f"OK — {pid} is now verified + authorized")
+
+asyncio.run(main())
+PY
+```
+This flips the program to verified and writes a current authorization (apex_verified=True) — exactly what steps 3–5 of the normal flow would produce, minus the DNS TXT check. It runs inside the api container, so the model shapes are guaranteed correct:
+
+You should see OK — prog_xxxx is now verified + authorized.
+
+5 · Start the scan
+Reload the program in the UI — it now shows Verified. Either:
+
+Click Scan (the /scan trigger), or
+Just wait — the scheduler's bootstrap tick will enqueue the first full run automatically (a program that's never completed a run is "due immediately").
+6 · Watch it
+UI → Activity tab, or the logs: docker compose -f docker/docker-compose.yml logs -f worker
+Then check Assets (interest badges), Findings, Endpoints (risk tags).
+Two things to expect, so they don't look like bugs:
+
+Port scanning and content-discovery will likely skip with a note like "no confirmed-dedicated hosts." That's correct — those only run on IPs confirmed as yours via asnmap (§9b), which the DNS bypass doesn't do. Probe, crawl, nuclei (safe), and secrets will all run over HTTP. If you want port scans against your own infra, set scan_shared_infra=true on the program (add await ProgramRepo.from_mongo(m).save(...) or a Mongo update) — but only because you own it.
+This is a real scan hitting quipohealth.com over the network, rate-limited to 10 req/s per target. Fine, since it's your domain.
+⚠️ One honest caveat: only ever do this bypass for a domain you actually own, on your own instance. Domain verification is the control that keeps Vantari from scanning someone else's property — bypassing it for a domain you don't control is exactly the AUP/legal violation the whole authorization chain exists to prevent. quipohealth.com is yours, so you're clear.
+
+It's posible to set  a quick mongosh one-liner to flip scan_shared_infra on (so this run includes port + content-discovery against our own infra)

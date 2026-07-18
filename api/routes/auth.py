@@ -145,6 +145,15 @@ async def me(
         if user:
             email_verified = bool(user.get("email_verified"))
             email = user.get("email")
+
+    # Plan + usage so the UI can show the tier, its domain limit, and how much of it
+    # is used — the same numbers the 402 on add-domain enforces (§13).
+    from core.plans import coerce_plan, max_domains
+    from db.programs import ProgramRepo, tenant_plan
+
+    plan = coerce_plan(await tenant_plan(mongo, principal.tenant_id))
+    cap = max_domains(plan)
+    used = len(await ProgramRepo.from_mongo(mongo).list(principal.tenant_id))
     return {
         "tenant_id": principal.tenant_id,
         "user_id": principal.user_id,
@@ -152,6 +161,9 @@ async def me(
         "auth": principal.method,
         "email": email,
         "email_verified": email_verified,
+        "plan": plan.value,
+        "domain_limit": cap,  # None = unlimited
+        "domains_used": used,
     }
 
 

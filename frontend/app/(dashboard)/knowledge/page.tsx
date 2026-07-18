@@ -454,6 +454,46 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: "section-refs",
+    title: "Those § numbers explained",
+    icon: BookOpen,
+    keywords:
+      "section reference numbering §9b §3.8b §9c §3.9 §15 spec what does mean symbol paragraph legend glossary",
+    body: (
+      <>
+        <p>
+          You&apos;ll see markers like <Code>§9b</Code> or <Code>§3.8b</Code> in some notes (e.g.
+          &quot;ports skipped — §9b&quot;). The <Term>§</Term> symbol just means &quot;section&quot; — it
+          points at the paragraph of Vantari&apos;s design spec that a rule comes from. They&apos;re there
+          so a decision is traceable to <em>why</em> it exists, not jargon you need to memorise. The ones
+          you&apos;ll actually meet:
+        </p>
+        <div className="space-y-2">
+          <Q q="§9b — authorization to scan">
+            You must prove you own a domain before it&apos;s scanned, and owning the domain doesn&apos;t
+            authorise scanning every IP it points at. This is why a CDN/shared host gets HTTP-only checks,
+            and why ports/brute-force are withheld until an IP is confirmed dedicated to you.
+          </Q>
+          <Q q="§3.8b — politeness / rate limiting">
+            Every request to a target is capped (≤10/sec per host) so scanning never looks like abuse to
+            the host or its provider. This is why a large scan is paced rather than instant.
+          </Q>
+          <Q q="§3.9 — CDN / cloud ranges">
+            Known Cloudflare/AWS/Akamai/… IP ranges get HTTP-layer probing only — that hardware belongs to
+            the provider, not you.
+          </Q>
+          <Q q="§9c — exposed-secret handling">
+            A found secret is stored masked + hashed, never in plaintext, and never sent in an alert.
+          </Q>
+          <Q q="§15 — signal quality targets">
+            The metrics that make the product trustworthy: time-to-first-alert, the false-positive rate
+            (target under 5%), and zero AUP complaints.
+          </Q>
+        </div>
+      </>
+    ),
+  },
+  {
     id: "faq",
     title: "FAQ & caveats",
     icon: HelpCircle,

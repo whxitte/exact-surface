@@ -85,12 +85,20 @@ async def run_dork(
     models: list[Finding] = []
     seen: set[str] = set()
     for dork in render(domain):
-        for item in await search(dork["query"]):
+        query = dork["query"]
+        for item in await search(query):
             link = item.get("link")
             if not link or link in seen:
                 continue
             seen.add(link)
             check_id = f"dork:{dork['category']}"
+            title = item.get("title") or ""
+            snippet = item.get("snippet") or ""
+            # Full transparency: the finding carries the EXACT dork query that
+            # matched, the search-result title + snippet (the indexed content the
+            # engine returned), and a reproduction the user can paste into Google.
+            # Nothing about why this was flagged is hidden.
+            desc_parts = [p for p in (title, snippet) if p]
             models.append(
                 Finding(
                     tenant_id=tenant.tenant_id,
@@ -99,9 +107,19 @@ async def run_dork(
                     check_id=check_id,
                     module="dork",
                     location=link,
+                    locator=query,  # the exact dork that surfaced this
                     name=f"Indexed exposure ({dork['category']})",
-                    description=item.get("title") or "",
+                    description=" — ".join(desc_parts) or f"Indexed by: {query}",
                     severity=category_severity(dork["category"]),
+                    reproduction=f"Search Google for: {query}",
+                    raw={
+                        "dork_query": query,
+                        "category": dork["category"],
+                        "engine": engine,
+                        "title": title,
+                        "snippet": snippet,
+                        "link": link,
+                    },
                 )
             )
     total, new = await FindingRepo.from_mongo(mongo).upsert_many(models)

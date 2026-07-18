@@ -356,7 +356,9 @@ export default function ProgramDetail() {
                   ["uncover", "Shodan/Censys", "passive host discovery (needs Shodan/Censys key)"],
                   ["tls", "TLS inspection", "cert chain + expiry (tlsx)"],
                   ["service_scan", "Service ID", "nmap -sV on open ports"],
-                  ["dork", "Dorking", "search-engine exposures (needs Google CSE key)"],
+                  ["dork", "Dorking", "search-engine exposures (needs Google/Brave/SerpAPI key)"],
+                  ["cloud_buckets", "Cloud buckets", "guess S3/GCS/Azure buckets from your name (name-derived, review before trusting)"],
+                  ["nuclei_watch", "Nuclei watch", "alert when a NEW nuclei template starts matching your stack"],
                 ] as const
               ).map(([mod, label, hint]) => (
                 <label key={mod} className="flex cursor-pointer items-center gap-3 text-sm">
@@ -910,9 +912,21 @@ export default function ProgramDetail() {
             {selected.description && (
               <Field label="Description">{selected.description}</Field>
             )}
+            {/* What actually matched — for a dork this is the exact search query, for
+                nuclei the detected value. Full transparency: never hide the trigger. */}
+            {selected.locator && (
+              <Field label={selected.module === "dork" ? "Dork query" : "Matched"}>
+                <code className="break-all text-xs">{selected.locator}</code>
+              </Field>
+            )}
+            {typeof selected.raw?.snippet === "string" && selected.raw.snippet && (
+              <Field label="Indexed snippet">
+                <code className="break-all text-xs">{selected.raw.snippet as string}</code>
+              </Field>
+            )}
             <Field label="Reproduce">
               <pre className="overflow-x-auto rounded-md border border-border bg-background p-3 text-xs">
-                curl -i {selected.location}
+                {selected.reproduction || `curl -i ${selected.location}`}
               </pre>
             </Field>
             {selected.references && selected.references.length > 0 && (

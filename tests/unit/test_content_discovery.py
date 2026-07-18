@@ -241,3 +241,9 @@ async def test_content_discovery_fallback_to_ffuf(monkeypatch):
     assert len(ffuf_calls) == 1
     assert ffuf_calls[0]["url"] == "https://app.customer.com/FUZZ"
     assert res["new"] == 1
+
+    # The path came from ffuf (feroxbuster raised), so the endpoint's source must say
+    # "ffuf" — not be mis-attributed to feroxbuster.
+    eps = await EndpointRepo(mongo.collection("endpoints")).list("t1", "p1")
+    admin = next(e for e in eps if e["url"].endswith("/admin"))
+    assert admin["source"] == "ffuf"

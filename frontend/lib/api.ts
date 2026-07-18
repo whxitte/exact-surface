@@ -75,6 +75,7 @@ export interface Finding {
   description?: string;
   references?: string[];
   cvss?: number | null;
+  reproduction?: string; // module-provided repro (e.g. the exact dork query to search)
   raw?: Record<string, unknown>; // full tool output (nuclei request/response/curl/tags)
   gone?: boolean; // no longer reported by its module's latest run (resolved)
 }
