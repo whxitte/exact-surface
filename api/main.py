@@ -84,7 +84,12 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
-    allowed = ["*"] if not settings.is_prod else []  # locked down per-deploy in prod
+    # Dev allows the local frontend; prod allows only explicitly-configured origins
+    # (empty by default — the shipped stack is same-origin behind one proxy, so no
+    # cross-origin access is granted to anyone). Never "*" with credentials.
+    allowed = settings.cors_allowed_origins or (
+        ["http://localhost:3000", "http://127.0.0.1:3000"] if not settings.is_prod else []
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=allowed,

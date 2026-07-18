@@ -172,6 +172,14 @@ class Settings(BaseSettings):
     # the refreshed feed on their next restart.
     scope_feed_refresh_hours: float = Field(default=24.0, ge=0)
 
+    # -- api -------------------------------------------------------------
+    # Cross-origin origins allowed in prod (comma-separated env). Empty is safe: the
+    # shipped stack serves the frontend and API same-origin behind one proxy, so no
+    # CORS is needed. Set this only if you deploy the API on a *different* origin than
+    # the frontend — never to "*" with credentials (browsers reject it, and it would
+    # let any site make authenticated calls).
+    cors_allowed_origins: list[str] = Field(default_factory=list)
+
     # -- observability ---------------------------------------------------
     sentry_dsn: SecretStr | None = Field(default=None)
     metrics_enabled: bool = Field(default=True)

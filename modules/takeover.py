@@ -87,9 +87,15 @@ SERVICES: tuple[Service, ...] = (
 async def default_fetch(url: str) -> str:  # pragma: no cover - real network
     import aiohttp
 
-    async with aiohttp.ClientSession() as session:
+    from modules.safe_http import assert_url_allowed, guarded_session
+
+    # SSRF guard: never let a takeover probe be redirected/rebound to an internal
+    # address (e.g. the cloud metadata endpoint). Redirects are off and the resolver
+    # blocks non-public IPs — see modules.safe_http (§3.10).
+    assert_url_allowed(url)
+    async with guarded_session() as session:
         async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=10), ssl=False, allow_redirects=True
+            url, timeout=aiohttp.ClientTimeout(total=10), ssl=False, allow_redirects=False
         ) as resp:
             raw = await resp.content.read(1_000_000)
             return raw.decode("utf-8", errors="ignore")

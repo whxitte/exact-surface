@@ -119,18 +119,21 @@ def is_scannable_url(url: str) -> bool:
 async def _default_fetch(url: str) -> str:
     import aiohttp
 
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+    from modules.safe_http import assert_url_allowed, guarded_session
+
+    # SSRF guard: the secret scanner reads response bodies, so a redirect/rebind to
+    # the cloud metadata endpoint would get its IAM credentials scanned and stored as
+    # a "secret". Redirects off + a resolver that blocks non-public IPs (§3.10).
+    assert_url_allowed(url)
+    async with guarded_session() as session:
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=8), allow_redirects=False
+        ) as resp:
             ctype = (resp.headers.get("Content-Type") or "").lower()
             if ctype and not any(ctype.startswith(t) for t in _TEXT_CONTENT_TYPES):
                 return ""  # non-text response (image/font/binary) — nothing to scan
             raw = await resp.content.read(_MAX_BODY_BYTES)
             return raw.decode("utf-8", errors="ignore")  # lenient: never crash on bytes
-
-
-def scan_content(content: str, source: str) -> list[dict]:
-    """Scan already-fetched text for secrets."""
-    return find_secrets(content, source)
 
 
 def _priority(url: str) -> int:
