@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, Search, Workflow, Radar, RefreshCw, Activity, ShieldAlert, KeyRound,
-  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard,
+  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard, Users,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -449,6 +449,49 @@ const SECTIONS: Section[] = [
           default <Code>log</Code> transport just prints the link into the server log (no account
           needed), and any SMTP provider (Resend, Brevo, SES, Postmark, Mailgun) works by setting
           <Code>EMAIL_TRANSPORT=smtp</Code> plus SMTP credentials.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "access",
+    title: "Team access & permissions",
+    icon: Users,
+    keywords:
+      "rbac role permission group owner member viewer iam access control team user invite settings manage view escalation revoke",
+    body: (
+      <>
+        <p>
+          The person who signs up is the <Term>owner</Term>. The owner holds every permission and is
+          the only one who can add teammates and decide what they can do — everything is managed under{" "}
+          <Term>Settings → Permission groups / Team members</Term>.
+        </p>
+        <p>
+          Access works AWS-IAM style: you compose a <Term>permission group</Term> (a named set of
+          permissions) and add members to it. A member&apos;s access is the union of their groups.
+          A brand-new member has <Term>no group and therefore no access at all</Term> until the owner
+          places them in one — nothing is visible by default. A read-only <Code>Viewer</Code> group is
+          seeded for you; it can be renamed or re-permissioned but not deleted.
+        </p>
+        <div className="space-y-2">
+          <Q q="View">
+            Read everything — overview, programs, assets, findings, DNS, activity. No changes.
+          </Q>
+          <Q q="Manage programs">
+            Add/remove domains, verify, run scans, toggle modules, mute assets. Implies View.
+          </Q>
+          <Q q="Manage settings">
+            API keys, integrations, notification channels, alert policy, schedules. Implies View.
+          </Q>
+        </div>
+        <p>
+          Two things are deliberately <Term>owner-only and can never be delegated</Term>: managing
+          teammates/groups, and the highest-stakes program actions (deleting a program and creating the
+          scanning-authorization record). This makes privilege escalation impossible — no permission a
+          member can be granted lets them expand their own access. Permission changes take effect{" "}
+          <Term>immediately</Term> (they&apos;re re-checked on every request), so removing someone from a
+          group revokes their access at once, without waiting for them to log out. An API key inherits its
+          creator&apos;s current permissions, so revoking the creator revokes the key.
         </p>
       </>
     ),

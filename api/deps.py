@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from api.auth import InvalidToken, decode_token, hash_api_key
 from core.config import get_settings
@@ -42,6 +42,16 @@ class Principal:
     user_id: str | None
     role: Role
     method: str  # "jwt" | "apikey"
+    #: Effective RBAC permissions (§ access control). Owner ⇒ every permission; a
+    #: non-owner ⇒ the union of their groups', empty if they have none.
+    permissions: frozenset[str] = frozenset()
+
+    @property
+    def is_owner(self) -> bool:
+        return self.role == Role.OWNER
+
+    def has(self, perm: str) -> bool:
+        return perm in self.permissions
 
 
 async def get_mongo_dep() -> Any:
@@ -66,22 +76,33 @@ async def get_principal(
             payload = decode_token(authorization[7:])
         except InvalidToken as exc:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid token") from exc
+        role = Role(payload.get("role", "member"))
+        tenant_id = payload["tenant_id"]
+        user_id = payload.get("sub")
+        # Resolve permissions from the DB on every request, NOT from the token — so an
+        # owner removing a user from a group takes effect immediately, not on the next
+        # login. The permission set is intentionally not carried in the JWT.
+        perms = await _resolve_permissions(mongo, tenant_id, user_id, role)
         return Principal(
-            tenant_id=payload["tenant_id"],
-            user_id=payload.get("sub"),
-            role=Role(payload.get("role", "member")),
-            method="jwt",
+            tenant_id=tenant_id, user_id=user_id, role=role, method="jwt", permissions=perms
         )
 
     if x_api_key:
         doc = await ApiKeyRepo.from_mongo(mongo).get_by_hash(hash_api_key(x_api_key))
         if not doc:
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid api key")
+        role = Role(doc.get("role", "member"))
+        # An API key acts with its creator's current permissions (owner-created key ⇒
+        # full access), resolved live so revoking the creator's access revokes the key.
+        perms = await _resolve_permissions(
+            mongo, doc["tenant_id"], doc.get("created_by"), role
+        )
         return Principal(
             tenant_id=doc["tenant_id"],
             user_id=doc.get("created_by"),
-            role=Role(doc.get("role", "member")),
+            role=role,
             method="apikey",
+            permissions=perms,
         )
 
     raise HTTPException(
@@ -89,6 +110,46 @@ async def get_principal(
         "missing credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+async def _resolve_permissions(
+    mongo: Any, tenant_id: str, user_id: str | None, role: Role
+) -> frozenset[str]:
+    """Effective permissions for a principal — owner=all, else the union of the
+    user's groups. Resolved from the DB so access changes take effect at once.
+
+    Owner-ness and group membership are read from the live user record, not the
+    caller-supplied ``role``: this makes an API key inherit its *creator's* current
+    permissions (an owner-created key ⇒ full access; a member-created key is bounded
+    to that member, and revoking the member revokes the key). ``role`` is only a
+    fallback when there is no user record (e.g. a legacy key without ``created_by``).
+    """
+    from core.permissions import effective_permissions
+    from db.groups import GroupRepo
+
+    is_owner = role == Role.OWNER
+    group_ids: list[str] = []
+    if user_id:
+        user = await UserRepo.from_mongo(mongo).get(tenant_id, user_id)
+        if user:
+            is_owner = user.get("role") == Role.OWNER.value
+            group_ids = user.get("group_ids") or []
+    if is_owner:
+        return effective_permissions(is_owner=True, group_permissions=())
+    perms = await GroupRepo.from_mongo(mongo).permissions_for_ids(tenant_id, group_ids)
+    return effective_permissions(is_owner=False, group_permissions=perms)
+
+
+def require_permission(perm: str):
+    """Guard: the principal must hold *perm* (owner always does). Returns the
+    principal so the route can reuse it."""
+
+    async def _dep(principal: Principal = Depends(get_principal)) -> Principal:
+        if not principal.has(perm):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"missing permission: {perm}")
+        return principal
+
+    return _dep
 
 
 def require_role(*allowed: Role):
@@ -100,10 +161,33 @@ def require_role(*allowed: Role):
     return _dep
 
 
-# Privileged operations — account-level or security-critical (mint credentials,
-# destroy a program, create the legal scanning-authorization record, manage
-# integration secrets). Owners and admins only; members are read/operate.
-require_owner = require_role(Role.OWNER, Role.ADMIN)
+# Managing users/groups is owner-only and non-delegable (core.permissions): only a
+# real OWNER may do it, so no member can ever escalate the tenant.
+require_owner = require_role(Role.OWNER)
+
+_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+
+def require_router_access(write_permission: str):
+    """Router-level RBAC gate, applied once per data router at include time.
+
+    Every route needs :data:`~core.permissions.VIEW`; any mutating request (non-GET)
+    additionally needs *write_permission*. Enforcing it here — not per route — means a
+    newly-added endpoint is protected by default and no write can slip through
+    unguarded. Owner holds all permissions, so this is transparent to owners.
+    """
+    from core.permissions import VIEW
+
+    async def _dep(request: Request, principal: Principal = Depends(get_principal)) -> Principal:
+        if not principal.has(VIEW):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, f"missing permission: {VIEW}")
+        if request.method not in _SAFE_METHODS and not principal.has(write_permission):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN, f"missing permission: {write_permission}"
+            )
+        return principal
+
+    return _dep
 
 
 async def require_verified_email(

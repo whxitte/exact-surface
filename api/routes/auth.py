@@ -15,7 +15,7 @@ from api.deps import (
     get_email_sender_dep,
     get_mongo_dep,
     get_principal,
-    require_owner,
+    require_permission,
 )
 from api.rate_limit import limiter
 from api.schemas import (
@@ -29,12 +29,18 @@ from api.schemas import (
 from core.config import get_settings
 from core.email import EmailSender, build_verification_email
 from core.logging import logger
-from core.models import ApiKey, Role, Tenant, User
+from core.models import ApiKey, Group, Role, Tenant, User
+from core.permissions import DEFAULT_VIEWER_PERMISSIONS, SETTINGS_MANAGE
 from db.apikeys import ApiKeyRepo
+from db.groups import GroupRepo
 from db.tenants import TenantRepo
 from db.users import UserRepo
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# Bound once (not per-request) so it can be a plain dependency — the auth router is
+# ungated, so key issuance carries its own SETTINGS_MANAGE guard.
+_require_settings_manage = require_permission(SETTINGS_MANAGE)
 
 
 async def _issue_and_send_verification(
@@ -79,6 +85,17 @@ async def signup(
             email=body.email,
             password_hash=hash_password(body.password),
             role=Role.OWNER,
+        )
+    )
+    # Seed the read-only "Viewer" group so the owner has a sane default to assign new
+    # users to (§ access control). It can be renamed/re-permissioned but not deleted.
+    await GroupRepo.from_mongo(mongo).save(
+        Group(
+            tenant_id=tenant_id,
+            group_id="g_" + uuid.uuid4().hex[:12],
+            name="Viewer",
+            permissions=sorted(DEFAULT_VIEWER_PERMISSIONS),
+            is_default=True,
         )
     )
     await _issue_and_send_verification(mongo, sender, user_id=user_id, email=body.email.lower())
@@ -164,17 +181,24 @@ async def me(
         "plan": plan.value,
         "domain_limit": cap,  # None = unlimited
         "domains_used": used,
+        # Effective RBAC state so the UI can hide what the caller can't do (§ access
+        # control). Authoritative enforcement is server-side; this is only for display.
+        "is_owner": principal.is_owner,
+        "permissions": sorted(principal.permissions),
     }
 
 
 @router.post("/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
 async def create_api_key(
     body: ApiKeyCreate,
-    principal: Principal = Depends(require_owner),
+    principal: Principal = Depends(_require_settings_manage),
     mongo: Any = Depends(get_mongo_dep),
 ) -> ApiKeyCreated:
-    # No privilege escalation: an admin cannot mint an owner-scoped key. (Only
-    # owners/admins reach here at all; this caps the key's role at the creator's.)
+    # The API router is ungated (login/me must stay open), so this route carries its
+    # own SETTINGS_MANAGE guard. A key acts with its creator's *live* permissions
+    # (resolved via created_by on every request), so a non-owner's key is naturally
+    # bounded to what that member can do — and this check stops it being minted with a
+    # higher role than the creator holds.
     if body.role == Role.OWNER and principal.role != Role.OWNER:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "cannot mint a key above your own role")
     raw, key_hash, prefix = generate_api_key()

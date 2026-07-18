@@ -11,7 +11,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
-from api.deps import Principal, get_mongo_dep, get_principal, require_owner
+from api.deps import Principal, get_mongo_dep, get_principal
 from core.integrations import INTEGRATION_BY_NAME, INTEGRATION_KEYS
 from db.integrations import IntegrationSecretRepo
 
@@ -52,9 +52,10 @@ async def list_integrations(
 async def set_integration(
     name: str,
     body: IntegrationSet,
-    principal: Principal = Depends(require_owner),
+    principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> None:
+    # Write access is enforced at the router (SETTINGS_MANAGE); owner always qualifies.
     if name not in INTEGRATION_BY_NAME:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown integration '{name}'")
     await IntegrationSecretRepo.from_mongo(mongo).set(principal.tenant_id, name, body.value.strip())
@@ -63,7 +64,7 @@ async def set_integration(
 @router.delete("/{name}", status_code=status.HTTP_204_NO_CONTENT)
 async def clear_integration(
     name: str,
-    principal: Principal = Depends(require_owner),
+    principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> None:
     if name not in INTEGRATION_BY_NAME:

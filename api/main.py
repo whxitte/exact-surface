@@ -10,14 +10,16 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Response
+from fastapi import Depends, FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
+from api.deps import require_router_access
 from api.rate_limit import limiter
 from api.routes import auth as auth_routes
 from api.routes import integrations as integration_routes
+from api.routes import members as member_routes
 from api.routes import notifications as notification_routes
 from api.routes import programs as program_routes
 from api.routes import reports as report_routes
@@ -27,6 +29,7 @@ from api.ws import stream as ws_stream
 from core.config import get_settings
 from core.logging import configure_logging, logger
 from core.metrics import REGISTRY
+from core.permissions import PROGRAMS_MANAGE, SETTINGS_MANAGE, VIEW
 from daemon.health import run_health_checks
 
 
@@ -116,14 +119,23 @@ def create_app() -> FastAPI:
             )
         return response
 
-    # Feature routers.
+    # Feature routers. Data routers carry a router-level RBAC gate (§ access control):
+    # every route needs VIEW and every write needs the router's manage permission, so a
+    # user with no permission group is refused everywhere and no new endpoint can ship
+    # unguarded. The auth router is deliberately ungated — login/signup/verify/me must
+    # be reachable by a user who has no permissions yet (so they can at least sign in
+    # and see they have none). The members router is owner-only (see its own guard).
+    def _gate(perm: str):
+        return [Depends(require_router_access(perm))]
+
     app.include_router(auth_routes.router)
-    app.include_router(program_routes.router)
-    app.include_router(stats_routes.router)
-    app.include_router(notification_routes.router)
-    app.include_router(integration_routes.router)
-    app.include_router(schedule_routes.router)
-    app.include_router(report_routes.router)
+    app.include_router(member_routes.router)  # owner-only; guarded inside
+    app.include_router(program_routes.router, dependencies=_gate(PROGRAMS_MANAGE))
+    app.include_router(stats_routes.router, dependencies=_gate(VIEW))
+    app.include_router(notification_routes.router, dependencies=_gate(SETTINGS_MANAGE))
+    app.include_router(integration_routes.router, dependencies=_gate(SETTINGS_MANAGE))
+    app.include_router(schedule_routes.router, dependencies=_gate(SETTINGS_MANAGE))
+    app.include_router(report_routes.router, dependencies=_gate(VIEW))
     app.include_router(ws_stream.router)
 
     @app.get("/healthz")

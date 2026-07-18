@@ -332,6 +332,21 @@ export interface Integration {
   configured: boolean;
   masked: string;
 }
+// -- access control (RBAC) ---------------------------------------------------
+export interface PermissionInfo { key: string; label: string; description: string }
+export interface Group {
+  group_id: string;
+  name: string;
+  permissions: string[];
+  is_default: boolean;
+}
+export interface Member {
+  user_id: string;
+  email: string | null;
+  role: string; // owner | member
+  group_ids: string[];
+  email_verified: boolean;
+}
 
 const json = (b: unknown) => ({ method: "POST", body: JSON.stringify(b) });
 
@@ -347,6 +362,11 @@ export const api = {
       auth: string;
       email: string | null;
       email_verified: boolean | null;
+      plan?: string;
+      domain_limit?: number | null;
+      domains_used?: number;
+      is_owner?: boolean;
+      permissions?: string[];
     }>("/auth/me"),
   verifyEmail: (token: string) =>
     request<{ verified: boolean; email: string }>("/auth/verify-email", json({ token })),
@@ -449,6 +469,21 @@ export const api = {
     request<void>(`/integrations/${name}`, { method: "PUT", body: JSON.stringify({ value }) }),
   clearIntegration: (name: string) =>
     request<void>(`/integrations/${name}`, { method: "DELETE" }),
+
+  // Access control (owner-only). 403 from any of these means the caller isn't the owner.
+  listPermissions: () => request<PermissionInfo[]>("/members/permissions"),
+  listGroups: () => request<Group[]>("/members/groups"),
+  createGroup: (name: string, permissions: string[]) =>
+    request<Group>("/members/groups", json({ name, permissions })),
+  updateGroup: (id: string, body: { name?: string; permissions?: string[] }) =>
+    request<Group>(`/members/groups/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteGroup: (id: string) => request<void>(`/members/groups/${id}`, { method: "DELETE" }),
+  listMembers: () => request<Member[]>("/members"),
+  createMember: (email: string, password: string, group_ids: string[]) =>
+    request<Member>("/members", json({ email, password, group_ids })),
+  setMemberGroups: (id: string, group_ids: string[]) =>
+    request<Member>(`/members/${id}`, { method: "PATCH", body: JSON.stringify({ group_ids }) }),
+  deleteMember: (id: string) => request<void>(`/members/${id}`, { method: "DELETE" }),
 };
 
 /** Fetch a report with auth and trigger a browser download. */

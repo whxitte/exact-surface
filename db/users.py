@@ -32,6 +32,24 @@ class UserRepo:
         await self._c.update_one({"user_id": doc["user_id"]}, {"$set": doc}, upsert=True)
         return doc
 
+    async def list(self, tenant_id: str) -> list[dict]:
+        """All users in a tenant (for the members-management UI)."""
+        return await self._c.find({"tenant_id": tenant_id}).to_list(None)
+
+    async def set_groups(self, tenant_id: str, user_id: str, group_ids: list[str]) -> bool:
+        res = await self._c.update_one(
+            {"tenant_id": tenant_id, "user_id": user_id},
+            {"$set": {"group_ids": group_ids}},
+        )
+        return bool(getattr(res, "modified", 0) or getattr(res, "modified_count", 0))
+
+    async def delete(self, tenant_id: str, user_id: str) -> bool:
+        res = await self._c.delete_one({"tenant_id": tenant_id, "user_id": user_id})
+        return bool(getattr(res, "deleted", 0) or getattr(res, "deleted_count", 0))
+
+    async def count_owners(self, tenant_id: str) -> int:
+        return await self._c.count_documents({"tenant_id": tenant_id, "role": "owner"})
+
     async def set_verification(
         self, user_id: str, *, token: str, expires_at: datetime, sent_at: datetime
     ) -> None:

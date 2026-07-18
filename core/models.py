@@ -80,6 +80,20 @@ class Role(str, Enum):
     MEMBER = "member"
 
 
+class Group(TenantScopedModel):
+    """A named permission set within a tenant (§ RBAC).
+
+    The owner composes these and assigns users to them; a user's effective
+    permissions are the union of their groups'. ``permissions`` values come from
+    ``core.permissions``.
+    """
+
+    group_id: str
+    name: str
+    permissions: list[str] = Field(default_factory=list)
+    is_default: bool = False  # the seeded read-only "Viewer" group
+
+
 class User(TenantScopedModel):
     """An account. Email is globally unique; the owner is created at signup."""
 
@@ -87,6 +101,9 @@ class User(TenantScopedModel):
     email: str
     password_hash: str
     role: Role = Role.OWNER
+    #: RBAC group membership (§ access control). Owner ignores this (implicit all);
+    #: a non-owner with no groups has NO access until the owner adds them to one.
+    group_ids: list[str] = Field(default_factory=list)
     email_verified: bool = False
     # One-time verification token (random, hashed at rest would be ideal; kept opaque
     # and cleared on use). ``verification_expires_at`` bounds its life; ``…_sent_at``

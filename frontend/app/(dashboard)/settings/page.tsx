@@ -11,6 +11,7 @@ import { IntegrationsSettings } from "@/components/integrations-settings";
 import { ScheduleDefaultsSettings } from "@/components/schedule-defaults-settings";
 import { TimeoutDefaultsSettings } from "@/components/timeout-defaults-settings";
 import { AlertPolicySettings } from "@/components/alert-policy-settings";
+import { AccessManagementSettings } from "@/components/access-management-settings";
 
 export default function SettingsPage() {
   const [me, setMe] = useState<{
@@ -19,6 +20,8 @@ export default function SettingsPage() {
     plan?: string;
     domain_limit?: number | null;
     domains_used?: number;
+    is_owner?: boolean;
+    permissions?: string[];
   } | null>(null);
   const [keyName, setKeyName] = useState("");
   const [newKey, setNewKey] = useState<string | null>(null);
@@ -28,6 +31,11 @@ export default function SettingsPage() {
   useEffect(() => {
     api.me().then(setMe).catch(() => {});
   }, []);
+
+  // The settings sub-sections below all require the "settings.manage" permission
+  // server-side (the owner always has it). Hiding them from a viewer keeps the page
+  // from filling with 403 errors and matches exactly what the API will allow.
+  const canManageSettings = !!me && (me.is_owner || (me.permissions ?? []).includes("settings.manage"));
 
   async function createKey(e: React.FormEvent) {
     e.preventDefault();
@@ -101,6 +109,9 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      {me?.is_owner && <AccessManagementSettings />}
+
+      {canManageSettings && (
       <Card>
         <CardContent className="space-y-4 p-5">
           <div className="flex items-center gap-2">
@@ -142,16 +153,21 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+      )}
 
-      <AlertPolicySettings />
+      {canManageSettings && (
+        <>
+          <AlertPolicySettings />
 
-      <ScheduleDefaultsSettings />
+          <ScheduleDefaultsSettings />
 
-      <TimeoutDefaultsSettings />
+          <TimeoutDefaultsSettings />
 
-      <IntegrationsSettings />
+          <IntegrationsSettings />
 
-      <NotificationsSettings />
+          <NotificationsSettings />
+        </>
+      )}
     </div>
   );
 }
