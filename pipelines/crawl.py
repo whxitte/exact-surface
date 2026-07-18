@@ -79,16 +79,26 @@ async def run_crawl(
                 urls.update(result)
                 logger.info("crawl: {} returned {} archived url(s)", name, len(result))
 
-    # Active crawl of hosts whose scope permits HTTP probing — capped so a domain
-    # with dozens of subdomains cannot exceed the run's time budget.
+    # Active crawl of hosts that PROBE found alive — capped so a domain with dozens
+    # of subdomains cannot exceed the run's time budget. Katana on a host that never
+    # answered HTTP is pure wasted time (it just times out), so gate on the probe's
+    # live root endpoints, not merely on scope. The passive archive harvest above is
+    # deliberately NOT gated — gau/waybackurls query archives, not the live host, and
+    # find URLs for hosts that are down right now.
     assets = await AssetRepo.from_mongo(mongo).list(tenant.tenant_id, program_id, limit=100_000)
     assets = [a for a in assets if a.get("monitored", True)]  # skip user-muted assets
     if targets:  # cascade: crawl only the newly discovered hosts
         assets = [a for a in assets if a["hostname"] in targets]
+    ep_repo = EndpointRepo.from_mongo(mongo)
+    endpoints = await ep_repo.list(tenant.tenant_id, program_id, limit=100_000)
+    alive_hosts = {
+        urlsplit(ep["url"]).hostname for ep in endpoints if ep.get("source") == "probe"
+    }
     crawl_hosts = [
         asset["hostname"]
         for asset in assets
-        if engine.evaluate(asset["hostname"], asset.get("resolved_ips", []), scope).permits(
+        if asset["hostname"] in alive_hosts  # probed alive
+        and engine.evaluate(asset["hostname"], asset.get("resolved_ips", []), scope).permits(
             Action.HTTP_PROBE
         )
     ][:MAX_ACTIVE_CRAWL_HOSTS]
