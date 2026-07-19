@@ -173,3 +173,18 @@ This is a real scan hitting quipohealth.com over the network, rate-limited to 10
 ⚠️ One honest caveat: only ever do this bypass for a domain you actually own, on your own instance. Domain verification is the control that keeps Vantari from scanning someone else's property — bypassing it for a domain you don't control is exactly the AUP/legal violation the whole authorization chain exists to prevent. quipohealth.com is yours, so you're clear.
 
 It's posible to set  a quick mongosh one-liner to flip scan_shared_infra on (so this run includes port + content-discovery against our own infra)
+
+---
+
+Email — why/what/where? It's for signup email verification only (the confirm-your-address link), and it's config, not a UI setting — that's why you don't see it in the app. In dev, VANTARI_EMAIL_TRANSPORT=log just prints the link to the API logs (no provider needed). To send real mail, set smtp + any provider's SMTP creds in .env. "Provider-agnostic" means it speaks plain SMTP, so Resend/Brevo/SES all work. Nothing to configure to test scanning.
+
+Tech-aware nuclei — will it lose generic findings (expired TLS, etc.)? No. The safe baseline is still exposure, misconfig, tech, ssl, cve, default-login — TLS/expiry, generic misconfigs, CVEs all still run. The tech tags are added on top (a WordPress host also gets WordPress templates). It's strictly more coverage, never less, on the safe scan. Only the aggressive run (confirmed-dedicated infra) uses the full library.
+
+Where's the ASN mapper in the pipeline? It's not a visible stage — it runs inside authorization confirmation (confirm_authorization_ip_scope, before scanning), which is why it's not in the stepper. It's the mechanism that answers your next question:
+
+How is the "point x.mydomain.com at any IP, declare /24 dedicated, scan third-party infra" risk prevented? The client only ever requests CIDRs — they're recorded as unconfirmed (HTTP-layer only). Before each scan, the worker runs asnmap on your verified apex's real announced ASN and promotes a CIDR to dedicated only if it actually falls in that ASN's ranges. Self-attestation never unlocks aggressive scanning. That's exactly why you saw "no confirmed-dedicated hosts — ports/content withheld (§9b)" — quipohealth.com is on shared/cloud infra, so port scan + content discovery + active nuclei were correctly withheld. To scan your own cloud infra, flip the "Scan my cloud infra" toggle (scan_shared_infra) — only because you own it.
+
+What is nuclei_watch? It baselines which nuclei templates currently match your stack, then alerts when a NEW template starts matching (e.g. a fresh CVE template now fires on your host). It's opt-in because its template-lister contract is unverified against the pinned binary.
+
+Grafana — creds/config? http://localhost:3001, login admin / admin in dev (set GRAFANA_ADMIN_PASSWORD to change). Nothing to configure — the Prometheus datasource and the "Vantari — Operations" dashboard are auto-provisioned. Panels populate during a scan (worker/scheduler are scraped on :9100).
+
