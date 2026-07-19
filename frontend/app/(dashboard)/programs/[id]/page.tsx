@@ -1,15 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
   Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
-  Bug, GitBranch, Boxes, Clock, Search,
+  Bug, GitBranch, Boxes, Clock, Search, Unlock,
 } from "lucide-react";
 import {
   api, downloadReport,
-  type Asset, type Correlation, type Cve, type Endpoint, type Finding, type Leak,
+  type Asset, type BypassEntry, type Correlation, type Cve, type Endpoint, type Finding, type Leak,
   type Port, type Program, type Secret, type Verification,
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,6 +54,15 @@ export default function ProgramDetail() {
   const [findingSearch, setFindingSearch] = useState("");
   const [prioritySort, setPrioritySort] = useState<"risk" | "severity" | "host">("risk");
   const [endpointSource, setEndpointSource] = useState<string>("all");
+  const [bypassBusy, setBypassBusy] = useState(false);
+  const [bypassMsg, setBypassMsg] = useState("");
+  const [selectedBypass, setSelectedBypass] = useState<Endpoint | null>(null);
+  const bypassPoll = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stop polling for bypass results if the user navigates away mid-run.
+  useEffect(() => () => {
+    if (bypassPoll.current) clearInterval(bypassPoll.current);
+  }, []);
 
   const loadProgram = useCallback(() => {
     api.getProgram(id).then(setProgram).catch((e) => setMsg(e.message));
@@ -78,6 +87,35 @@ export default function ProgramDetail() {
     api.listLeaks(id).then(setLeaks).catch(() => {});
     api.getCorrelation(id).then(setCorrelation).catch(() => {});
   }, [program, id]);
+
+  // On-demand 403/401-bypass: fire the run, then poll for results (it runs in the
+  // worker and streams to the Activity tab). Bounded so it self-stops.
+  async function runBypass403() {
+    setBypassBusy(true);
+    setBypassMsg("");
+    try {
+      await api.triggerBypass403(id);
+      setBypassMsg("Running 403-bypass — follow it live in the Activity tab. Results attach below.");
+      if (bypassPoll.current) clearInterval(bypassPoll.current);
+      let ticks = 0;
+      bypassPoll.current = setInterval(async () => {
+        ticks += 1;
+        try {
+          setEndpoints(await api.listEndpoints(id));
+        } catch {
+          /* transient */
+        }
+        if (ticks >= 24) {
+          if (bypassPoll.current) clearInterval(bypassPoll.current);
+          bypassPoll.current = null;
+          setBypassBusy(false);
+        }
+      }, 5000);
+    } catch (e) {
+      setBypassMsg(e instanceof Error ? e.message : "failed to start 403-bypass");
+      setBypassBusy(false);
+    }
+  }
 
   // Derive per-asset live status/tech from its root endpoint (probe output), so the
   // assets view shows what an attacker sees: alive?, HTTP status, technologies.
@@ -750,6 +788,32 @@ export default function ProgramDetail() {
 
       {tab === "endpoints" && (
         <div className="space-y-2">
+          {(() => {
+            const forbidden = endpoints.filter(
+              (e) => !e.gone && (e.status_code === 401 || e.status_code === 403),
+            );
+            const bypassed = endpoints.filter((e) => (e.bypasses?.length ?? 0) > 0).length;
+            if (forbidden.length === 0) return null;
+            return (
+              <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
+                <Unlock className="h-4 w-4 shrink-0 text-blue-500" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">403 / 401 bypass</p>
+                  <p className="text-xs text-muted-foreground">
+                    {forbidden.length} forbidden endpoint{forbidden.length === 1 ? "" : "s"}. Try the
+                    common access-control bypasses an attacker would — detection only, nothing is
+                    changed on the target.
+                    {bypassed > 0 && ` ${bypassed} already bypassable.`}
+                  </p>
+                </div>
+                <Button size="sm" onClick={runBypass403} disabled={bypassBusy}>
+                  <Unlock className="h-4 w-4" />
+                  {bypassBusy ? "Running…" : "Try 403 bypass"}
+                </Button>
+              </div>
+            );
+          })()}
+          {bypassMsg && <p className="text-xs text-blue-500">{bypassMsg}</p>}
           {endpoints.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               {["all", ...endpointSources].map((s) => (
@@ -816,6 +880,16 @@ export default function ProgramDetail() {
                     {t}
                   </span>
                 ))}
+                {(ep.bypasses?.length ?? 0) > 0 && (
+                  <button
+                    onClick={() => setSelectedBypass(ep)}
+                    title="This 403/401 was bypassed — click for the payload and details"
+                    className="flex items-center gap-1 rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-500 hover:bg-blue-500/25"
+                  >
+                    <Unlock className="h-3 w-3" />
+                    403 bypassed
+                  </button>
+                )}
                 {ep.source && (
                   <span className="hidden rounded bg-muted px-1.5 py-0.5 text-[10px] capitalize text-muted-foreground sm:inline">
                     {ep.source}
@@ -942,6 +1016,69 @@ export default function ProgramDetail() {
                 </ul>
               </Field>
             )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!selectedBypass}
+        onClose={() => setSelectedBypass(null)}
+        title={
+          selectedBypass && (
+            <span className="flex items-center gap-2">
+              <Unlock className="h-4 w-4 text-blue-500" /> 403 bypass
+            </span>
+          )
+        }
+      >
+        {selectedBypass && (
+          <div className="space-y-4 text-sm">
+            <Field label="Endpoint">
+              <code className="break-all text-xs">{selectedBypass.url}</code>
+            </Field>
+            <p className="text-xs text-muted-foreground">
+              The access control on this endpoint was bypassed by {selectedBypass.bypasses?.length}{" "}
+              request{selectedBypass.bypasses?.length === 1 ? "" : "s"} below. Each is the exact,
+              benign probe that reached the resource — reproduce it with the shown command.
+            </p>
+            <div className="space-y-3">
+              {selectedBypass.bypasses?.map((b: BypassEntry, i: number) => (
+                <div key={i} className="space-y-2 rounded-md border border-border p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded bg-blue-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-500">
+                      {b.technique}
+                    </span>
+                    <span className="font-mono text-xs">{b.label}</span>
+                    <span className="ml-auto font-mono text-xs text-severity-high">
+                      → {b.status}
+                    </span>
+                    <span
+                      className={`rounded px-1.5 py-0.5 text-[10px] uppercase ${
+                        b.confidence === "high"
+                          ? "bg-severity-high/15 text-severity-high"
+                          : "bg-severity-medium/15 text-severity-medium"
+                      }`}
+                    >
+                      {b.confidence}
+                    </span>
+                  </div>
+                  {Object.keys(b.request_headers || {}).length > 0 && (
+                    <div className="text-xs text-muted-foreground">
+                      {Object.entries(b.request_headers).map(([k, v]) => (
+                        <div key={k}>
+                          <code>
+                            {k}: {v}
+                          </code>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <pre className="overflow-x-auto rounded-md border border-border bg-background p-2 text-xs">
+                    {b.curl}
+                  </pre>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </Modal>

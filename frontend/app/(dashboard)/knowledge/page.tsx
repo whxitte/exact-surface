@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, Search, Workflow, Radar, RefreshCw, Activity, ShieldAlert, KeyRound,
-  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard, Users,
+  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard, Users, Unlock,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -258,6 +258,45 @@ const SECTIONS: Section[] = [
           The body is scanned against every known service <em>regardless of the CNAME</em> — important
           for S3 fronted by CloudFront, where the CNAME is <Code>*.cloudfront.net</Code> but the body is
           S3&apos;s error. Confirmed risks appear on the <Term>DNS</Term> page and as HIGH findings.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "bypass403",
+    title: "403 / 401 bypass",
+    icon: Unlock,
+    keywords:
+      "403 401 bypass forbidden access control x-original-url x-forwarded-for path normalisation header method endpoints button blue label attacker detection",
+    body: (
+      <>
+        <p>
+          A <Code>403 Forbidden</Code> or <Code>401</Code> isn&apos;t always a real wall. A mis-configured
+          proxy or app will often hand over the &quot;protected&quot; page anyway if you ask the right way —
+          and an attacker who hits a 403 tries exactly those tricks before moving on. This tool runs them
+          for you, on your own surface, so you find the hole first.
+        </p>
+        <p>
+          It&apos;s <Term>on-demand only</Term>: open the <Term>Endpoints</Term> tab and, when there are
+          forbidden endpoints, a <Term>Try 403 bypass</Term> button appears. It is <em>not</em> part of the
+          scan pipeline and never runs on a schedule. Progress streams into the <Term>Activity</Term> tab
+          like any scan (&quot;trying X-Original-URL …&quot;). Any endpoint that turns out to be bypassable
+          gets a blue <Term>403 bypassed</Term> label — click it for the exact request (technique, headers,
+          and a ready-to-run <Code>curl</Code>).
+        </p>
+        <p>
+          The techniques are the canonical ones: forwarding headers (<Code>X-Forwarded-For</Code>,{" "}
+          <Code>X-Real-IP</Code>), URL-rewrite headers (<Code>X-Original-URL</Code>,{" "}
+          <Code>X-Rewrite-URL</Code>), and path-normalisation quirks (<Code>/admin/</Code>,{" "}
+          <Code>/admin/..;/</Code>, encoded characters). A hit is re-confirmed with a second request to
+          shed load-balancer noise before it&apos;s recorded.
+        </p>
+        <p>
+          <Term>This is still detection, not exploitation.</Term> It only uses <Term>safe HTTP methods</Term>{" "}
+          (never POST/PUT/DELETE — nothing that could change data), never follows redirects, never changes
+          the host it talks to, and sends the same benign probe an attacker would — it just reports what got
+          through. It obeys the same rules as every scan: a current authorization, in-scope hosts only, and
+          the ≤10 req/s politeness cap (§9b, §3.8b).
         </p>
       </>
     ),

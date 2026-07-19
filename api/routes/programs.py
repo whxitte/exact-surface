@@ -576,6 +576,88 @@ async def trigger_scan(
     }
 
 
+# -- 403-bypass (on-demand, user-triggered; NOT a pipeline phase) ------------
+@router.post("/{program_id}/bypass-403", status_code=status.HTTP_202_ACCEPTED)
+async def trigger_bypass_403(
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Run the 403/401-bypass module across this program's forbidden endpoints.
+
+    On-demand only (the Endpoints-tab button) — never scheduled. Detection-only: it
+    sends the same benign probes an attacker would, records any endpoint whose 403 can
+    be bypassed, and changes nothing on the target. Gated exactly like a scan (verified
+    + current authorization) because it makes active requests; the programs router
+    already requires ``programs.manage`` for this write.
+    """
+    from core.logging import logger
+
+    if not program.get("verified"):
+        raise HTTPException(status.HTTP_409_CONFLICT, "verify the domain first")
+    auth = await AuthorizationRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
+    if not (auth and auth.get("apex_verified") and not auth.get("revoked")):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "a current authorization record is required first"
+        )
+
+    tid, pid = principal.tenant_id, program["program_id"]
+    audit = ScanRunRepo.from_mongo(mongo)
+
+    # Refuse a duplicate bypass run while one is already in flight for this program.
+    if await audit.active_phase_run(tid, pid, "bypass_403", fresh_seconds=180):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "a 403-bypass run is already in progress for this program"
+        )
+
+    scan_id = uuid.uuid4().hex
+    await audit.save(
+        ScanRun(
+            tenant_id=tid,
+            program_id=pid,
+            scan_id=scan_id,
+            pipeline="bypass_403",
+            status=ScanStatus.QUEUED,
+        )
+    )
+
+    enqueued = False
+    try:
+        from taskqueue.arq_client import create_pool
+
+        pool = await create_pool()
+        try:
+            await pool.enqueue_job("run_bypass_task", tid, pid, scan_id=scan_id)
+            enqueued = True
+        finally:
+            await pool.aclose()
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("403-bypass enqueue failed: {}", exc)
+
+    if not enqueued:
+        await audit.save(
+            ScanRun(
+                tenant_id=tid,
+                program_id=pid,
+                scan_id=scan_id,
+                pipeline="bypass_403",
+                status=ScanStatus.FAILED,
+                note="couldn't start the 403-bypass run — is the worker running?",
+            )
+        )
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "couldn't start the 403-bypass run — no worker available right now",
+        )
+
+    return {
+        "status": "queued",
+        "program_id": pid,
+        "scan_id": scan_id,
+        "detail": "Running 403-bypass — watch the Activity tab; results attach to endpoints.",
+    }
+
+
 # -- reads -------------------------------------------------------------------
 async def _phase_refs(mongo: Any, tenant_id: str, program_id: str) -> dict:
     """Per-phase full-coverage-run reference starts for gone-detection (core.liveness)."""

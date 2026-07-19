@@ -251,6 +251,14 @@ class Endpoint(StatefulModel):
     #: risk categories from core.endpoint_risk (admin/api/idor/ssrf/payment/…) —
     #: which of the crawled URLs are worth a human's attention.
     risk_tags: list[str] = Field(default_factory=list)
+    #: On-demand 403/401-bypass results (module: http_bypass). User-triggered only,
+    #: never part of a pipeline. Preserved across re-scans (EndpointRepo.PRESERVE_FIELDS)
+    #: and written via EndpointRepo.record_bypass, so a later probe never wipes them.
+    bypass_attempted: bool = False
+    bypass_checked_at: datetime | None = None
+    #: each entry: technique/label/method/url/request_headers/status/length/confidence/
+    #: evidence/curl — the exact request that reached the resource behind the 403.
+    bypasses: list[dict] = Field(default_factory=list)
 
 
 class Port(StatefulModel):

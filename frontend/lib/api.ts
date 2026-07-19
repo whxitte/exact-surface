@@ -94,6 +94,18 @@ export interface Asset {
   last_seen?: string; // last time it was observed alive (stops advancing when it goes down)
   gone?: boolean; // not re-observed in the latest scan sweep
 }
+export interface BypassEntry {
+  technique: string; // method | header | path
+  label: string; // e.g. "X-Original-URL: /admin"
+  method: string;
+  url: string;
+  request_headers: Record<string, string>;
+  status: number;
+  length: number;
+  confidence: string; // high | medium
+  evidence: string;
+  curl: string; // ready-to-run reproduction
+}
 export interface Endpoint {
   fingerprint: string;
   url: string;
@@ -106,6 +118,9 @@ export interface Endpoint {
   first_seen?: string;
   last_seen?: string; // last scan that re-confirmed it live
   gone?: boolean; // not re-observed in the latest sweep
+  bypass_attempted?: boolean; // the 403-bypass module has run against this endpoint
+  bypasses?: BypassEntry[]; // successful 403/401 bypasses (blue "403 bypassed" label)
+  bypass_checked_at?: string;
 }
 export interface Port {
   fingerprint: string;
@@ -411,6 +426,10 @@ export const api = {
     ),
   triggerScan: (id: string) =>
     request<{ status: string; detail?: string }>(`/programs/${id}/scan`, { method: "POST" }),
+  triggerBypass403: (id: string) =>
+    request<{ status: string; scan_id: string; detail?: string }>(`/programs/${id}/bypass-403`, {
+      method: "POST",
+    }),
   setScanSharedInfra: (id: string, value: boolean) =>
     request<{ program_id: string; scan_shared_infra: boolean }>(
       `/programs/${id}/scan-config?scan_shared_infra=${value}`,

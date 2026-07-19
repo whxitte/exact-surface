@@ -153,6 +153,35 @@ async def run_pipeline_task(
     return result
 
 
+async def run_bypass_task(
+    ctx: dict,
+    tenant_id: str,
+    program_id: str,
+    scan_id: str | None = None,
+    targets: list[str] | None = None,
+) -> dict:
+    """arq task: run the on-demand 403-bypass for a program (user-triggered only).
+
+    Not a pipeline phase and never enqueued by the scheduler — the API enqueues it when
+    a user clicks "Try 403 bypass". Reuses the shared engine + politeness limiter so it
+    stays scope- and rate-safe, and reuses ``scan_id`` so the queued Activity row is the
+    one that goes RUNNING."""
+    from core.tenant import TenantContext
+    from pipelines.bypass_403 import run_bypass_scan
+
+    settings = ctx["settings"]
+    return await run_bypass_scan(
+        mongo=ctx["mongo"],
+        engine=ctx["engine"],
+        tenant=TenantContext(tenant_id=tenant_id),
+        program_id=program_id,
+        scan_id=scan_id,
+        targets=tuple(targets or ()),
+        limiter=ctx["limiter"],
+        timeout=settings.tool_default_timeout,
+    )
+
+
 async def _emit_cascade(
     ctx: dict, tenant_id: str, program_id: str, pipeline: str, result: dict
 ) -> None:
@@ -193,7 +222,7 @@ def _redis_settings():
 class WorkerSettings:
     """arq reads these as CLASS attributes — they must be plain values, not properties."""
 
-    functions = [run_program_task, run_pipeline_task]
+    functions = [run_program_task, run_pipeline_task, run_bypass_task]
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = get_settings().worker_concurrency
