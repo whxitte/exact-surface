@@ -80,3 +80,28 @@ def guarded_session(**kwargs):  # pragma: no cover - needs aiohttp
 
     kwargs.setdefault("connector", aiohttp.TCPConnector(resolver=_filtering_resolver()))
     return aiohttp.ClientSession(**kwargs)
+
+
+async def guarded_post(  # pragma: no cover - needs aiohttp
+    url: str, payload: dict, *, timeout: float = 15.0
+) -> int:
+    """POST *payload* as JSON to *url* through the SSRF-safe guarded session.
+
+    Used for outbound webhooks (Discord/Slack/generic/Telegram), whose URL is
+    user-supplied. The filtering resolver blocks any host that resolves to a non-public
+    address (metadata/RFC1918/loopback) — closing the DNS-rebinding gap — and
+    ``assert_url_allowed`` refuses a forbidden IP literal up front. Redirects are off so
+    a 302 can't hop to an internal address. Returns the HTTP status; raises
+    :class:`ForbiddenTarget` if the destination is not globally routable.
+    """
+    import aiohttp
+
+    assert_url_allowed(url)
+    async with guarded_session() as session:
+        async with session.post(
+            url,
+            json=payload,
+            timeout=aiohttp.ClientTimeout(total=timeout),
+            allow_redirects=False,
+        ) as resp:
+            return resp.status

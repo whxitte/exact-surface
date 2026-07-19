@@ -63,11 +63,21 @@ def severity_color(sev: Severity) -> int:
 
 
 async def default_http(url: str, payload: dict) -> int:  # pragma: no cover - real network
-    import aiohttp
+    """Deliver a webhook through the SSRF-safe guarded session.
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=15)) as resp:
-            return resp.status
+    The channel URL is user-supplied, so this must never be a plain aiohttp POST: a
+    tenant could otherwise point a webhook at ``169.254.169.254`` or an internal
+    service and have the server fetch it on every alert. :func:`guarded_post` blocks any
+    non-public destination (incl. DNS rebinding); a blocked target is logged and treated
+    as a failed delivery, never contacted."""
+    from core.logging import logger
+    from modules.safe_http import ForbiddenTarget, guarded_post
+
+    try:
+        return await guarded_post(url, payload)
+    except ForbiddenTarget as exc:
+        logger.warning("notify: refusing webhook to non-public address: {}", exc)
+        return 0
 
 
 def default_senders() -> Senders:

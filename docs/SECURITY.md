@@ -267,6 +267,29 @@ metric (target <5%).
 
 ## 9. Application security
 
+- **Server-side input validation on the trust boundary.** Frontend checks are advisory
+  — a request from curl/Burp ignores them — so every externally-supplied value is
+  validated in the API before it is persisted or acted on (`core/validation.py`, wired
+  into the Pydantic schemas in `api/schemas.py`). A bad value is a clean 422, never a
+  persisted/acted-on value. Covered: apex domain (must be a bare registrable domain, not
+  a URL/IP/path — it feeds scope + scanning), exclusion hosts/CIDRs (format + count
+  caps), authorization CIDRs, and notification channel config (below). Numeric overrides
+  (cadence/timeout/alert-policy) are clamped and unknown keys dropped; the report
+  `format` is whitelisted; module toggles are filtered to the known set.
+- **NoSQL/operator injection is inert.** Path/query params are typed `str` and used only
+  as equality operands *alongside* the token-derived `tenant_id`, so a `{"$ne": null}`
+  is treated as a literal that matches nothing (`tests/security/test_nosql_injection.py`).
+  Models use `extra="ignore"`, so mass-assignment of unexpected fields is impossible.
+- **Outbound-webhook SSRF is closed.** A notification channel URL is user-supplied and
+  the server POSTs to it on every alert. Delivery goes through the SSRF-safe guarded
+  session (`modules/safe_http.guarded_post`): the filtering resolver blocks any host
+  that resolves to a non-public address (metadata/RFC1918/loopback — incl. DNS
+  rebinding) and redirects are off. Input-time validation additionally rejects non-http
+  schemes and forbidden IP literals, and constrains a Telegram bot token so it can't
+  rewrite the request host. This complements the in-process fetch guard (§3.10) used by
+  the takeover/secret/403-bypass modules.
+- **Request bodies are size-capped** (512 KiB) by middleware before buffering, so an
+  oversized JSON payload is a 413, not a memory-DoS.
 - Prod refuses to boot with insecure default secrets (`Settings.assert_prod_safe`).
 - CORS locked to the frontend origin in prod; frontend ships no inline scripts.
 - Trivy scans in CI (`.github/workflows/ci.yml`).

@@ -106,6 +106,23 @@ def create_app() -> FastAPI:
     app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
     app.add_middleware(SlowAPIMiddleware)
 
+    # Reject oversized request bodies up front (§8): our largest legitimate body is a
+    # small JSON document, so a multi-MB payload is either a mistake or a memory-DoS
+    # attempt. Enforced by declared Content-Length so we never buffer the body to find
+    # out. 512 KiB is comfortably above any real request.
+    max_body_bytes = 512 * 1024
+
+    @app.middleware("http")
+    async def _limit_body(request, call_next):
+        cl = request.headers.get("content-length")
+        if cl is not None:
+            try:
+                if int(cl) > max_body_bytes:
+                    return Response(status_code=413, content="request body too large")
+            except ValueError:
+                return Response(status_code=400, content="invalid Content-Length")
+        return await call_next(request)
+
     # Prometheus request metrics.
     @app.middleware("http")
     async def _metrics(request, call_next):
