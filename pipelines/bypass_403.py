@@ -161,6 +161,12 @@ async def run_bypass_scan(
     Enforces the §9b authorization gate up front (it makes active requests), then runs
     the engine inside a bound logging context with an updated-at heartbeat, mirroring
     :func:`pipelines.dispatch.run_pipeline`."""
+    from core.entitlements import ensure_fresh
+
+    if (await ensure_fresh(mongo)).read_only:
+        logger.info("license read-only — skipping 403-bypass for {}", program_id)
+        return {"skipped": True, "note": "subscription read-only"}
+
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
         raise AuthorizationRequired(f"no program {program_id} for tenant {tenant.tenant_id}")

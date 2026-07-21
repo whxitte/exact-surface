@@ -8,6 +8,7 @@ one fails. ``/metrics`` exposes the Prometheus registry.
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI, Response
@@ -59,7 +60,33 @@ async def lifespan(app: FastAPI):
         set_bus(RedisActivityBus.connect(settings.redis_uri))
     except Exception as exc:  # noqa: BLE001
         logger.warning("activity bus unavailable: {}", exc)
+    # Evaluate the subscription license now, then keep it fresh on an interval so an
+    # expiry (or a renewal) takes effect without a restart. Enforcement is server-side
+    # in the value routes; this just keeps the cached state current.
+    license_task: asyncio.Task | None = None
+    if settings.license_enforced:
+        try:
+            from core.entitlements import refresh as refresh_license
+            from db.mongo import get_mongo
+
+            await refresh_license(get_mongo())
+
+            async def _license_loop() -> None:
+                from core.entitlements import refresh as _refresh
+
+                while True:
+                    await asyncio.sleep(settings.license_check_interval_seconds)
+                    try:
+                        await _refresh(get_mongo())
+                    except Exception as exc:  # noqa: BLE001 - never crash on a check
+                        logger.warning("license refresh failed: {}", exc)
+
+            license_task = asyncio.create_task(_license_loop())
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("initial license evaluation failed (fail-closed): {}", exc)
     yield
+    if license_task is not None:
+        license_task.cancel()
     try:
         from core.activity_bus import get_bus, set_bus
 

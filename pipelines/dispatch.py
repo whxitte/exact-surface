@@ -47,6 +47,17 @@ async def run_pipeline(
     targets: tuple[str, ...] = (),
     limiter: PolitenessLimiter | None = None,
 ) -> dict:
+    # Subscription gate (self-hosted licensing): a read-only instance (expired past
+    # grace / missing / tampered) does no scanning — the authoritative stop for
+    # scheduled work, mirroring the API's per-request guard. No-op when unenforced.
+    from core.entitlements import ensure_fresh
+
+    if (await ensure_fresh(mongo)).read_only:
+        from core.logging import logger
+
+        logger.info("license read-only — skipping {} for {}", pipeline, program_id)
+        return {"skipped": True, "note": "subscription read-only"}
+
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
         raise AuthorizationRequired(f"no program {program_id} for tenant {tenant.tenant_id}")

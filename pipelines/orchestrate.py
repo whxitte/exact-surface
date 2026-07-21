@@ -513,6 +513,14 @@ async def run_program(
     paused. Automated runs (scheduler bootstrap) leave it False, so a paused program
     is skipped — including a job that was already queued in Redis before the pause
     or a restart (the scheduler filters paused programs, but the queue may not)."""
+    # Subscription gate: a read-only instance (expired/missing/tampered license) runs
+    # no scans. No-op when licensing isn't enforced (dev/tests).
+    from core.entitlements import ensure_fresh
+
+    if (await ensure_fresh(mongo)).read_only:
+        logger.info("license read-only — skipping full run for {}", program_id)
+        return {"skipped": True, "note": "subscription read-only"}
+
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     if not program:
         raise AuthorizationRequired(f"no program {program_id} for tenant {tenant.tenant_id}")

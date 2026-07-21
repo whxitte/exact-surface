@@ -17,6 +17,7 @@ from api.deps import (
     require_owner,
     require_program,
     require_verified_email,
+    require_write_license,
 )
 from api.schemas import (
     AuthorizationCreate,
@@ -92,6 +93,7 @@ async def create_program(
     body: ProgramCreate,
     principal: Principal = Depends(require_verified_email),
     mongo: Any = Depends(get_mongo_dep),
+    _lic: None = Depends(require_write_license),
 ) -> dict:
     if not await tenant_can_add_domain(mongo, principal.tenant_id):
         cap = max_domains(await tenant_plan(mongo, principal.tenant_id))
@@ -483,6 +485,7 @@ async def trigger_scan(
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
+    _lic: None = Depends(require_write_license),
 ) -> dict:
     if not program.get("verified"):
         raise HTTPException(status.HTTP_409_CONFLICT, "verify the domain first")
@@ -582,6 +585,7 @@ async def trigger_bypass_403(
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
+    _lic: None = Depends(require_write_license),
 ) -> dict:
     """Run the 403/401-bypass module across this program's forbidden endpoints.
 

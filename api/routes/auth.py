@@ -43,6 +43,12 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _require_settings_manage = require_permission(SETTINGS_MANAGE)
 
 
+def _license_summary() -> dict:
+    from core.entitlements import summary
+
+    return summary()
+
+
 async def _issue_and_send_verification(
     mongo: Any, sender: EmailSender, *, user_id: str, email: str
 ) -> None:
@@ -185,7 +191,16 @@ async def me(
         # control). Authoritative enforcement is server-side; this is only for display.
         "is_owner": principal.is_owner,
         "permissions": sorted(principal.permissions),
+        # Subscription state so the UI can show a renew banner / read-only mode. The
+        # actual gate is server-side (require_write_license); this is display only.
+        "license": _license_summary(),
     }
+
+
+@router.get("/license")
+async def license_status(_: Principal = Depends(get_principal)) -> dict:
+    """The instance's subscription/license state (for the settings page + banner)."""
+    return _license_summary()
 
 
 @router.post("/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)

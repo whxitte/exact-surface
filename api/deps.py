@@ -190,6 +190,26 @@ def require_router_access(write_permission: str):
     return _dep
 
 
+async def require_write_license() -> None:
+    """Gate a value-generating action (scan, add-domain, 403-bypass) on an active
+    subscription. When the license is enforced and the instance is read-only (expired
+    past grace / missing / tampered), refuse with 402 — the authoritative, server-side
+    enforcement that a patched frontend cannot get around. A no-op when enforcement is
+    off (dev/tests)."""
+    settings = get_settings()
+    if not settings.license_enforced:
+        return
+    from core.entitlements import current
+
+    state = current()
+    if state.read_only:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"Vantari is in read-only mode — {state.reason}. Renew the subscription to "
+            "resume scanning; existing data remains viewable and exportable.",
+        )
+
+
 async def require_verified_email(
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),

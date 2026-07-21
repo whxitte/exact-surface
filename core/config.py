@@ -157,6 +157,26 @@ class Settings(BaseSettings):
     email_verification_ttl_seconds: int = Field(default=86400)  # 24h
     email_resend_cooloff_seconds: int = Field(default=60)
 
+    # -- self-hosted subscription licensing (§ commercial) --------------
+    # Enforce the signed subscription license. OFF in dev/tests so local work isn't
+    # gated; ON in every customer deployment. When on and the license is missing,
+    # invalid, or expired-past-grace, the instance runs READ-ONLY (fail closed).
+    license_enforced: bool = Field(default=False)
+    # Ed25519 PUBLIC key (PEM) that licenses are verified against. Baked into the image
+    # you build; public by design (it can only verify, never mint). No default — an
+    # enforced instance with no key configured fails closed to read-only.
+    license_public_key: str | None = Field(default=None)
+    # The signed license token itself, or a path to a file containing it. The token
+    # (env) wins if both are set; the file lets ops mount a license without an env var.
+    license_token: str | None = Field(default=None)
+    license_file: str | None = Field(default=None)
+    # How often the instance re-evaluates the clock and (if configured) refreshes the
+    # license from the license server. Also the clock high-water-mark cadence.
+    license_check_interval_seconds: int = Field(default=3600, ge=60)
+    # Optional online-refresh endpoint (hybrid model). When set, the instance periodically
+    # asks it for a fresh signed license extending the paid period; empty = pure offline.
+    license_refresh_url: str | None = Field(default=None)
+
     # -- backups (§7 Phase G, §9 retention) ------------------------------
     backup_dir: str = Field(default="./backups")
     # An age PUBLIC key (age1...). Public on purpose: this host encrypts to it and
