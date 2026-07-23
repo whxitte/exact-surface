@@ -1,6 +1,6 @@
-# Vantari Security Posture
+# ExactSurface Security Posture
 
-Vantari is an outside-in scanner that holds sensitive data about customers'
+ExactSurface is an outside-in scanner that holds sensitive data about customers'
 attack surfaces, and that *points scanners at the internet on their behalf*. Two
 things therefore matter as much as the findings it ships:
 
@@ -16,7 +16,7 @@ three.
 
 ## 1. Ethical boundary — detection only
 
-Vantari **detects, it does not exploit** (§3.10). Operationally: no payload that
+ExactSurface **detects, it does not exploit** (§3.10). Operationally: no payload that
 modifies target state, causes denial of service, or exfiltrates data beyond a
 minimal benign proof. Nuclei runs with `-etags dos,intrusive,fuzz` excluded
 (`modules/scanning/nuclei.py`). Aggressive scanners only ever run against
@@ -127,7 +127,7 @@ different kinds of I/O:
 
 **In-process I/O** (`core/ratelimit.py`) — a token bucket, backed by Redis in
 production so the ceiling holds across the whole worker fleet, not per process.
-This governs the requests Vantari itself makes at customer hosts: the takeover
+This governs the requests ExactSurface itself makes at customer hosts: the takeover
 body-fetch and the secret fetcher. Pipelines pace them with
 `throttled_fetch(fetch, limiter)` wrapped around their injected fetch function, so
 the ceiling applies by construction rather than by each module remembering to ask.
@@ -147,7 +147,7 @@ cost time, not coverage.
 `rate ÷ worker_fleet_size` rather than failing open (which would silently remove
 the ceiling) or failing closed (which would stop all scanning). The divisor means
 that even if every worker degrades at once, the aggregate stays within the cap —
-so `VANTARI_WORKER_FLEET_SIZE` **must be ≥ your real replica count**. In prod, a
+so `EXACTSURFACE_WORKER_FLEET_SIZE` **must be ≥ your real replica count**. In prod, a
 worker that cannot reach a shared store refuses to start.
 
 **Scanner subprocesses** (`core.ratelimit.derive_subprocess_rate`) — a token bucket
@@ -156,7 +156,7 @@ each send their own traffic, so our limiter never sees it. The ceiling is handed
 the tool up front, via its rate flag (`-rate`/`-rl`/`--rate-limit`), derived from
 the per-target cap. For a tool given many hosts at once the flag is an aggregate
 (`cap × hosts`, clamped by an absolute ceiling); for a per-host invocation it is the
-cap itself. Every derivation publishes `vantari_subprocess_per_target_pps{tool}`, so
+cap itself. Every derivation publishes `exactsurface_subprocess_per_target_pps{tool}`, so
 the ceiling is verifiable per tool rather than asserted. See ADR-0009 (naabu) and
 ADR-0013 (the rest).
 
@@ -168,14 +168,14 @@ ADR-0013 (the rest).
 > `-t` look like rate controls but bound concurrency, not rate (ADR-0013).
 
 **Verifiable, not asserted.** `/metrics` exposes
-`vantari_politeness_rate_limit_pps` (the cap) and, per tool,
-`vantari_subprocess_rate_pps{tool}` (aggregate) and
-`vantari_subprocess_per_target_pps{tool}` (derived). The §15 exit gate is
+`exactsurface_politeness_rate_limit_pps` (the cap) and, per tool,
+`exactsurface_subprocess_rate_pps{tool}` (aggregate) and
+`exactsurface_subprocess_per_target_pps{tool}` (derived). The §15 exit gate is
 "no subprocess exceeds the cap *verified by metrics*" — these are that evidence, and
 `SubprocessRateExceedsPolitenessCap` pages if any tool crosses it. Tests:
 `tests/unit/test_politeness_rate.py`, `tests/unit/test_subprocess_rate.py`.
 
-Masscan is disabled in v1 (ADR-0004) and stays disabled until Vantari has
+Masscan is disabled in v1 (ADR-0004) and stays disabled until ExactSurface has
 dedicated, abuse-contact-registered netblocks.
 
 ---
@@ -232,7 +232,7 @@ verified token, never from client input). `tests/security/test_nosql_injection.p
 
 ## 7. Exposed-secret handling (§9c / ADR-0006)
 
-Vantari must never become a plaintext honeypot of *other companies'* live
+ExactSurface must never become a plaintext honeypot of *other companies'* live
 credentials. When it finds a leaked secret it **never stores the plaintext**:
 
 - a masked hint (`AKIA••••••••7Q`),
@@ -301,5 +301,5 @@ metric (target <5%).
 
 ## 10. Reporting a vulnerability
 
-Email security@vantari.io with details and a reproduction. We trade in findings;
+Email security@exactsurface.com with details and a reproduction. We trade in findings;
 we take ours seriously.

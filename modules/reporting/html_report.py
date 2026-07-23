@@ -88,13 +88,13 @@ def render_html(ctx: ReportContext) -> str:
     td_css = "td{padding:8px;border-bottom:1px solid #1c1c20;font-size:14px}"
 
     return f"""<!doctype html>
-<html><head><meta charset="utf-8"><title>Vantari Report — {escape(ctx.program)}</title>
+<html><head><meta charset="utf-8"><title>ExactSurface Report — {escape(ctx.program)}</title>
 <style>
 body{{background:#0a0a0b;color:#fafafa;font-family:system-ui,-apple-system,sans-serif;margin:0;padding:40px;max-width:1000px;margin:0 auto}}
 h1{{font-size:24px;margin:0 0 4px}} h2{{font-size:16px;margin:32px 0 12px}}
 .muted{{color:#8b8b93;font-size:13px}} table{{width:100%;border-collapse:collapse}} {td_css}
 </style></head><body>
-<h1>Vantari Attack-Surface Report</h1>
+<h1>ExactSurface Attack-Surface Report</h1>
 <div class="muted">{escape(ctx.program)} · generated {escape(ctx.generated_at)} · detection only</div>
 <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:24px">{stats}</div>
 

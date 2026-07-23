@@ -43,7 +43,7 @@ def _print_health(report) -> None:
 async def _dry_run() -> int:
     settings = get_settings()
     configure_logging(json_logs=settings.is_prod)
-    logger.info("vantari daemon dry-run (env={})", settings.env)
+    logger.info("exactsurface daemon dry-run (env={})", settings.env)
     # Services may be absent on a bare dev box; report them but don't require them.
     report = await run_health_checks(check_services=True)
     _print_health(report)
@@ -69,7 +69,7 @@ async def _supervise() -> int:
     from core.observability import init_sentry
 
     init_sentry(settings)
-    logger.info("vantari daemon starting (scheduler)")
+    logger.info("exactsurface daemon starting (scheduler)")
 
     report = await run_health_checks(check_services=True)
     if not report.critical_ok({"config", "scope_feeds", "mongo", "redis"}):
@@ -97,7 +97,7 @@ async def _supervise() -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="vantari-daemon")
+    parser = argparse.ArgumentParser(prog="exactsurface-daemon")
     parser.add_argument("--dry-run", action="store_true", help="health check + registry, no I/O")
     args = parser.parse_args(argv)
     coro = _dry_run() if args.dry_run else _supervise()

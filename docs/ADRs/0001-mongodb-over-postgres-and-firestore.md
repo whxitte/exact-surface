@@ -3,7 +3,7 @@ Date: 2026-07-04
 Status: Accepted
 
 ## Context
-Vantari needs a datastore for a write-heavy, state-aware workload: continuous
+ExactSurface needs a datastore for a write-heavy, state-aware workload: continuous
 upserts keyed on content-hash fingerprints, "read state before doing expensive
 work," multi-filter triage queries, and cross-module correlation. Cost discipline
 matters (§3.8). The datastore must also support an on-prem/enterprise deployment
@@ -28,7 +28,7 @@ Record **PostgreSQL + Row-Level Security** as the sanctioned migration path.
 
 ## Alternatives considered
 - **Firestore/Firebase.** Rejected. It bills **per document read/write**, which
-  directly punishes the state-aware "read before work" pattern that is Vantari's
+  directly punishes the state-aware "read before work" pattern that is ExactSurface's
   core loop — continuous re-scans of millions of findings become a runaway bill.
   It cannot be self-hosted (kills on-prem/enterprise and complicates §3.7), and
   its query model (no joins, one range field per query, composite-index-per-shape)

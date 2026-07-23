@@ -2,7 +2,7 @@
 
 Crawling surfaces hundreds of URLs; most are noise (static assets, tracking) and a
 few are where an attacker actually looks — auth flows, admin panels, APIs, and
-parameters prone to IDOR / SSRF / open-redirect. Vantari already triages *host*
+parameters prone to IDOR / SSRF / open-redirect. ExactSurface already triages *host*
 interest (:func:`core.fingerprint.classify_interest`); this classifies the *path and
 query* of a specific endpoint, the granularity that separates ``/admin/users?id=42``
 from ``/img/logo.png``.

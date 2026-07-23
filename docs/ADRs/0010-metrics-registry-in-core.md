@@ -19,7 +19,7 @@ throttled decisions it must reach the registry — but `core → daemon` inverts
 direction. The result: **the limiter shipped with no metrics at all**, and §7's
 Phase D exit gate ("naabu never exceeds the global rate cap, *verified by
 metrics*") had nothing to verify against. The only metric in the entire codebase
-was `vantari_http_requests_total`.
+was `exactsurface_http_requests_total`.
 
 So the layout forced a choice between an architectural violation and an
 unobservable safety control. Both are bad.
@@ -46,7 +46,7 @@ need distributions, not gauges.
 
 ## Consequences
 
-**Good.** `core.ratelimit` now emits `vantari_politeness_decisions_total`
+**Good.** `core.ratelimit` now emits `exactsurface_politeness_decisions_total`
 (`allowed`/`throttled`) and publishes the configured ceiling — the Phase D exit
 gate has real evidence. `core` stays pure by its actual definition (no I/O), and
 the dependency graph stays acyclic. Any future `core` policy can be instrumented

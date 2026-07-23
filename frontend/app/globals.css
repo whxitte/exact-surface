@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dark-first design tokens (zinc canvas, emerald accent — the Vantari brand). */
+/* Dark-first design tokens (zinc canvas, emerald accent — the ExactSurface brand). */
 :root {
   --background: 240 10% 4%;
   --foreground: 0 0% 98%;

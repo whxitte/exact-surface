@@ -8,23 +8,23 @@
 #   * Mongo and Redis are on the internal network ONLY — no host ports. An exposed,
 #     unauthenticated datastore is the classic breach; here they are neither.
 #   * Both require auth (credentials from the environment, never defaulted).
-#   * VANTARI_ENV=prod, which makes Settings.assert_prod_safe() refuse insecure
+#   * EXACTSURFACE_ENV=prod, which makes Settings.assert_prod_safe() refuse insecure
 #     secrets and the lab-private scope bypass.
 #   * The API and frontend are not published either — Caddy is the single ingress
 #     and terminates TLS.
 #
 # Required environment (set in an untracked .env alongside this file, or exported):
 #   DOMAIN, MONGO_ROOT_USER, MONGO_ROOT_PASSWORD, REDIS_PASSWORD,
-#   GRAFANA_ADMIN_PASSWORD, plus the VANTARI_ secrets from .env.example
-#   (VANTARI_JWT_SECRET, VANTARI_SECRET_HASH_KEY, …).
-name: vantari-prod
+#   GRAFANA_ADMIN_PASSWORD, plus the EXACTSURFACE_ secrets from .env.example
+#   (EXACTSURFACE_JWT_SECRET, EXACTSURFACE_SECRET_HASH_KEY, …).
+name: exactsurface-prod
 
 # Auth-carrying connection strings, injected into every backend service. Kept in one
 # anchor so the credentials are defined once.
 x-backend-env: &backend-env
-  VANTARI_ENV: prod
-  VANTARI_MONGO_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
-  VANTARI_REDIS_URI: redis://:${REDIS_PASSWORD}@redis:6379/0
+  EXACTSURFACE_ENV: prod
+  EXACTSURFACE_MONGO_URI: mongodb://${MONGO_ROOT_USER}:${MONGO_ROOT_PASSWORD}@mongo:27017/?authSource=admin
+  EXACTSURFACE_REDIS_URI: redis://:${REDIS_PASSWORD}@redis:6379/0
 
 services:
   mongo:
@@ -63,7 +63,7 @@ services:
   # Heavy recon image; built once, reused by scheduler + workers. The dry-run gate
   # fails the stack fast if config/scope feeds are broken before anything scans.
   pipeline:
-    image: vantari/pipeline:latest
+    image: exactsurface/pipeline:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile.pipeline
@@ -75,7 +75,7 @@ services:
       redis: { condition: service_healthy }
 
   scheduler:
-    image: vantari/pipeline:latest
+    image: exactsurface/pipeline:latest
     command: ["python", "-m", "daemon.main"]
     env_file: ../.env
     environment: *backend-env
@@ -86,7 +86,7 @@ services:
       redis: { condition: service_healthy }
 
   worker:
-    image: vantari/pipeline:latest
+    image: exactsurface/pipeline:latest
     command: ["arq", "taskqueue.worker.WorkerSettings"]
     env_file: ../.env
     environment:
@@ -94,7 +94,7 @@ services:
       # Must track `replicas` below: if Redis is down each worker enforces
       # 1/fleet_size of the per-target cap locally, so a value under the real replica
       # count lets a degraded fleet exceed the cap (ADR-0012).
-      VANTARI_WORKER_FLEET_SIZE: "3"
+      EXACTSURFACE_WORKER_FLEET_SIZE: "3"
     restart: unless-stopped
     deploy:
       replicas: 3
@@ -104,7 +104,7 @@ services:
       redis: { condition: service_healthy }
 
   api:
-    image: vantari/api:latest
+    image: exactsurface/api:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
@@ -117,7 +117,7 @@ services:
       redis: { condition: service_healthy }
 
   frontend:
-    image: vantari/frontend:latest
+    image: exactsurface/frontend:latest
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend

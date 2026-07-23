@@ -11,8 +11,8 @@ from __future__ import annotations
 from core.logging import logger
 from core.models import VerificationMethod
 
-_DNS_LABEL = "_vantari"
-_HTTP_PATH = "/.well-known/vantari-challenge.txt"
+_DNS_LABEL = "_exactsurface"
+_HTTP_PATH = "/.well-known/exactsurface-challenge.txt"
 
 
 class DomainVerifier:

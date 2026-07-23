@@ -74,7 +74,7 @@ def _observe_alert_latency(first_seen: Any) -> None:
     if seconds < 0:  # clock skew — don't pollute the histogram
         return
     REGISTRY.observe(
-        "vantari_alert_latency_seconds",
+        "exactsurface_alert_latency_seconds",
         seconds,
         help="Seconds from a signal being first seen to its alert being delivered (§15)",
     )

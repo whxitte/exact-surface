@@ -19,7 +19,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_prefix="VANTARI_",
+        env_prefix="EXACTSURFACE_",
         env_file=".env",
         env_file_encoding="utf-8",
         extra="ignore",
@@ -31,7 +31,7 @@ class Settings(BaseSettings):
 
     # -- datastore (self-hosted MongoDB by default; Atlas optional) ------
     mongo_uri: str = Field(default="mongodb://localhost:27017")
-    mongo_db: str = Field(default="vantari")
+    mongo_db: str = Field(default="exactsurface")
 
     # -- redis (task queue + politeness token buckets) -------------------
     redis_uri: str = Field(default="redis://localhost:6379/0")
@@ -137,7 +137,7 @@ class Settings(BaseSettings):
     # Provider-agnostic: "log" prints the message (dev default, no account needed);
     # "smtp" sends via any provider's SMTP creds (Resend/Brevo/SES/Postmark/Mailgun).
     email_transport: str = Field(default="log", description="log | smtp")
-    email_from: str = Field(default="Vantari <no-reply@vantari.local>")
+    email_from: str = Field(default="ExactSurface <no-reply@exactsurface.local>")
     smtp_host: str | None = Field(default=None)
     smtp_port: int = Field(default=587)
     smtp_user: str | None = Field(default=None)

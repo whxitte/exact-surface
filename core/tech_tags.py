@@ -1,6 +1,6 @@
 """Detected-tech → Nuclei template-tag selection (§7 module 7, engine quality).
 
-Vantari's non-aggressive scan runs a fixed safe tag set on every host. That is safe
+ExactSurface's non-aggressive scan runs a fixed safe tag set on every host. That is safe
 but blunt: a WordPress site and a Jenkins panel get the same generic templates. This
 module maps the technologies httpx already fingerprinted to the Nuclei product tags
 that actually matter for them, so the safe scan *adds* targeted coverage — a

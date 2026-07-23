@@ -1,6 +1,6 @@
 """A leaked secret's plaintext must never reach a notification channel (§9c, §8).
 
-Vantari stores masked value + hash + locator; alerts are built only from the
+ExactSurface stores masked value + hash + locator; alerts are built only from the
 masked field. These tests prove that: (1) ``mask`` never returns the full value
 for a realistic secret, and (2) the alert an operator receives — the text that
 goes to Discord/Slack/Telegram/email/webhook — contains the masked hint and

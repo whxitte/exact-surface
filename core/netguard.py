@@ -1,10 +1,10 @@
 """SSRF guard for in-process fetches to customer targets (§3.10 defensive).
 
-Vantari fetches content from hosts it does not control — the takeover probe reads a
+ExactSurface fetches content from hosts it does not control — the takeover probe reads a
 host's body, the secret scanner pulls JS/config URLs. Those targets are attacker-
 influenced: a subdomain in scope can return ``302 → http://169.254.169.254/`` or a
 DNS name that rebinds to an internal address between the scope check and the socket
-connect. Following that would make Vantari fetch the cloud metadata endpoint and scan
+connect. Following that would make ExactSurface fetch the cloud metadata endpoint and scan
 the IAM credentials it returns as a "secret" — turning a scanned target into a thief
 of *our* cloud role.
 

@@ -2,7 +2,7 @@
 
 Scanning shared cloud infrastructure too fast gets abuse reports and, ultimately,
 the platform's cloud account terminated. This limiter enforces a hard ceiling on
-how fast Vantari contacts any single target, *regardless of how many concurrent
+how fast ExactSurface contacts any single target, *regardless of how many concurrent
 jobs touch it*, by keying the token bucket on ``(target-ip, asn)``.
 
 The algorithm is a standard token bucket:
@@ -18,7 +18,7 @@ worker fleet in production). The bucket math lives in one place so both backends
 behave identically. :class:`DegradingBucketStore` wraps the Redis one so a Redis
 outage cannot stop scanning *or* silently lift the ceiling (ADR-0012).
 
-**Scope of this limiter.** It governs *in-process* HTTP that Vantari makes to a
+**Scope of this limiter.** It governs *in-process* HTTP that ExactSurface makes to a
 customer's targets — today the takeover probe and the secret fetcher. It cannot
 govern a subprocess: naabu, httpx, katana, feroxbuster and nuclei send their own
 packets and are capped by a derived ``-rate``/``-rl`` flag instead (ADR-0009).
@@ -111,18 +111,18 @@ def derive_subprocess_rate(
         cap=per_target_cap,
     )
     REGISTRY.set(
-        "vantari_politeness_rate_limit_pps",
+        "exactsurface_politeness_rate_limit_pps",
         per_target_cap,
         help="Configured max packets/requests per second per target IP (§3.8b)",
     )
     REGISTRY.set(
-        "vantari_subprocess_rate_pps",
+        "exactsurface_subprocess_rate_pps",
         float(aggregate),
         help="Aggregate rate handed to a scanner subprocess's rate flag",
         tool=tool,
     )
     REGISTRY.set(
-        "vantari_subprocess_per_target_pps",
+        "exactsurface_subprocess_per_target_pps",
         rate.per_target,
         help="Derived per-target rate for a scanner subprocess; must stay <= the cap (§3.8b)",
         tool=tool,
@@ -264,7 +264,7 @@ class RedisBucketStore:
     return allowed
     """
 
-    def __init__(self, redis, namespace: str = "vantari:rl") -> None:
+    def __init__(self, redis, namespace: str = "exactsurface:rl") -> None:
         self._redis = redis
         self._ns = namespace
         self._sha: str | None = None
@@ -350,7 +350,7 @@ class DegradingBucketStore:
             )
         self._degraded = True
         REGISTRY.set(
-            "vantari_politeness_store_degraded",
+            "exactsurface_politeness_store_degraded",
             1.0,
             help="1 while the shared rate-limit store is unreachable and this process "
             "is enforcing its divided local share of the ceiling (§7).",
@@ -360,7 +360,7 @@ class DegradingBucketStore:
         if self._degraded:
             logger.info("politeness limiter recovered — shared store reachable again")
         self._degraded = False
-        REGISTRY.set("vantari_politeness_store_degraded", 0.0)
+        REGISTRY.set("exactsurface_politeness_store_degraded", 0.0)
 
 
 class PolitenessLimiter:
@@ -389,12 +389,12 @@ class PolitenessLimiter:
         # IP and blow up cardinality. The ratio of throttled:allowed is what tells
         # an operator the ceiling is doing work.
         REGISTRY.inc(
-            "vantari_politeness_decisions_total",
+            "exactsurface_politeness_decisions_total",
             help="Politeness limiter decisions (§3.8b)",
             decision="allowed" if ok else "throttled",
         )
         REGISTRY.set(
-            "vantari_politeness_rate_limit_pps",
+            "exactsurface_politeness_rate_limit_pps",
             eff.rate,
             help="Configured max packets/requests per second per target IP (§3.8b)",
         )

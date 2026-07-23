@@ -39,8 +39,10 @@ async def test_seed_creates_usable_demo_tenant():
 def test_backup_command_streams_to_stdout():
     """`--archive` with no value means stdout. That is what lets the dump pipe
     straight into age, so the plaintext never lands on disk."""
-    cmd = build_mongodump_cmd("mongodb://x:27017", "vantari")
-    assert cmd == ["mongodump", "--uri=mongodb://x:27017", "--archive", "--db=vantari", "--gzip"]
+    cmd = build_mongodump_cmd("mongodb://x:27017", "exactsurface")
+    assert cmd == [
+        "mongodump", "--uri=mongodb://x:27017", "--archive", "--db=exactsurface", "--gzip",
+    ]
     assert not any(a.startswith("--out") for a in cmd), "writing to a directory leaks plaintext"
     assert "--gzip" not in build_mongodump_cmd("uri", "db", gzip=False)
 
@@ -72,7 +74,7 @@ def test_http_metrics_are_recorded():
     client = TestClient(create_app())
     client.get("/healthz")
     body = client.get("/metrics").text
-    assert "vantari_http_requests_total" in body
+    assert "exactsurface_http_requests_total" in body
 
 
 def test_sentry_disabled_without_dsn():

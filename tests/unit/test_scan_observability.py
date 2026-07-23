@@ -35,9 +35,9 @@ def test_stage_outcome_and_duration_are_recorded(monkeypatch):
     orch._observe_stage("scan", "success", stage)
 
     out = reg.render()
-    assert 'vantari_scan_stage_total{stage="scan",status="success"} 1.0' in out
-    assert 'vantari_scan_stage_duration_seconds_bucket{stage="scan",le="60"} 1.0' in out
-    assert 'vantari_scan_stage_duration_seconds_sum{stage="scan"} 42.0' in out
+    assert 'exactsurface_scan_stage_total{stage="scan",status="success"} 1.0' in out
+    assert 'exactsurface_scan_stage_duration_seconds_bucket{stage="scan",le="60"} 1.0' in out
+    assert 'exactsurface_scan_stage_duration_seconds_sum{stage="scan"} 42.0' in out
 
 
 def test_a_timed_out_stage_is_distinguishable_from_a_failure(monkeypatch):
@@ -49,8 +49,8 @@ def test_a_timed_out_stage_is_distinguishable_from_a_failure(monkeypatch):
     orch._observe_stage("port_scan", "failed", stage)
 
     out = reg.render()
-    assert 'vantari_scan_stage_total{stage="port_scan",status="timeout"} 1.0' in out
-    assert 'vantari_scan_stage_total{stage="port_scan",status="failed"} 1.0' in out
+    assert 'exactsurface_scan_stage_total{stage="port_scan",status="timeout"} 1.0' in out
+    assert 'exactsurface_scan_stage_total{stage="port_scan",status="failed"} 1.0' in out
 
 
 def test_stage_without_timestamps_records_outcome_but_no_duration(monkeypatch):
@@ -58,8 +58,8 @@ def test_stage_without_timestamps_records_outcome_but_no_duration(monkeypatch):
     reg, orch = _patched(monkeypatch)
     orch._observe_stage("dork", "skipped", ScanStage(name="dork"))
     out = reg.render()
-    assert 'vantari_scan_stage_total{stage="dork",status="skipped"} 1.0' in out
-    assert "vantari_scan_stage_duration_seconds" not in out
+    assert 'exactsurface_scan_stage_total{stage="dork",status="skipped"} 1.0' in out
+    assert "exactsurface_scan_stage_duration_seconds" not in out
 
 
 def test_run_outcome_and_duration_are_recorded(monkeypatch):
@@ -77,8 +77,8 @@ def test_run_outcome_and_duration_are_recorded(monkeypatch):
     orch._observe_run(run)
 
     out = reg.render()
-    assert 'vantari_scan_run_total{pipeline="full",status="success"} 1.0' in out
-    assert 'vantari_scan_run_duration_seconds_sum{pipeline="full"} 900.0' in out
+    assert 'exactsurface_scan_run_total{pipeline="full",status="success"} 1.0' in out
+    assert 'exactsurface_scan_run_duration_seconds_sum{pipeline="full"} 900.0' in out
 
 
 def test_failed_run_is_counted_separately(monkeypatch):
@@ -87,7 +87,7 @@ def test_failed_run_is_counted_separately(monkeypatch):
         tenant_id="t1", scan_id="s1", program_id="p1", pipeline="full", status=ScanStatus.FAILED
     )
     orch._observe_run(run)
-    assert 'vantari_scan_run_total{pipeline="full",status="failed"} 1.0' in reg.render()
+    assert 'exactsurface_scan_run_total{pipeline="full",status="failed"} 1.0' in reg.render()
 
 
 # -- Sentry must cover every long-running process ----------------------------

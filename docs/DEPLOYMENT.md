@@ -1,13 +1,13 @@
-# Vantari Deployment
+# ExactSurface Deployment
 
-Vantari has four runtime roles: **api** (FastAPI), **worker** (stateless scan
+ExactSurface has four runtime roles: **api** (FastAPI), **worker** (stateless scan
 executors), **scheduler** (singleton enqueuer), and the datastores **MongoDB** +
 **Redis**. Workers use the heavy `pipeline` image (all recon tools); the api uses
 the slim image.
 
 ## Configuration
-All config is `VANTARI_`-prefixed env (`.env.example`). **Before prod**, change
-`VANTARI_JWT_SECRET` and `VANTARI_SECRET_HASH_KEY` — the app refuses to boot with
+All config is `EXACTSURFACE_`-prefixed env (`.env.example`). **Before prod**, change
+`EXACTSURFACE_JWT_SECRET` and `EXACTSURFACE_SECRET_HASH_KEY` — the app refuses to boot with
 the insecure defaults (`Settings.assert_prod_safe`).
 
 ## Local / small deployments — Docker Compose
@@ -25,7 +25,7 @@ This is enough for a single tenant on one host (min 4 GB / 2 vCPU, §3.8).
 ## DigitalOcean / AWS / GCP (single VM)
 1. Provision a 4 GB / 2 vCPU VM (Ubuntu, Docker installed), with a DNS record for
    your domain pointing at it (Caddy needs it to obtain a certificate).
-2. `git clone`; set `.env` (strong `VANTARI_JWT_SECRET`, `VANTARI_SECRET_HASH_KEY`)
+2. `git clone`; set `.env` (strong `EXACTSURFACE_JWT_SECRET`, `EXACTSURFACE_SECRET_HASH_KEY`)
    **and** the prod-only vars `DOMAIN`, `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`,
    `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`.
 3. `docker compose -f docker/docker-compose.prod.yml up -d --build`.
@@ -33,7 +33,7 @@ This is enough for a single tenant on one host (min 4 GB / 2 vCPU, §3.8).
 The prod compose differs from the dev stack in the ways that matter for exposure:
 Mongo and Redis have **no host ports** (internal network only) and **both require
 auth**; the API and frontend are not published either — **Caddy** is the single
-ingress and terminates TLS (automatic Let's Encrypt for `$DOMAIN`); `VANTARI_ENV=prod`
+ingress and terminates TLS (automatic Let's Encrypt for `$DOMAIN`); `EXACTSURFACE_ENV=prod`
 makes `assert_prod_safe()` refuse insecure secrets. Grafana is published on
 **loopback only** (`127.0.0.1:3001`) — reach it via an SSH tunnel.
 
@@ -43,16 +43,16 @@ makes `assert_prod_safe()` refuse insecure secrets. Grafana is published on
 > flipping the compose file.
 
 4. **Scanning egress:** run workers from IPs whose abuse contact you control;
-   keep `VANTARI_MASSCAN_ENABLED=false` (ADR-0004). Every scanner subprocess stays
+   keep `EXACTSURFACE_MASSCAN_ENABLED=false` (ADR-0004). Every scanner subprocess stays
    rate-capped (ADR-0009 + ADR-0013).
 
 ## Kubernetes (Helm)
 ```bash
-kubectl create secret generic vantari-secrets --from-env-file=.env
-helm install vantari deploy/helm/vantari -f my-values.yaml
+kubectl create secret generic exactsurface-secrets --from-env-file=.env
+helm install exactsurface deploy/helm/exactsurface -f my-values.yaml
 ```
 The chart deploys api (2), workers (3, autoscale to scan load), and a **singleton**
-scheduler (`strategy: Recreate`). Point `VANTARI_MONGO_URI` / `VANTARI_REDIS_URI`
+scheduler (`strategy: Recreate`). Point `EXACTSURFACE_MONGO_URI` / `EXACTSURFACE_REDIS_URI`
 at managed instances (Atlas M10+, managed Redis) or in-cluster StatefulSets.
 
 ## Datastore sizing
@@ -69,8 +69,8 @@ ports, unfixed findings. A plaintext dump of it is arguably a better target than
 the live system, so backups are encrypted with **`age` to a public recipient key**:
 
 ```bash
-age-keygen -o vantari-backup-identity.txt     # DO THIS OFF THE SERVER
-# public key → VANTARI_BACKUP_AGE_RECIPIENT (safe to ship anywhere)
+age-keygen -o exactsurface-backup-identity.txt     # DO THIS OFF THE SERVER
+# public key → EXACTSURFACE_BACKUP_AGE_RECIPIENT (safe to ship anywhere)
 # identity file → a vault/offline store. NOT on the scanning host.
 ```
 
@@ -85,13 +85,13 @@ python -m scripts.backup restore <archive> --identity id.txt [--drop]
 ```
 
 `mongodump --archive` is piped straight into `age`, so the plaintext never touches
-disk. Retention is `VANTARI_BACKUP_RETENTION_DAYS` (default 30) and always keeps at
+disk. Retention is `EXACTSURFACE_BACKUP_RETENTION_DAYS` (default 30) and always keeps at
 least the newest archive, so a run of silent failures cannot age out the last good
 copy. Cron `run` daily.
 
 > **Shipping offsite is on you, and it matters.** A backup on the same host as the
 > database is not a backup — the failure it protects against destroys both. Sync
-> `VANTARI_BACKUP_DIR` with whatever the deployment already uses (rclone, aws-cli,
+> `EXACTSURFACE_BACKUP_DIR` with whatever the deployment already uses (rclone, aws-cli,
 > restic). Deliberately not bundled: it would mean either a new SDK dependency or
 > bucket credentials sitting on the host we just assumed could be compromised.
 
@@ -111,7 +111,7 @@ providers vanish or collapse, and writes atomically. A rejected update leaves th
 previous feed in place — stale beats empty.
 
 **It is automatic.** The scheduler refreshes a shared copy of the feed in Mongo
-every `VANTARI_SCOPE_FEED_REFRESH_HOURS` (default 24; set 0 to disable and cron the
+every `EXACTSURFACE_SCOPE_FEED_REFRESH_HOURS` (default 24; set 0 to disable and cron the
 script instead). Workers load that Mongo copy at startup, falling back to the feed
 bundled in the image, and **never** load a Mongo copy smaller than the bundled
 baseline — a corrupt or partial write cannot silently un-classify ranges (ADR-0014).
@@ -144,7 +144,7 @@ Compose brings up Prometheus + Grafana already wired:
 ```bash
 docker compose -f docker/docker-compose.yml up -d prometheus grafana
 # Grafana → http://localhost:3001 (admin / $GRAFANA_ADMIN_PASSWORD, default "admin")
-# Dashboard: Vantari → Operations
+# Dashboard: ExactSurface → Operations
 ```
 
 Prometheus is not published to the host — reach it through Grafana. Set
@@ -153,7 +153,7 @@ every metric the platform emits. Under Helm, `metrics.enabled` adds
 `prometheus.io/scrape` annotations to the worker/scheduler pods (swap for a
 PodMonitor if you run the Prometheus Operator).
 
-`VANTARI_METRICS_PORT` (default 9100) sets the listener port; a bind failure
+`EXACTSURFACE_METRICS_PORT` (default 9100) sets the listener port; a bind failure
 degrades to a warning and never blocks the process from starting. On a shared
 host, bind loopback rather than publishing 9100.
 
@@ -163,7 +163,7 @@ host, bind loopback rather than publishing 9100.
   open. This is the only thing that catches it.
 - `PortScanRateExceedsPolitenessCap` — §15's "naabu never exceeds the global rate
   cap, verified by metrics". Exceeding it is an AUP breach against a third party.
-  Its threshold is **duplicated** from `VANTARI_GLOBAL_RATE_PER_TARGET` (Prometheus
+  Its threshold is **duplicated** from `EXACTSURFACE_GLOBAL_RATE_PER_TARGET` (Prometheus
   cannot read app config): change the setting, change the rule.
 
 ## Operations

@@ -1,4 +1,4 @@
-# Vantari frontend image — Next.js 14 (App Router). Multi-arch (works on arm64).
+# ExactSurface frontend image — Next.js 14 (App Router). Multi-arch (works on arm64).
 # Build context is the repo root (so it matches the api/pipeline images).
 
 FROM node:20-alpine AS build

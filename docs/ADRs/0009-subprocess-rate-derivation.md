@@ -5,7 +5,7 @@ Status: Accepted
 
 ## Context
 
-§3.8b requires a **global politeness limiter** capping Vantari at
+§3.8b requires a **global politeness limiter** capping ExactSurface at
 **≤10 packets/requests per second per target IP**, "regardless of how many jobs
 touch it concurrently". `core/ratelimit.py` implements exactly that: a token
 bucket keyed on `(target-ip, asn)`, Redis-backed so the ceiling holds across the
@@ -27,7 +27,7 @@ It did not apply to the port scanner, and could not:
 This is the §7 Phase D exit gate: *"naabu never exceeds the global rate cap
 (verified by metrics)"*. It was failing on both halves — the cap wasn't enforced,
 and there were no metrics to verify it with (the only metric in the codebase was
-`vantari_http_requests_total`).
+`exactsurface_http_requests_total`).
 
 ## Decision
 
@@ -47,9 +47,9 @@ stall a scan) and treats 0/negative host counts as one target.
 
 `pipelines/port_scan.py` derives the rate, passes it, and publishes:
 
-- `vantari_politeness_rate_limit_pps` — the configured cap
-- `vantari_port_scan_rate_pps` — the aggregate handed to naabu
-- `vantari_port_scan_per_target_pps` — the derived per-target rate
+- `exactsurface_politeness_rate_limit_pps` — the configured cap
+- `exactsurface_port_scan_rate_pps` — the aggregate handed to naabu
+- `exactsurface_port_scan_per_target_pps` — the derived per-target rate
 
 The exit gate says *verified by metrics*, so the per-target number an operator can
 graph against the cap **is** the deliverable — not an assertion in a docstring.

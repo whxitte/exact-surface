@@ -20,5 +20,5 @@ the original spec, and it exists purely to avoid the stdlib collision.
 ## Alternatives considered
 - **Keep `queue/` and rely on import ordering.** Rejected: fragile and a classic
   Python footgun.
-- **Make everything a subpackage of `vantari/`.** Rejected: larger deviation from
+- **Make everything a subpackage of `exactsurface/`.** Rejected: larger deviation from
   the documented flat layout than necessary to fix the one real collision.

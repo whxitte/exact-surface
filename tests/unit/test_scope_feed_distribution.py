@@ -1,6 +1,6 @@
 """Distributing the scope feed via Mongo, with the bundled file as the floor (ADR-0014).
 
-The feed classifies IPs as CDN/cloud-shared, which is what restricts Vantari to
+The feed classifies IPs as CDN/cloud-shared, which is what restricts ExactSurface to
 HTTP-layer probing (§3.9). Storing it in Mongo lets an update reach the fleet without
 a rebuild — but a feed that *loses* ranges is a removed protection, so every path
 here fails toward the more-protective option: a missing, unreadable, or thin Mongo

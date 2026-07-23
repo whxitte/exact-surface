@@ -1,4 +1,4 @@
-"""Central scope-enforcement engine — the most important control in Vantari.
+"""Central scope-enforcement engine — the most important control in ExactSurface.
 
 Every module that touches the network MUST route its target through this engine
 before any I/O. The rule is enforced by convention *and* by code review: a
@@ -356,7 +356,7 @@ class ScopeEngine:
 def default_engine() -> ScopeEngine:
     """Process-wide engine built from the bundled feed file.
 
-    Honors ``VANTARI_LAB_ALLOW_PRIVATE`` (dev only) so a local VM can be scanned.
+    Honors ``EXACTSURFACE_LAB_ALLOW_PRIVATE`` (dev only) so a local VM can be scanned.
     """
     from core.config import get_settings
 

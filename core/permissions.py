@@ -1,6 +1,6 @@
 """Tenant-scoped RBAC permission model (§ access control).
 
-Vantari is multi-tenant: one company (a *tenant*) has one **owner** and any number of
+ExactSurface is multi-tenant: one company (a *tenant*) has one **owner** and any number of
 member users. The owner grants access the mature-SaaS way — by composing **permission
 groups** (AWS-IAM style) and adding users to them. A brand-new user has **no group and
 therefore no access at all** until the owner places them in one.

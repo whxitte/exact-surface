@@ -14,5 +14,5 @@ async def send(alert: Alert, config: dict, senders: Senders) -> bool:
     to = config.get("to")
     if not to or senders.smtp is None:
         return False
-    subject = f"[Vantari][{alert.severity.value.upper()}] {alert.title}"
+    subject = f"[ExactSurface][{alert.severity.value.upper()}] {alert.title}"
     return await senders.smtp(to=to, subject=subject, body=alert.text(), config=config)

@@ -100,5 +100,5 @@ async def test_port_scan_passes_derived_rate_and_publishes_metrics():
 
     rendered = REGISTRY.render()
     # Labelled tool=naabu now (one metric family for every subprocess, ADR-0013).
-    assert 'vantari_subprocess_per_target_pps{tool="naabu"}' in rendered
-    assert "vantari_politeness_rate_limit_pps" in rendered
+    assert 'exactsurface_subprocess_per_target_pps{tool="naabu"}' in rendered
+    assert "exactsurface_politeness_rate_limit_pps" in rendered

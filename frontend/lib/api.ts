@@ -530,7 +530,7 @@ export async function downloadReport(programId: string, format: string): Promise
   const blob = await res.blob();
   const disposition = res.headers.get("content-disposition") || "";
   const match = disposition.match(/filename="(.+?)"/);
-  const filename = match ? match[1] : `vantari-report.${format}`;
+  const filename = match ? match[1] : `exactsurface-report.${format}`;
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

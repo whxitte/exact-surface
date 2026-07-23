@@ -39,10 +39,10 @@ def server():
 
 
 def test_metrics_endpoint_renders_the_process_registry(server):
-    REGISTRY.inc("vantari_test_scrape_total", help="probe")
+    REGISTRY.inc("exactsurface_test_scrape_total", help="probe")
     status, _, body = _get(server.port, "/metrics")
     assert status == 200
-    assert "vantari_test_scrape_total" in body
+    assert "exactsurface_test_scrape_total" in body
 
 
 def test_metrics_is_served_as_prometheus_text(server):

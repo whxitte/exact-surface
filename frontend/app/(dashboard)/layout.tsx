@@ -46,7 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/15 text-primary">
               <Radar className="h-4 w-4" />
             </div>
-            <span className="font-semibold tracking-tight">Vantari</span>
+            <span className="font-semibold tracking-tight">ExactSurface</span>
           </div>
         </header>
         <main className="min-w-0 flex-1 overflow-y-auto">

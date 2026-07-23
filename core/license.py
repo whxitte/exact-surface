@@ -1,6 +1,6 @@
 """Self-hosted subscription licensing (§ commercial / self-hosted model).
 
-Vantari ships as an image the customer runs in their own infrastructure, on a monthly
+ExactSurface ships as an image the customer runs in their own infrastructure, on a monthly
 subscription. This module is the enforcement core: a **cryptographically signed license**
 that the running instance verifies against an embedded public key, and a **fail-closed
 read-only degrade** once the subscription lapses past its grace window.

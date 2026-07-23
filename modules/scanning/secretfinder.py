@@ -195,7 +195,7 @@ async def scan_urls(
 
     sem = asyncio.Semaphore(concurrency)
     failed = 0
-    tmpdir = tempfile.mkdtemp(prefix="vantari-secrets-") if deep_scan else ""
+    tmpdir = tempfile.mkdtemp(prefix="exactsurface-secrets-") if deep_scan else ""
     file_to_url: dict[str, str] = {}
 
     async def _one(idx: int, url: str) -> list[dict]:

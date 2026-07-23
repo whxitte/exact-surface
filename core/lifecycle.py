@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from core.errors import VantariError
+from core.errors import ExactSurfaceError
 
 
 class FindingState(str, Enum):
@@ -62,7 +62,7 @@ OPEN_STATES: frozenset[FindingState] = frozenset(
 )
 
 
-class IllegalTransition(VantariError):
+class IllegalTransition(ExactSurfaceError):
     def __init__(self, src: FindingState, dst: FindingState) -> None:
         super().__init__(f"illegal finding transition: {src.value} -> {dst.value}")
 

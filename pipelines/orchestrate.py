@@ -140,14 +140,14 @@ def _observe_stage(name: str, status: str, stage: ScanStage) -> None:
     is visible here long before a human notices missing findings.
     """
     REGISTRY.inc(
-        "vantari_scan_stage_total",
+        "exactsurface_scan_stage_total",
         help="Scan stages by outcome",
         stage=name,
         status=status,
     )
     if stage.started_at and stage.finished_at:
         REGISTRY.observe(
-            "vantari_scan_stage_duration_seconds",
+            "exactsurface_scan_stage_duration_seconds",
             (stage.finished_at - stage.started_at).total_seconds(),
             help="Per-stage wall-clock duration",
             buckets=STAGE_DURATION_BUCKETS,
@@ -157,14 +157,14 @@ def _observe_stage(name: str, status: str, stage: ScanStage) -> None:
 
 def _observe_run(run: ScanRun) -> None:
     REGISTRY.inc(
-        "vantari_scan_run_total",
+        "exactsurface_scan_run_total",
         help="Completed scan runs by pipeline and outcome",
         pipeline=run.pipeline,
         status=run.status.value,
     )
     if run.started_at and run.finished_at:
         REGISTRY.observe(
-            "vantari_scan_run_duration_seconds",
+            "exactsurface_scan_run_duration_seconds",
             (run.finished_at - run.started_at).total_seconds(),
             help="Full-pipeline wall-clock duration",
             buckets=STAGE_DURATION_BUCKETS,

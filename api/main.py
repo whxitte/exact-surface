@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(
-        title="Vantari API",
+        title="ExactSurface API",
         version="0.1.0",
         description="Continuous external attack-surface intelligence — detection only.",
         lifespan=lifespan,
@@ -158,7 +158,7 @@ def create_app() -> FastAPI:
         try:
             from core.entitlements import watermark
 
-            response.headers["X-Vantari-Instance"] = watermark()
+            response.headers["X-ExactSurface-Instance"] = watermark()
         except Exception:  # noqa: BLE001, S110 - a header stamp must never break a response
             pass
         return response
@@ -169,7 +169,7 @@ def create_app() -> FastAPI:
         response = await call_next(request)
         if settings.metrics_enabled:
             REGISTRY.inc(
-                "vantari_http_requests_total",
+                "exactsurface_http_requests_total",
                 help="Total HTTP requests",
                 method=request.method,
                 status=str(response.status_code),

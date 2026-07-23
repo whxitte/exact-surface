@@ -23,7 +23,7 @@ from core.severity import Severity
 # placeholder/sample values. Deliberately unambiguous: "test" and "1234" are NOT
 # here because `sk_test_…` and real tokens legitimately contain them — a marker that
 # risks dropping a real secret would defeat the point. (Idea from the ZeroPoint
-# reference engine; adapted to Vantari's high-signal patterns.)
+# reference engine; adapted to ExactSurface's high-signal patterns.)
 _PLACEHOLDER_MARKERS = (
     "your_",
     "your-",
@@ -67,7 +67,7 @@ def _shannon_entropy(value: str) -> float:
 def _is_false_positive(kind: str, value: str) -> bool:
     """True if a regex match is almost certainly not a live secret.
 
-    Vantari's regex layer records hits independently of trufflehog's live
+    ExactSurface's regex layer records hits independently of trufflehog's live
     verification, so without this a bundle with ``apiKey = "YOUR_API_KEY_HERE"``
     produced a real finding — directly inflating the §15 false-positive rate, the
     make-or-break metric. Kept conservative: the URL/placeholder checks are safe for

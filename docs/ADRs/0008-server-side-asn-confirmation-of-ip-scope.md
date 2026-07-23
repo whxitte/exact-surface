@@ -19,7 +19,7 @@ nothing read, and module 17 (`asn_mapper`) — the thing meant to do the confirm
 
 **The exploit:** a tenant verifies a domain they genuinely own, points
 `x.their-domain.com` at any IP on the internet, POSTs an authorization declaring
-that IP's /24 `"ip_class": "dedicated"`, and Vantari port-scans and aggressively
+that IP's /24 `"ip_class": "dedicated"`, and ExactSurface port-scans and aggressively
 probes third-party infrastructure on their behalf. DNS control is trivially
 obtained; it proves nothing about IP ownership. This is precisely the scenario
 §9b exists to prevent, and it is an AUP/legal risk (§15 targets zero AUP

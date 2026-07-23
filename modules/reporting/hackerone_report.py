@@ -25,7 +25,7 @@ def _reproduction(finding: dict) -> str:
 
 def render_hackerone(ctx: ReportContext) -> str:
     lines = [
-        f"# Vantari Findings — {ctx.program}",
+        f"# ExactSurface Findings — {ctx.program}",
         f"_Generated {ctx.generated_at} · detection only, no exploitation._",
         "",
     ]
@@ -41,7 +41,7 @@ def render_hackerone(ctx: ReportContext) -> str:
             f"**Detection:** {finding.get('module', 'nuclei')} / `{finding.get('check_id', '')}`",
             "",
             "### Description",
-            finding.get("description") or "Detected by Vantari's external scan.",
+            finding.get("description") or "Detected by ExactSurface's external scan.",
             "",
             "### Steps to Reproduce",
             _reproduction(finding),

@@ -38,14 +38,14 @@ function Q({ q, children }: { q: string; children: React.ReactNode }) {
 const SECTIONS: Section[] = [
   {
     id: "what",
-    title: "What Vantari is",
+    title: "What ExactSurface is",
     icon: Radar,
-    keywords: "overview easm attack surface external what is vantari",
+    keywords: "overview easm attack surface external what is exactsurface",
     body: (
       <>
         <p>
-          Vantari is a continuous <Term>External Attack Surface Management (EASM)</Term> platform.
-          You add a domain you own; Vantari discovers everything that domain exposes to the internet
+          ExactSurface is a continuous <Term>External Attack Surface Management (EASM)</Term> platform.
+          You add a domain you own; ExactSurface discovers everything that domain exposes to the internet
           — subdomains, live hosts, open ports, services, endpoints, technologies, secrets, and
           vulnerabilities — and then keeps watching it so you learn the moment something changes.
         </p>
@@ -110,13 +110,13 @@ const SECTIONS: Section[] = [
       <>
         <p>
           The <Term>first</Term> scan of a program is a single ordered full run — it establishes your
-          baseline. After it completes, Vantari switches to <Term>continuous</Term> mode: each phase
+          baseline. After it completes, ExactSurface switches to <Term>continuous</Term> mode: each phase
           re-runs on its own cadence (e.g. CVE watch every 15 min, subdomain enumeration every 6 h,
           full nuclei every 12 h). You configure these per program or account-wide in Settings.
         </p>
         <p>
           On top of the schedule there is an <Term>event-driven cascade</Term>: when re-enumeration
-          finds a brand-new subdomain, Vantari immediately runs the downstream phases (probe, crawl,
+          finds a brand-new subdomain, ExactSurface immediately runs the downstream phases (probe, crawl,
           scan…) for just that host, instead of waiting for the next full cycle. A cascade run is
           <Term> target-scoped</Term> — it only covers the new hosts.
         </p>
@@ -245,7 +245,7 @@ const SECTIONS: Section[] = [
         <p>
           A <Term>subdomain takeover</Term> happens when a subdomain points at a cloud service that has
           been de-provisioned — an attacker can re-claim that service and serve content from your
-          subdomain. Vantari detects two signals:
+          subdomain. ExactSurface detects two signals:
         </p>
         <ul className="ml-4 list-disc space-y-1.5">
           <li><Term>Dangling CNAME</Term> — the record points at a claimable service that no longer resolves.</li>
@@ -312,7 +312,7 @@ const SECTIONS: Section[] = [
           <Term>Secrets</Term> are keys/tokens exposed in your own assets (JS, config, .env files). Two
           engines run over each fetched body: a fast always-on regex detector, plus <Code>trufflehog</Code>
           {" "}(800+ detectors with live <Term>verification</Term> — a verified hit is a key that works
-          right now). Vantari stores only a <Term>masked</Term> value and a keyed hash — never the plaintext.
+          right now). ExactSurface stores only a <Term>masked</Term> value and a keyed hash — never the plaintext.
         </p>
         <p>
           <Term>Leaks</Term> (the Leaks tab) are your credentials found in <em>public</em> GitHub code.
@@ -348,7 +348,7 @@ const SECTIONS: Section[] = [
     body: (
       <p>
         The Ports tab lists every open port with its service/product and a derived severity + reason.
-        Ports carry no severity from the scanner, so Vantari grades by exposure: a directly-reachable
+        Ports carry no severity from the scanner, so ExactSurface grades by exposure: a directly-reachable
         database/cache (MySQL, Redis, MongoDB, Elasticsearch…) is <Term>critical</Term>; remote-admin
         (SSH, RDP, SMB) is <Term>high</Term>; web/DNS is informational. Port scanning only runs on
         infrastructure confirmed to be dedicated to you (shared cloud IPs are HTTP-checked only).
@@ -546,7 +546,7 @@ const SECTIONS: Section[] = [
         <p>
           You&apos;ll see markers like <Code>§9b</Code> or <Code>§3.8b</Code> in some notes (e.g.
           &quot;ports skipped — §9b&quot;). The <Term>§</Term> symbol just means &quot;section&quot; — it
-          points at the paragraph of Vantari&apos;s design spec that a rule comes from. They&apos;re there
+          points at the paragraph of ExactSurface&apos;s design spec that a rule comes from. They&apos;re there
           so a decision is traceable to <em>why</em> it exists, not jargon you need to memorise. The ones
           you&apos;ll actually meet:
         </p>
@@ -601,12 +601,12 @@ const SECTIONS: Section[] = [
           In the <Term>Findings</Term> tab, tagged <Code>dork</Code>. Dorking is skipped unless a Google
           CSE key is configured.
         </Q>
-        <Q q="Does Vantari ever attack or change my systems?">
+        <Q q="Does ExactSurface ever attack or change my systems?">
           No. It is detection-only: it observes, fingerprints, and reports. It never exploits, writes, or
           disrupts.
         </Q>
         <Q q="Why does a large scan take a while?">
-          Every request Vantari sends a target — probing, crawling, content discovery, vulnerability
+          Every request ExactSurface sends a target — probing, crawling, content discovery, vulnerability
           checks — is <Term>paced to stay under a per-target rate cap</Term> so scanning never looks like
           abuse to the host or its cloud provider. A domain with many subdomains or a big content-discovery
           run is therefore deliberately spread out rather than run flat-out. Politeness is a hard
@@ -637,7 +637,7 @@ export default function KnowledgePage() {
             <BookOpen className="h-6 w-6 text-primary" /> Knowledge
           </h1>
           <p className="text-sm text-muted-foreground">
-            How Vantari works, what each signal means, and the conditions behind it.
+            How ExactSurface works, what each signal means, and the conditions behind it.
           </p>
         </div>
         <div className="relative">

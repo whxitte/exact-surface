@@ -48,7 +48,7 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
             <Radar className="h-5 w-5" />
           </div>
           <div className="leading-tight">
-            <div className="font-semibold tracking-tight">Vantari</div>
+            <div className="font-semibold tracking-tight">ExactSurface</div>
             <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
               attack surface
             </div>

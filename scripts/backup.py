@@ -83,7 +83,7 @@ def build_mongorestore_cmd(uri: str, *, drop: bool = False, gzip: bool = True) -
 
 
 def archive_name(db: str, now: datetime) -> str:
-    return f"vantari-{db}-{now.strftime('%Y%m%dT%H%M%SZ')}{ARCHIVE_SUFFIX}"
+    return f"exactsurface-{db}-{now.strftime('%Y%m%dT%H%M%SZ')}{ARCHIVE_SUFFIX}"
 
 
 @dataclass(frozen=True)
@@ -144,7 +144,7 @@ def resolve_recipient(settings: Settings) -> str:
         return recipient
     if settings.is_prod:
         raise RuntimeError(
-            "VANTARI_BACKUP_AGE_RECIPIENT is unset — refusing to write an "
+            "EXACTSURFACE_BACKUP_AGE_RECIPIENT is unset — refusing to write an "
             "unencrypted backup of customer attack-surface data in prod (§7/§9)"
         )
     return ""
@@ -284,7 +284,7 @@ async def run_restore(
 async def main() -> None:  # pragma: no cover
     import argparse
 
-    parser = argparse.ArgumentParser(prog="vantari-backup")
+    parser = argparse.ArgumentParser(prog="exactsurface-backup")
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("run", help="dump + encrypt + prune")
     r = sub.add_parser("restore", help="decrypt + mongorestore (needs the age identity)")

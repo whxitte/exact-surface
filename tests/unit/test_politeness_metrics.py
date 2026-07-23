@@ -21,10 +21,10 @@ async def test_limiter_counts_allowed_and_throttled():
     assert await limiter.allow("45.55.1.1") is False
 
     out = REGISTRY.render()
-    assert 'vantari_politeness_decisions_total{decision="allowed"}' in out
-    assert 'vantari_politeness_decisions_total{decision="throttled"}' in out
+    assert 'exactsurface_politeness_decisions_total{decision="allowed"}' in out
+    assert 'exactsurface_politeness_decisions_total{decision="throttled"}' in out
     # the configured ceiling is published so a dashboard can draw the limit line
-    assert "vantari_politeness_rate_limit_pps" in out
+    assert "exactsurface_politeness_rate_limit_pps" in out
 
 
 async def test_limiter_does_not_label_by_target():
@@ -39,17 +39,17 @@ async def test_limiter_does_not_label_by_target():
 def test_alert_latency_is_recorded():
     _observe_alert_latency(datetime.now(UTC) - timedelta(seconds=30))
     out = REGISTRY.render()
-    assert "vantari_alert_latency_seconds_bucket" in out
-    assert "vantari_alert_latency_seconds_count" in out
+    assert "exactsurface_alert_latency_seconds_bucket" in out
+    assert "exactsurface_alert_latency_seconds_count" in out
 
 
 def test_alert_latency_ignores_missing_or_naive_timestamps():
     """A legacy/tz-naive doc must be skipped, not recorded as a bogus latency —
     a wrong metric is worse than a missing one."""
-    before = REGISTRY.render().count("vantari_alert_latency_seconds_count")
+    before = REGISTRY.render().count("exactsurface_alert_latency_seconds_count")
     _observe_alert_latency(None)
     _observe_alert_latency(datetime(2026, 1, 1))  # tz-naive → TypeError, swallowed
-    after = REGISTRY.render().count("vantari_alert_latency_seconds_count")
+    after = REGISTRY.render().count("exactsurface_alert_latency_seconds_count")
     assert before == after  # nothing new recorded, nothing raised
 
 

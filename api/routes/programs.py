@@ -362,7 +362,7 @@ async def request_verification(
     program: dict = Depends(require_program),
     mongo: Any = Depends(get_mongo_dep),
 ) -> VerifyRequestResponse:
-    token = "vantari-verify=" + secrets.token_hex(16)
+    token = "exactsurface-verify=" + secrets.token_hex(16)
     await ProgramRepo.from_mongo(mongo).set_verification(
         program["tenant_id"], program["program_id"], method.value, token
     )

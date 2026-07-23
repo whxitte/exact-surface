@@ -1,7 +1,7 @@
 "use client";
 
-const TOKEN_KEY = "vantari_token";
-const TENANT_KEY = "vantari_tenant";
+const TOKEN_KEY = "exactsurface_token";
+const TENANT_KEY = "exactsurface_tenant";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

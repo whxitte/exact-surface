@@ -16,8 +16,8 @@ from typing import Any, Protocol
 
 from core.logging import logger
 
-CHANNEL_PREFIX = "vantari:activity:"
-LOG_KEY_PREFIX = "vantari:logs:"
+CHANNEL_PREFIX = "exactsurface:activity:"
+LOG_KEY_PREFIX = "exactsurface:logs:"
 LOG_MAX_LINES = 500  # keep the last N log lines per scan
 LOG_TTL_SECONDS = 86400  # logs expire after a day
 

@@ -1,8 +1,8 @@
-"""SSRF guard for in-process fetches (§3.10) — Vantari must not be steered inward.
+"""SSRF guard for in-process fetches (§3.10) — ExactSurface must not be steered inward.
 
 The takeover probe and secret scanner fetch attacker-influenced targets. Without
 this, an in-scope host returning ``302 -> http://169.254.169.254/`` would make
-Vantari fetch the cloud metadata endpoint and scan the IAM credentials it returns as
+ExactSurface fetch the cloud metadata endpoint and scan the IAM credentials it returns as
 a "secret". These pin the socket-level backstop that forbids any non-public target.
 """
 

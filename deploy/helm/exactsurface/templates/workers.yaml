@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-worker
-  labels: {{- include "vantari.labels" . | nindent 4 }}
+  labels: {{- include "exactsurface.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.worker.replicas }}
   selector:
@@ -28,17 +28,17 @@ spec:
           envFrom:
             - secretRef: { name: {{ .Values.existingSecret }} }
           env:
-            - name: VANTARI_ENV
+            - name: EXACTSURFACE_ENV
               value: {{ .Values.env | quote }}
             # Derived from replicas, not configured separately: if Redis is down each
             # worker enforces 1/fleet_size of the ceiling locally, so a fleet_size
             # below the real replica count means the degraded fleet exceeds the
             # per-target cap (ADR-0012). Templating it removes that footgun here.
-            - name: VANTARI_WORKER_FLEET_SIZE
+            - name: EXACTSURFACE_WORKER_FLEET_SIZE
               value: {{ .Values.worker.replicas | quote }}
-            - name: VANTARI_METRICS_ENABLED
+            - name: EXACTSURFACE_METRICS_ENABLED
               value: {{ .Values.metrics.enabled | quote }}
-            - name: VANTARI_METRICS_PORT
+            - name: EXACTSURFACE_METRICS_PORT
               value: {{ .Values.metrics.port | quote }}
           {{- if .Values.metrics.enabled }}
           ports:
@@ -52,7 +52,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-scheduler
-  labels: {{- include "vantari.labels" . | nindent 4 }}
+  labels: {{- include "exactsurface.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.scheduler.replicas }}
   strategy: { type: Recreate }
@@ -64,7 +64,7 @@ spec:
       {{- if .Values.metrics.enabled }}
       # Scrape this one especially: run_forever swallows tick errors, so a
       # scheduler that has stopped enqueueing anything still passes a liveness
-      # probe. vantari_scheduler_last_success_timestamp is the only thing that
+      # probe. exactsurface_scheduler_last_success_timestamp is the only thing that
       # distinguishes it from healthy-and-idle (ADR-0011).
       annotations:
         prometheus.io/scrape: "true"
@@ -80,11 +80,11 @@ spec:
           envFrom:
             - secretRef: { name: {{ .Values.existingSecret }} }
           env:
-            - name: VANTARI_ENV
+            - name: EXACTSURFACE_ENV
               value: {{ .Values.env | quote }}
-            - name: VANTARI_METRICS_ENABLED
+            - name: EXACTSURFACE_METRICS_ENABLED
               value: {{ .Values.metrics.enabled | quote }}
-            - name: VANTARI_METRICS_PORT
+            - name: EXACTSURFACE_METRICS_PORT
               value: {{ .Values.metrics.port | quote }}
           {{- if .Values.metrics.enabled }}
           ports:

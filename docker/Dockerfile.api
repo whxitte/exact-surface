@@ -1,4 +1,4 @@
-# Vantari API image — slim; the API never runs scan tools, so no recon binaries.
+# ExactSurface API image — slim; the API never runs scan tools, so no recon binaries.
 FROM python:3.11-slim-bookworm
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
@@ -23,8 +23,8 @@ COPY daemon/ daemon/
 COPY api/ api/
 COPY scripts/ scripts/
 
-RUN useradd -m -u 10002 vantari && chown -R vantari:vantari /app
-USER vantari
+RUN useradd -m -u 10002 exactsurface && chown -R exactsurface:exactsurface /app
+USER exactsurface
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \

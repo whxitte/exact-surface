@@ -38,8 +38,8 @@ def test_a_successful_tick_records_its_timestamp(reg):
     _observe("ok", jobs=0, now=now)
 
     out = reg.render()
-    assert 'vantari_scheduler_ticks_total{status="ok"} 1.0' in out
-    assert f"vantari_scheduler_last_success_timestamp {now.timestamp()}" in out
+    assert 'exactsurface_scheduler_ticks_total{status="ok"} 1.0' in out
+    assert f"exactsurface_scheduler_last_success_timestamp {now.timestamp()}" in out
 
 
 def test_a_failed_tick_does_not_advance_the_success_timestamp(reg):
@@ -50,22 +50,22 @@ def test_a_failed_tick_does_not_advance_the_success_timestamp(reg):
     _observe("failed", now=datetime(2026, 7, 17, 13, 0, tzinfo=UTC))
 
     out = reg.render()
-    assert 'vantari_scheduler_ticks_total{status="failed"} 1.0' in out
-    assert f"vantari_scheduler_last_success_timestamp {ok_at.timestamp()}" in out
+    assert 'exactsurface_scheduler_ticks_total{status="failed"} 1.0' in out
+    assert f"exactsurface_scheduler_last_success_timestamp {ok_at.timestamp()}" in out
 
 
 def test_an_idle_tick_is_still_a_healthy_tick(reg):
     """Zero jobs due is normal — it must count as alive, not as a stall."""
     _observe("ok", jobs=0)
     out = reg.render()
-    assert 'vantari_scheduler_ticks_total{status="ok"} 1.0' in out
-    assert "vantari_scheduler_jobs_enqueued_total" not in out
+    assert 'exactsurface_scheduler_ticks_total{status="ok"} 1.0' in out
+    assert "exactsurface_scheduler_jobs_enqueued_total" not in out
 
 
 def test_enqueued_jobs_are_counted(reg):
     _observe("ok", jobs=3)
     _observe("ok", jobs=2)
-    assert "vantari_scheduler_jobs_enqueued_total 5.0" in reg.render()
+    assert "exactsurface_scheduler_jobs_enqueued_total 5.0" in reg.render()
 
 
 async def test_run_once_marks_the_scheduler_alive(reg):
@@ -77,4 +77,4 @@ async def test_run_once_marks_the_scheduler_alive(reg):
 
     scheduler = Scheduler(FakeMongo(), _enqueue)
     assert await scheduler.run_once() == 0
-    assert "vantari_scheduler_last_success_timestamp" in reg.render()
+    assert "exactsurface_scheduler_last_success_timestamp" in reg.render()

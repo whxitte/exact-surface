@@ -1,4 +1,4 @@
-# Vantari API
+# ExactSurface API
 
 FastAPI. Interactive reference (always authoritative, generated from the code):
 **`/docs`** · OpenAPI JSON: **`/openapi.json`**.

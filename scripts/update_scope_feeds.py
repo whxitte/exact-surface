@@ -5,7 +5,7 @@ Fetches published provider ranges (AWS ip-ranges.json, Cloudflare) and updates
 the ``__main__`` path.
 
 **This file is a safety control, not a cache.** The engine classifies an IP as
-CDN/CLOUD_SHARED from these ranges, and those classes are what restrict Vantari to
+CDN/CLOUD_SHARED from these ranges, and those classes are what restrict ExactSurface to
 HTTP-layer probing (§3.9). A range that falls out of the feed stops being
 recognised as shared infrastructure — so a *bad update is not a stale feed, it is
 a removed protection*. Everything below is shaped by that asymmetry: adding ranges

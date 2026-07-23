@@ -23,7 +23,7 @@ turned out to be impossible to do meaningfully on a limiter nothing invoked:
 
 Consequences of that, in order of severity:
 
-1. **The in-process HTTP that Vantari aims at customer hosts was unthrottled.**
+1. **The in-process HTTP that ExactSurface aims at customer hosts was unthrottled.**
    `pipelines/takeover.py` (a body fetch per resolving host) and
    `pipelines/secrets.py` (many JS/config URLs per host) go straight out at
    `asyncio.gather` concurrency with no ceiling whatsoever.

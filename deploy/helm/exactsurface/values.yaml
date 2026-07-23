@@ -1,12 +1,12 @@
-# Vantari Helm values. Override per environment.
+# ExactSurface Helm values. Override per environment.
 
 image:
-  api: vantari/api:latest
-  pipeline: vantari/pipeline:latest
+  api: exactsurface/api:latest
+  pipeline: exactsurface/pipeline:latest
   pullPolicy: IfNotPresent
 
-# External datastores (self-hosted or managed). Provided via the vantari-secrets Secret.
-existingSecret: vantari-secrets
+# External datastores (self-hosted or managed). Provided via the exactsurface-secrets Secret.
+existingSecret: exactsurface-secrets
 
 env: prod
 
@@ -19,8 +19,8 @@ api:
     port: 8000
 
 # Stateless scan workers — scale to concurrent-scan load (§3.8).
-# VANTARI_WORKER_FLEET_SIZE is templated from `replicas`, so scaling here stays
-# safe. If you add an HPA, that breaks: set VANTARI_WORKER_FLEET_SIZE to maxReplicas
+# EXACTSURFACE_WORKER_FLEET_SIZE is templated from `replicas`, so scaling here stays
+# safe. If you add an HPA, that breaks: set EXACTSURFACE_WORKER_FLEET_SIZE to maxReplicas
 # explicitly, or a scaled-out fleet in Redis-down mode exceeds the per-target
 # politeness cap (ADR-0012).
 worker:
@@ -48,5 +48,5 @@ metrics:
 ingress:
   enabled: true
   className: nginx
-  host: api.vantari.io
+  host: api.exactsurface.com
   tls: true

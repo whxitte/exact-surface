@@ -13,9 +13,9 @@ between the two was invisible.
 renderer. It is therefore **per process**. `/metrics` is rendered by
 `api/main.py`, so the API's registry is scrapeable. But the API image is
 deliberately slim and carries no scan toolchain (§3.8): **no scanning happens in
-the API process**. Every metric that describes scanning — `vantari_scan_stage_*`,
-`vantari_scan_run_*`, `vantari_politeness_decisions_total`,
-`vantari_port_scan_*`, `vantari_alert_latency_seconds` — is emitted in the
+the API process**. Every metric that describes scanning — `exactsurface_scan_stage_*`,
+`exactsurface_scan_run_*`, `exactsurface_politeness_decisions_total`,
+`exactsurface_port_scan_*`, `exactsurface_alert_latency_seconds` — is emitted in the
 **worker**, which arq runs with no HTTP server at all.
 
 So those samples accumulated in worker memory and were discarded at exit. Nothing
@@ -32,7 +32,7 @@ while being the single process whose silent death stops *all* scanning.
 **Each process exposes its own registry; Prometheus scrapes all of them.** This is
 the standard multi-process Prometheus pattern. `daemon/metrics_server.py` provides
 the listener for the headless roles (worker, scheduler) on
-`VANTARI_METRICS_PORT` (default 9100); the API keeps serving its own from FastAPI.
+`EXACTSURFACE_METRICS_PORT` (default 9100); the API keeps serving its own from FastAPI.
 `docker/prometheus.yml` scrapes all three roles, using `dns_sd_configs` for the
 worker so each replica becomes its own target rather than whichever one DNS
 happened to return.
@@ -48,7 +48,7 @@ regardless. The endpoint serves one text page per scrape interval, so an event
 loop buys nothing. `MetricsRegistry` is already `threading.Lock`-guarded
 (`render()` included), so cross-thread reads are safe.
 
-**The scheduler now emits `vantari_scheduler_last_success_timestamp`.**
+**The scheduler now emits `exactsurface_scheduler_last_success_timestamp`.**
 `run_forever` deliberately swallows tick exceptions so one bad tick cannot kill
 the loop — meaning a scheduler failing *every* tick keeps a live process and an
 answering port while never enqueueing again. No liveness probe can distinguish

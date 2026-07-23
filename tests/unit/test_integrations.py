@@ -29,7 +29,7 @@ async def test_resolve_prefers_tenant_value_over_env(monkeypatch):
     from core.config import Settings, get_settings
 
     get_settings.cache_clear()
-    monkeypatch.setenv("VANTARI_GITHUB_TOKEN", "env-fallback-token")
+    monkeypatch.setenv("EXACTSURFACE_GITHUB_TOKEN", "env-fallback-token")
     assert Settings().github_token is not None  # env fallback is present
 
     mongo = FakeMongo()

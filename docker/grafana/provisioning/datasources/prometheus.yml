@@ -6,5 +6,5 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
-    uid: vantari-prometheus
+    uid: exactsurface-prometheus
     editable: false

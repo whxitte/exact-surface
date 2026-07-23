@@ -1,6 +1,6 @@
-# Vantari licensing — operating the self-hosted subscription
+# ExactSurface licensing — operating the self-hosted subscription
 
-Vantari ships as an image the customer runs in **their own** infrastructure, on a monthly
+ExactSurface ships as an image the customer runs in **their own** infrastructure, on a monthly
 subscription. This document is how you, the vendor, issue and enforce that subscription.
 
 ## How it works (and its honest limits)
@@ -31,7 +31,7 @@ python -m scripts.license keygen --out-dir ./license-keys
 ```
 
 Bake `license-keys/public.pem` into the image you distribute (it can only verify, never
-mint — safe to ship), by setting `VANTARI_LICENSE_PUBLIC_KEY` at build time.
+mint — safe to ship), by setting `EXACTSURFACE_LICENSE_PUBLIC_KEY` at build time.
 
 ## Issuing a subscription (you)
 
@@ -56,12 +56,12 @@ The instance is configured entirely by environment variables (or a mounted licen
 
 | Env var | Meaning |
 |---|---|
-| `VANTARI_LICENSE_ENFORCED` | `true` in every customer deployment. `false` (default) disables gating — dev/self-serve only. |
-| `VANTARI_LICENSE_PUBLIC_KEY` | Your Ed25519 public key (PEM). Bake into the image. |
-| `VANTARI_LICENSE` | The license token, or… |
-| `VANTARI_LICENSE_FILE` | …a path to a file containing it (mount a secret). |
-| `VANTARI_LICENSE_REFRESH_URL` | *(hybrid, optional)* your license server — the instance periodically pulls a renewed token from here. Omit for pure-offline / air-gapped. |
-| `VANTARI_LICENSE_CHECK_INTERVAL_SECONDS` | How often the instance re-evaluates the clock and refreshes (default 3600). |
+| `EXACTSURFACE_LICENSE_ENFORCED` | `true` in every customer deployment. `false` (default) disables gating — dev/self-serve only. |
+| `EXACTSURFACE_LICENSE_PUBLIC_KEY` | Your Ed25519 public key (PEM). Bake into the image. |
+| `EXACTSURFACE_LICENSE` | The license token, or… |
+| `EXACTSURFACE_LICENSE_FILE` | …a path to a file containing it (mount a secret). |
+| `EXACTSURFACE_LICENSE_REFRESH_URL` | *(hybrid, optional)* your license server — the instance periodically pulls a renewed token from here. Omit for pure-offline / air-gapped. |
+| `EXACTSURFACE_LICENSE_CHECK_INTERVAL_SECONDS` | How often the instance re-evaluates the clock and refreshes (default 3600). |
 
 Enforcement is server-side and multi-point (the scan/add-domain/403-bypass routes **and**
 the scheduler/worker), so a patched frontend cannot re-enable scanning.
@@ -71,7 +71,7 @@ the scheduler/worker), so a patched frontend cannot re-enable scanning.
 - **Offline:** mint a new token with a later `--expires`/`--months` and hand it to the
   customer (new env value or replace the mounted file). It takes effect on the next
   license check — no restart needed.
-- **Hybrid (online refresh):** run a small license server at `VANTARI_LICENSE_REFRESH_URL`.
+- **Hybrid (online refresh):** run a small license server at `EXACTSURFACE_LICENSE_REFRESH_URL`.
   Each instance periodically calls it:
 
   ```
@@ -112,15 +112,15 @@ python -m scripts.license issue --private-key ./license-keys/private.pem \
     --customer "Acme Corp" --plan business --months 1 --store ./cp/licenses.json --out acme.vlic
 
 # run the control plane
-VANTARI_CP_PRIVATE_KEY_FILE=./license-keys/private.pem \
-VANTARI_CP_PUBLIC_KEY_FILE=./license-keys/public.pem \
-VANTARI_CP_STORE=./cp/licenses.json \
-VANTARI_CP_MANIFEST=./cp/bundle_manifest.json \
+EXACTSURFACE_CP_PRIVATE_KEY_FILE=./license-keys/private.pem \
+EXACTSURFACE_CP_PUBLIC_KEY_FILE=./license-keys/public.pem \
+EXACTSURFACE_CP_STORE=./cp/licenses.json \
+EXACTSURFACE_CP_MANIFEST=./cp/bundle_manifest.json \
 uvicorn control_plane.server:app --port 8800
 ```
 
-Point customer instances at it: `VANTARI_LICENSE_REFRESH_URL=https://cp.you.com/v1/license/refresh`
-and `VANTARI_UPDATE_FEED_URL=https://cp.you.com`.
+Point customer instances at it: `EXACTSURFACE_LICENSE_REFRESH_URL=https://cp.you.com/v1/license/refresh`
+and `EXACTSURFACE_UPDATE_FEED_URL=https://cp.you.com`.
 
 - **`POST /v1/license/refresh`** — the instance sends its token; if the store shows the
   subscription current (`status: active`, `paid_until` in the future) it gets a renewed,
@@ -130,7 +130,7 @@ and `VANTARI_UPDATE_FEED_URL=https://cp.you.com`.
 - **`GET /v1/updates/manifest`** — the license-gated update feed. Returns a **signed**
   manifest `{version, templates_url, sha256}` for the latest Nuclei-template / tool bundle;
   a lapsed subscriber is refused (402). Your CI produces the signed bundle + manifest;
-  point `VANTARI_CP_MANIFEST` at it. The instance verifies the signature against the
+  point `EXACTSURFACE_CP_MANIFEST` at it. The instance verifies the signature against the
   embedded public key and the bundle against `sha256` before applying — a hostile mirror
   can't inject templates you didn't sign.
 
@@ -143,8 +143,8 @@ self-enforcing, independent of any client-side check they might patch.
 
 ## Watermarking
 
-Every response carries an `X-Vantari-Instance: <customer_id>:<build_id>` header, and every
-exported HTML report is footer-stamped with the same tag (`VANTARI_BUILD_ID` set per
+Every response carries an `X-ExactSurface-Instance: <customer_id>:<build_id>` header, and every
+exported HTML report is footer-stamped with the same tag (`EXACTSURFACE_BUILD_ID` set per
 build). A leaked instance or a leaked report is therefore traceable to the licensee.
 
 ## Security notes

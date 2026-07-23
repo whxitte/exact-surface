@@ -1,6 +1,6 @@
 """Delta detection — what changed about an asset/endpoint since last time (module 23).
 
-State-awareness (§3.1) is Vantari's defining behaviour, and deltas are how it shows
+State-awareness (§3.1) is ExactSurface's defining behaviour, and deltas are how it shows
 up to the user: a 403 becoming 200, a title/tech change, a new port, a cert change.
 This module is a pure comparator — given the stored document and the fresh
 observation, it returns the ``Delta`` events that occurred. Persisting and alerting

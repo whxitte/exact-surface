@@ -67,7 +67,7 @@ def test_full_self_serve_workflow():
 
     # request + check verification (stub says True)
     vr = client.post(f"/programs/{pid}/verify/request?method=dns_txt", headers=_auth(token))
-    assert vr.status_code == 200 and vr.json()["token"].startswith("vantari-verify=")
+    assert vr.status_code == 200 and vr.json()["token"].startswith("exactsurface-verify=")
     vc = client.post(f"/programs/{pid}/verify/check", headers=_auth(token))
     assert vc.json()["verified"] is True
     assert client.get(f"/programs/{pid}", headers=_auth(token)).json()["verified"] is True
@@ -310,7 +310,7 @@ def test_report_download():
     assert "attachment" in h1.headers["content-disposition"]
     # HTML
     html = client.get(f"/programs/{pid}/reports?format=html", headers=_auth(token))
-    assert html.status_code == 200 and "Vantari Attack-Surface Report" in html.text
+    assert html.status_code == 200 and "ExactSurface Attack-Surface Report" in html.text
     # unknown format → 400
     assert (
         client.get(f"/programs/{pid}/reports?format=xlsx", headers=_auth(token)).status_code == 400

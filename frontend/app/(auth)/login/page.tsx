@@ -38,7 +38,7 @@ export default function LoginPage() {
         <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/15 text-primary">
           <Radar className="h-6 w-6" />
         </div>
-        <h1 className="text-xl font-semibold tracking-tight">Sign in to Vantari</h1>
+        <h1 className="text-xl font-semibold tracking-tight">Sign in to ExactSurface</h1>
         <p className="text-sm text-muted-foreground">Continuous attack-surface intelligence</p>
       </div>
 

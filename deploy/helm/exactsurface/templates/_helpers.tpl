@@ -1,11 +1,11 @@
-{{- define "vantari.labels" -}}
-app.kubernetes.io/name: vantari
+{{- define "exactsurface.labels" -}}
+app.kubernetes.io/name: exactsurface
 app.kubernetes.io/instance: {{ .Release.Name }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end -}}
 
-{{- define "vantari.env" -}}
-- name: VANTARI_ENV
+{{- define "exactsurface.env" -}}
+- name: EXACTSURFACE_ENV
   value: {{ .Values.env | quote }}
 envFrom:
   - secretRef:

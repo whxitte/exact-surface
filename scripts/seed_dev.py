@@ -34,7 +34,7 @@ from db.secrets import SecretRepo
 from db.tenants import TenantRepo
 from db.users import UserRepo
 
-DEMO_EMAIL = "demo@vantari.io"
+DEMO_EMAIL = "demo@exactsurface.com"
 DEMO_PASSWORD = "demo-password-123"  # noqa: S105 - local dev seed only
 APEX = "example.com"
 

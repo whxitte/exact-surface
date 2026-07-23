@@ -33,7 +33,7 @@ NOW = datetime(2026, 7, 17, 12, 0, tzinfo=UTC)
 
 
 def _archive(stamp: str) -> Path:
-    return Path(f"/b/vantari-vantari-{stamp}{ARCHIVE_SUFFIX}")
+    return Path(f"/b/exactsurface-exactsurface-{stamp}{ARCHIVE_SUFFIX}")
 
 
 # -- encryption policy -------------------------------------------------------
@@ -111,7 +111,7 @@ def test_prune_ignores_files_it_does_not_own():
 def test_unparseable_timestamps_are_kept_not_deleted():
     """Fail safe: if the name doesn't parse, we don't know its age — keeping an
     extra archive is free, deleting an unknown one is not."""
-    weird = Path(f"/b/vantari-db-notatimestamp{ARCHIVE_SUFFIX}")
+    weird = Path(f"/b/exactsurface-db-notatimestamp{ARCHIVE_SUFFIX}")
     plan = plan_prune([_archive("20260716T000000Z"), weird], retention_days=30, now=NOW)
     assert weird not in plan.delete
 
@@ -125,7 +125,7 @@ def test_age_is_read_from_the_name_not_the_mtime():
 
 
 def test_archive_name_is_timestamp_sortable():
-    name = archive_name("vantari", NOW)
-    assert name == f"vantari-vantari-20260717T120000Z{ARCHIVE_SUFFIX}"
-    earlier = archive_name("vantari", datetime(2026, 1, 1, tzinfo=UTC))
+    name = archive_name("exactsurface", NOW)
+    assert name == f"exactsurface-exactsurface-20260717T120000Z{ARCHIVE_SUFFIX}"
+    earlier = archive_name("exactsurface", datetime(2026, 1, 1, tzinfo=UTC))
     assert earlier < name  # lexical order == chronological order; prune relies on it

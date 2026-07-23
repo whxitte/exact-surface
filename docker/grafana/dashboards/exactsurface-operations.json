@@ -1,8 +1,8 @@
 {
-  "uid": "vantari-ops",
-  "title": "Vantari — Operations",
+  "uid": "exactsurface-ops",
+  "title": "ExactSurface — Operations",
   "description": "Is scanning alive, is it polite, and is it healthy? Ordered by what an operator checks first during the §7 Phase G unattended run. Every query here matches a metric name emitted in core/, pipelines/, or taskqueue/.",
-  "tags": ["vantari"],
+  "tags": ["exactsurface"],
   "timezone": "browser",
   "schemaVersion": 39,
   "editable": true,
@@ -18,12 +18,12 @@
       "type": "stat",
       "title": "Time since last successful scheduler tick",
       "description": "The scheduler swallows tick exceptions to keep the loop alive, so a broken one still looks 'up'. This is the number that exposes it. Should sit under the 60s tick interval.",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 6, "w": 6, "x": 0, "y": 1 },
       "targets": [
         {
           "refId": "A",
-          "expr": "time() - vantari_scheduler_last_success_timestamp",
+          "expr": "time() - exactsurface_scheduler_last_success_timestamp",
           "instant": true
         }
       ],
@@ -51,12 +51,12 @@
       "type": "timeseries",
       "title": "Jobs enqueued",
       "description": "Flat at zero while programs are due means the scheduler is running but deciding nothing is worth doing — a different failure from not ticking.",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 6, "w": 9, "x": 6, "y": 1 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(rate(vantari_scheduler_jobs_enqueued_total[5m])) * 60",
+          "expr": "sum(rate(exactsurface_scheduler_jobs_enqueued_total[5m])) * 60",
           "legendFormat": "jobs/min"
         }
       ],
@@ -65,12 +65,12 @@
     {
       "type": "timeseries",
       "title": "Scheduler ticks by outcome",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 6, "w": 9, "x": 15, "y": 1 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (rate(vantari_scheduler_ticks_total[5m])) * 60",
+          "expr": "sum by (status) (rate(exactsurface_scheduler_ticks_total[5m])) * 60",
           "legendFormat": "{{status}}"
         }
       ],
@@ -85,17 +85,17 @@
       "type": "timeseries",
       "title": "Subprocess per-target rate vs the cap",
       "description": "§15 exit criterion: no scanner subprocess exceeds the global rate cap, verified by metrics. Every tool that sends its own packets is here (naabu, httpx, katana, nuclei, feroxbuster, ffuf) — the token bucket cannot govern them, so this per-tool line crossing the cap is the only thing that proves the derived rate flag was right (ADR-0013).",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (tool) (vantari_subprocess_per_target_pps)",
+          "expr": "max by (tool) (exactsurface_subprocess_per_target_pps)",
           "legendFormat": "{{tool}}"
         },
         {
           "refId": "B",
-          "expr": "max(vantari_politeness_rate_limit_pps)",
+          "expr": "max(exactsurface_politeness_rate_limit_pps)",
           "legendFormat": "configured cap"
         }
       ],
@@ -116,12 +116,12 @@
       "type": "timeseries",
       "title": "Politeness decisions",
       "description": "Aggregate only — there is deliberately no per-target label, which would make cardinality unbounded in the number of hosts ever scanned.",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 8 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (decision) (rate(vantari_politeness_decisions_total[5m]))",
+          "expr": "sum by (decision) (rate(exactsurface_politeness_decisions_total[5m]))",
           "legendFormat": "{{decision}}"
         }
       ],
@@ -136,12 +136,12 @@
       "type": "timeseries",
       "title": "Stage failure + timeout rate by stage",
       "description": "'timeout' and 'failed' are separated at the source: too-slow and broken need different fixes. A stage quietly climbing here is the Phase G failure mode — scans still 'succeed' with missing data.",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 12, "x": 0, "y": 16 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (stage) (rate(vantari_scan_stage_total{status=~\"failed|timeout\"}[1h])) / clamp_min(sum by (stage) (rate(vantari_scan_stage_total[1h])), 0.001)",
+          "expr": "sum by (stage) (rate(exactsurface_scan_stage_total{status=~\"failed|timeout\"}[1h])) / clamp_min(sum by (stage) (rate(exactsurface_scan_stage_total[1h])), 0.001)",
           "legendFormat": "{{stage}}"
         }
       ],
@@ -151,12 +151,12 @@
       "type": "timeseries",
       "title": "Stage duration p95",
       "description": "Watch for a stage creeping toward its timeout budget before it starts actually timing out.",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 12, "x": 12, "y": 16 },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (stage, le) (rate(vantari_scan_stage_duration_seconds_bucket[1h])))",
+          "expr": "histogram_quantile(0.95, sum by (stage, le) (rate(exactsurface_scan_stage_duration_seconds_bucket[1h])))",
           "legendFormat": "{{stage}}"
         }
       ],
@@ -165,12 +165,12 @@
     {
       "type": "timeseries",
       "title": "Scan runs by outcome",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 8, "x": 0, "y": 23 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (rate(vantari_scan_run_total[1h])) * 3600",
+          "expr": "sum by (status) (rate(exactsurface_scan_run_total[1h])) * 3600",
           "legendFormat": "{{status}}/hr"
         }
       ],
@@ -179,12 +179,12 @@
     {
       "type": "timeseries",
       "title": "Full run duration p95",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 8, "x": 8, "y": 23 },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (pipeline, le) (rate(vantari_scan_run_duration_seconds_bucket[6h])))",
+          "expr": "histogram_quantile(0.95, sum by (pipeline, le) (rate(exactsurface_scan_run_duration_seconds_bucket[6h])))",
           "legendFormat": "{{pipeline}}"
         }
       ],
@@ -194,12 +194,12 @@
       "type": "timeseries",
       "title": "Alert latency p95 (finding first seen → notified)",
       "description": "§15 tracks time-to-first-alert. This measures the notify hop only, not signup→alert end to end.",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 8, "x": 16, "y": 23 },
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(vantari_alert_latency_seconds_bucket[6h])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(exactsurface_alert_latency_seconds_bucket[6h])))",
           "legendFormat": "p95"
         }
       ],
@@ -213,12 +213,12 @@
     {
       "type": "timeseries",
       "title": "HTTP requests by status",
-      "datasource": { "type": "prometheus", "uid": "vantari-prometheus" },
+      "datasource": { "type": "prometheus", "uid": "exactsurface-prometheus" },
       "gridPos": { "h": 7, "w": 24, "x": 0, "y": 31 },
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (status) (rate(vantari_http_requests_total[5m]))",
+          "expr": "sum by (status) (rate(exactsurface_http_requests_total[5m]))",
           "legendFormat": "{{status}}"
         }
       ],

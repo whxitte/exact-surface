@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .Release.Name }}-api
-  labels: {{- include "vantari.labels" . | nindent 4 }}
+  labels: {{- include "exactsurface.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.api.replicas }}
   selector:
@@ -20,7 +20,7 @@ spec:
           envFrom:
             - secretRef: { name: {{ .Values.existingSecret }} }
           env:
-            - name: VANTARI_ENV
+            - name: EXACTSURFACE_ENV
               value: {{ .Values.env | quote }}
           readinessProbe:
             httpGet: { path: /readyz, port: 8000 }
@@ -34,7 +34,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: {{ .Release.Name }}-api
-  labels: {{- include "vantari.labels" . | nindent 4 }}
+  labels: {{- include "exactsurface.labels" . | nindent 4 }}
 spec:
   selector: { app.kubernetes.io/component: api, app.kubernetes.io/instance: {{ .Release.Name }} }
   ports:
@@ -46,7 +46,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ .Release.Name }}-api
-  labels: {{- include "vantari.labels" . | nindent 4 }}
+  labels: {{- include "exactsurface.labels" . | nindent 4 }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
   {{- if .Values.ingress.tls }}

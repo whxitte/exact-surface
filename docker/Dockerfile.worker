@@ -1,5 +1,5 @@
-# Vantari worker image — the pipeline image with the arq worker as its command.
-# Built after vantari/pipeline (see docker-compose). Kept as a distinct image so
+# ExactSurface worker image — the pipeline image with the arq worker as its command.
+# Built after exactsurface/pipeline (see docker-compose). Kept as a distinct image so
 # Kubernetes can scale workers independently of the daemon/scheduler.
-FROM vantari/pipeline:latest
+FROM exactsurface/pipeline:latest
 CMD ["arq", "taskqueue.worker.WorkerSettings"]

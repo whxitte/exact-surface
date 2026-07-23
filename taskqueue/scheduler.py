@@ -52,25 +52,25 @@ def _observe_tick(status: str, *, jobs: int = 0, now: datetime | None = None) ->
 
     ``run_forever`` deliberately swallows tick exceptions so one bad tick cannot
     kill the loop — which means a scheduler failing *every* tick is externally
-    indistinguishable from a healthy idle one. ``vantari_scheduler_last_success_
+    indistinguishable from a healthy idle one. ``exactsurface_scheduler_last_success_
     timestamp`` is the fix: alert when ``time() - <gauge>`` exceeds a few ticks and
     you catch both a crashed loop and a silently-failing one.
     """
     REGISTRY.inc(
-        "vantari_scheduler_ticks_total",
+        "exactsurface_scheduler_ticks_total",
         help="Scheduler loop iterations by outcome.",
         status=status,
     )
     if status != "ok":
         return
     REGISTRY.set(
-        "vantari_scheduler_last_success_timestamp",
+        "exactsurface_scheduler_last_success_timestamp",
         (now or datetime.now(UTC)).timestamp(),
         help="Unix time of the last scheduler tick that completed without error.",
     )
     if jobs:
         REGISTRY.inc(
-            "vantari_scheduler_jobs_enqueued_total",
+            "exactsurface_scheduler_jobs_enqueued_total",
             value=float(jobs),
             help="Jobs enqueued by the scheduler.",
         )

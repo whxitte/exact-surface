@@ -15,16 +15,16 @@ import bcrypt
 from jose import JWTError, jwt
 
 from core.config import get_settings
-from core.errors import VantariError
+from core.errors import ExactSurfaceError
 
 _MAX_BCRYPT_BYTES = 72  # bcrypt hard limit; longer inputs must be truncated
 
 
-class InvalidToken(VantariError):
+class InvalidToken(ExactSurfaceError):
     pass
 
 
-class InvalidCredentials(VantariError):
+class InvalidCredentials(ExactSurfaceError):
     pass
 
 

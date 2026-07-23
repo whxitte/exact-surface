@@ -1,7 +1,7 @@
 # P0 build specs — the deal-blockers to close before enterprise selling
 
 These three gaps are the ones that turn a "yes" into a "not yet" during an enterprise
-evaluation. None is a research problem — each slots into machinery Vantari already has
+evaluation. None is a research problem — each slots into machinery ExactSurface already has
 (JWT auth + RBAC, `IntegrationSecretRepo`, `ApiKeyRepo`, the SSRF-safe `guarded_post`,
 the arq worker). Build order below is by unblock-value.
 
@@ -19,7 +19,7 @@ Grounding references (already in the codebase):
 ## 1. SSO / SAML + SCIM  — *effort: M · gate: Enterprise tier*
 
 **Why it blocks deals:** every mid-market+ security team mandates SSO before they'll
-put staff in a tool. Today Vantari is email+password only.
+put staff in a tool. Today ExactSurface is email+password only.
 
 ### Scope
 - **OIDC** for Okta / Entra ID / Google Workspace (covers ~90% of buyers), **plus SAML
@@ -28,7 +28,7 @@ put staff in a tool. Today Vantari is email+password only.
 - **JIT provisioning:** a first-time SSO login creates the `User` in the tenant with **no
   groups** (consistent with the RBAC default — no access until the owner assigns a group).
 - **SCIM 2.0** (phase 2) for automated user deprovisioning — the real enterprise ask is
-  "when we offboard someone in Okta, they lose Vantari access."
+  "when we offboard someone in Okta, they lose ExactSurface access."
 
 ### Data model (`core/models.py`)
 - New `TenantSSOConfig(TenantScopedModel)`: `provider` (oidc|saml), `issuer`/`metadata_url`,
@@ -73,7 +73,7 @@ must land in the customer's workflow, not just a webhook/Slack ping.
 - **Push:** create a ticket from a finding — manually ("Create ticket" on a finding) and
   by **rule** (e.g. auto-create for `critical`/`high` on a program).
 - **De-dup & status sync (phase 2):** store the created ticket id on the finding; on
-  re-detection don't re-create; when Vantari marks a finding `resolved`, comment/transition
+  re-detection don't re-create; when ExactSurface marks a finding `resolved`, comment/transition
   the ticket (and optionally the reverse).
 
 ### Data model
@@ -100,7 +100,7 @@ must land in the customer's workflow, not just a webhook/Slack ping.
 ### Acceptance
 - A `critical` finding auto-creates a Jira issue with the finding's transparency payload
   (detector, matched request, repro) in the body; re-scan doesn't duplicate it; resolving
-  in Vantari comments the issue.
+  in ExactSurface comments the issue.
 
 ---
 

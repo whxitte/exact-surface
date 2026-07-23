@@ -205,7 +205,7 @@ async def require_write_license() -> None:
     if state.read_only:
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            f"Vantari is in read-only mode — {state.reason}. Renew the subscription to "
+            f"ExactSurface is in read-only mode — {state.reason}. Renew the subscription to "
             "resume scanning; existing data remains viewable and exportable.",
         )
 

@@ -12,7 +12,7 @@ import shutil
 from dataclasses import dataclass
 
 from core.config import get_settings
-from core.errors import VantariError
+from core.errors import ExactSurfaceError
 from core.scope import default_engine
 from modules.registry import required_binaries
 
@@ -42,7 +42,7 @@ def _check_config() -> Check:
         s = get_settings()
         s.assert_prod_safe()
         return Check("config", True, f"env={s.env} db={s.mongo_db}")
-    except VantariError as exc:
+    except ExactSurfaceError as exc:
         return Check("config", False, str(exc))
 
 

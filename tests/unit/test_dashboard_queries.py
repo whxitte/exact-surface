@@ -16,14 +16,14 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-DASHBOARD = ROOT / "docker/grafana/dashboards/vantari-operations.json"
+DASHBOARD = ROOT / "docker/grafana/dashboards/exactsurface-operations.json"
 ALERTS = ROOT / "docker/alerts.yml"
 
 #: Source dirs that may emit metrics. `tests/` is excluded on purpose — a probe
 #: metric invented by a test must not satisfy a dashboard reference.
 SOURCE_DIRS = ("core", "modules", "pipelines", "api", "db", "daemon", "taskqueue")
 
-_METRIC_RE = re.compile(r"vantari_[a-z0-9_]+")
+_METRIC_RE = re.compile(r"exactsurface_[a-z0-9_]+")
 #: Prometheus synthesises these from a histogram registered under the base name.
 _HISTOGRAM_SUFFIXES = ("_bucket", "_sum", "_count")
 
@@ -33,7 +33,7 @@ def _emitted_names() -> set[str]:
     names: set[str] = set()
     for d in SOURCE_DIRS:
         for path in (ROOT / d).rglob("*.py"):
-            for match in re.finditer(r"""["'](vantari_[a-z0-9_]+)["']""", path.read_text()):
+            for match in re.finditer(r"""["'](exactsurface_[a-z0-9_]+)["']""", path.read_text()):
                 names.add(match.group(1))
     return names
 
@@ -99,6 +99,6 @@ def test_the_politeness_cap_alert_matches_the_configured_default():
     from core.config import Settings
 
     cap = Settings().global_rate_per_target
-    assert f"vantari_subprocess_per_target_pps > {cap:g}" in ALERTS.read_text(), (
+    assert f"exactsurface_subprocess_per_target_pps > {cap:g}" in ALERTS.read_text(), (
         f"alerts.yml threshold does not match global_rate_per_target={cap:g}"
     )

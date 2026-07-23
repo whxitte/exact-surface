@@ -151,7 +151,7 @@ class VerificationMethod(str, Enum):
 
 
 class Program(TenantScopedModel):
-    """A verified domain a tenant has asked Vantari to monitor."""
+    """A verified domain a tenant has asked ExactSurface to monitor."""
 
     program_id: str
     apex_domain: str

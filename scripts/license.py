@@ -1,4 +1,4 @@
-"""Vantari license minting CLI (§ commercial / self-hosted).
+"""ExactSurface license minting CLI (§ commercial / self-hosted).
 
 Run this OFFLINE, on your own machine — it holds the Ed25519 **private key** that mints
 subscriptions. The private key must never ship in the image; only the matching public
@@ -7,7 +7,7 @@ key is baked into the build (it can verify, never sign).
     # one-time: create your signing keypair
     python -m scripts.license keygen --out-dir ./license-keys
     #   → license-keys/private.pem  (KEEP SECRET — this is your money printer)
-    #   → license-keys/public.pem   (bake into the image: VANTARI_LICENSE_PUBLIC_KEY)
+    #   → license-keys/public.pem   (bake into the image: EXACTSURFACE_LICENSE_PUBLIC_KEY)
 
     # issue a customer a 1-month Business subscription (25 domains)
     python -m scripts.license issue \
@@ -17,7 +17,7 @@ key is baked into the build (it can verify, never sign).
     # inspect / verify a token against the public key
     python -m scripts.license inspect --public-key ./license-keys/public.pem "$(cat acme.vlic)"
 
-Give the customer the token (a mounted file or the VANTARI_LICENSE env var) at deploy
+Give the customer the token (a mounted file or the EXACTSURFACE_LICENSE env var) at deploy
 time. Renew by issuing a new token with a later expiry and handing it over (or serving
 it from the online-refresh endpoint).
 """
@@ -133,7 +133,9 @@ def _cmd_inspect(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="scripts.license", description="Vantari license minting")
+    parser = argparse.ArgumentParser(
+        prog="scripts.license", description="ExactSurface license minting"
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_key = sub.add_parser("keygen", help="generate an Ed25519 signing keypair")

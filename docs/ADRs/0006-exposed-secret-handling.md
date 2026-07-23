@@ -3,8 +3,8 @@ Date: 2026-07-04
 Status: Accepted
 
 ## Context
-When Vantari finds a customer's leaked secret (`.env`, an API key in JS, a GitHub
-leak), naively storing the plaintext turns Vantari's own database into a
+When ExactSurface finds a customer's leaked secret (`.env`, an API key in JS, a GitHub
+leak), naively storing the plaintext turns ExactSurface's own database into a
 high-value honeypot holding *other companies'* live credentials — a catastrophic
 liability and breach magnet.
 

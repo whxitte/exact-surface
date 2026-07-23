@@ -9,10 +9,10 @@ targets' ISPs. The realistic outcome is account termination — which takes the
 entire platform down with it.
 
 ## Decision
-**Masscan is disabled in v1** (`VANTARI_MASSCAN_ENABLED=false`, and its registry
+**Masscan is disabled in v1** (`EXACTSURFACE_MASSCAN_ENABLED=false`, and its registry
 entry ships `enabled=False`). Port discovery uses **naabu** with a rate cap and
 bounded concurrency, behind the global politeness limiter (§3.8b, ≤10 pkt/s per
-target IP by default). Masscan returns only once Vantari operates from dedicated,
+target IP by default). Masscan returns only once ExactSurface operates from dedicated,
 abuse-contact-registered netblocks.
 
 ## Consequences

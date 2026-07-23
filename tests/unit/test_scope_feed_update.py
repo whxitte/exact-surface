@@ -1,7 +1,7 @@
 """The scope-feed updater must never remove protection (§3.9, §7 Phase G).
 
 This file is a safety control, not a cache. The engine classifies an IP as
-CDN/CLOUD_SHARED from these ranges, and those classes are what confine Vantari to
+CDN/CLOUD_SHARED from these ranges, and those classes are what confine ExactSurface to
 HTTP-layer probing. A range that drops out of the feed stops being recognised as
 shared infrastructure — so a bad update is not a stale feed, it is a *removed*
 protection, and the target finds out before we do.

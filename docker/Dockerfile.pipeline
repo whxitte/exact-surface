@@ -1,4 +1,4 @@
-# Vantari pipeline image: all recon tooling + Python runtime + app code.
+# ExactSurface pipeline image: all recon tooling + Python runtime + app code.
 # Reused (with different commands) by the daemon, scheduler, and workers.
 # masscan is installed but DISABLED at the application layer in v1 (ADR-0004).
 
@@ -139,11 +139,11 @@ COPY api/ api/
 COPY scripts/ scripts/
 
 # Non-root: scanning does not need root (naabu falls back to connect-scan).
-RUN useradd -m -u 10001 vantari && chown -R vantari:vantari /app
-USER vantari
+RUN useradd -m -u 10001 exactsurface && chown -R exactsurface:exactsurface /app
+USER exactsurface
 
 # Pre-fetch nuclei templates AS THE RUNTIME USER so scans actually run. Running
-# this as root (previously) put templates in /root, invisible to `vantari` →
+# this as root (previously) put templates in /root, invisible to `exactsurface` →
 # nuclei found no templates and exited in <1s without scanning anything.
 RUN nuclei -update-templates -silent || true
 

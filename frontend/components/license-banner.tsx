@@ -40,7 +40,7 @@ export function LicenseBanner() {
       <Clock className="mt-0.5 h-4 w-4 shrink-0 text-severity-medium" />
       <p className="text-severity-medium">
         <span className="font-semibold">Subscription expired.</span> You&apos;re in the grace
-        period{renewBy ? ` until ${renewBy}` : ""} — everything still works, but Vantari switches to
+        period{renewBy ? ` until ${renewBy}` : ""} — everything still works, but ExactSurface switches to
         read-only after that. Renew to avoid interruption.
       </p>
     </div>

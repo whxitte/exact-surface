@@ -1,4 +1,4 @@
-# Vantari Architecture
+# ExactSurface Architecture
 
 Continuous external attack-surface intelligence — **detection only**. Outside-in,
 agentless, multi-tenant, state-aware.
@@ -171,21 +171,21 @@ What is emitted, and why each earns its place:
 
 | Metric | Role | Answers |
 | --- | --- | --- |
-| `vantari_scheduler_last_success_timestamp` | scheduler | Is scanning still happening? |
-| `vantari_scheduler_ticks_total{status}` · `..._jobs_enqueued_total` | scheduler | Ticking but enqueueing nothing? |
-| `vantari_scan_stage_total{stage,status}` · `..._duration_seconds` | worker | Which stage is failing, timing out, or slowing? |
-| `vantari_scan_run_total{pipeline,status}` · `..._duration_seconds` | worker | Are whole runs completing? |
-| `vantari_subprocess_per_target_pps{tool}` · `..._rate_pps{tool}` | worker | §15: does each scanner subprocess stay under the cap? |
-| `vantari_politeness_decisions_total{decision}` · `..._rate_limit_pps` | worker | Is the limiter throttling? |
-| `vantari_alert_latency_seconds` | worker | §15 notify-hop latency. |
-| `vantari_http_requests_total{method,status}` | api | API traffic/errors. |
+| `exactsurface_scheduler_last_success_timestamp` | scheduler | Is scanning still happening? |
+| `exactsurface_scheduler_ticks_total{status}` · `..._jobs_enqueued_total` | scheduler | Ticking but enqueueing nothing? |
+| `exactsurface_scan_stage_total{stage,status}` · `..._duration_seconds` | worker | Which stage is failing, timing out, or slowing? |
+| `exactsurface_scan_run_total{pipeline,status}` · `..._duration_seconds` | worker | Are whole runs completing? |
+| `exactsurface_subprocess_per_target_pps{tool}` · `..._rate_pps{tool}` | worker | §15: does each scanner subprocess stay under the cap? |
+| `exactsurface_politeness_decisions_total{decision}` · `..._rate_limit_pps` | worker | Is the limiter throttling? |
+| `exactsurface_alert_latency_seconds` | worker | §15 notify-hop latency. |
+| `exactsurface_http_requests_total{method,status}` | api | API traffic/errors. |
 
 **No metric carries a tenant, program, or host label** — deliberately. It bounds
 cardinality (a per-target label grows without limit in hosts ever scanned) and it
 keeps the listener free of tenant data, which is what lets it bind the container
 network without being an exposure.
 
-`vantari_scheduler_last_success_timestamp` deserves specific mention: `run_forever`
+`exactsurface_scheduler_last_success_timestamp` deserves specific mention: `run_forever`
 swallows tick exceptions so one bad tick cannot kill the loop, which means a
 scheduler failing *every* tick still has a live process and an answering port
 while never enqueueing again. A liveness probe cannot see that; the gauge can.
@@ -218,7 +218,7 @@ just enough of motor; every tool wrapper takes an injectable runner.
 
 - **CVE/KEV match latency is not measured** (§15 target <60 min). `CveRecord` has
   no `published` field, so the NVD parser must carry it first. Alert latency
-  (detection→delivered) *is* measured: `vantari_alert_latency_seconds`.
+  (detection→delivered) *is* measured: `exactsurface_alert_latency_seconds`.
 - **`nuclei_watch` has no default template lister.** The pipeline is wired and
   tested, but nuclei's `-tl` output contract has not been verified against the
   pinned binary, so the lister must be injected. Without one the stage reports
@@ -235,7 +235,7 @@ just enough of motor; every tool wrapper takes an injectable runner.
   `CveRecord` has no `published` field, so there is no origin timestamp to measure
   from; `parse_nvd` must carry it before the metric can mean anything. Alert
   latency (finding first-seen → notified) *is* instrumented
-  (`vantari_alert_latency_seconds`), but that is only the notify hop — it is not
+  (`exactsurface_alert_latency_seconds`), but that is only the notify hop — it is not
   the signup→first-alert figure §15 asks for.
 - **Phase G is code-complete; the exit gate is not.** Observability, rate-limit
   degradation (ADR-0012), encrypted backups, per-tool subprocess caps (ADR-0013),

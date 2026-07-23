@@ -1,6 +1,6 @@
-# Vantari — Comprehensive Testing Guide
+# ExactSurface — Comprehensive Testing Guide
 
-How to test Vantari to full coverage: what to test, in what order, and how to know
+How to test ExactSurface to full coverage: what to test, in what order, and how to know
 it actually works. This is the reference; [`docs/TESTING.md`](TESTING.md) is the
 quick "run it on a Mac + Kali VM" walkthrough.
 
@@ -20,7 +20,7 @@ quick "run it on a Mac + Kali VM" walkthrough.
 | 1 | Automated suite | logic is correct in isolation | every commit |
 | 2 | Static + preflight | it lints, imports, and can start | every commit |
 | 3 | Local end-to-end | the pipeline runs against a real target you own | before a deploy |
-| 4 | **Security & safety** | Vantari can't be turned against you or a third party | before a deploy, and after any scope/fetch/auth change |
+| 4 | **Security & safety** | ExactSurface can't be turned against you or a third party | before a deploy, and after any scope/fetch/auth change |
 | 5 | Real-infra validation | the parts CI can't exercise actually work | before first prod |
 | 6 | Unattended run (exit gate) | it survives days alone with real tenants | before launch |
 | 7 | Load & scale | it holds at multi-tenant volume | before selling multi-tenant |
@@ -103,7 +103,7 @@ that's off by default) — read the note.
 ## Layer 4 — Security & safety verification (the important part)
 
 This is a scanning product with cloud credentials and multi-tenant data. These are
-the tests that prove **Vantari doesn't become an attacker's target, and never
+the tests that prove **ExactSurface doesn't become an attacker's target, and never
 attacks a third party it shouldn't.** Re-run them after any change to `core/scope`,
 the fetch paths, or auth.
 
@@ -124,11 +124,11 @@ The engine must refuse to actively scan anything that isn't confirmed-dedicated.
 
 ### 4b. Politeness rate cap — the AUP boundary (§3.8b, §15)
 
-No target may be contacted faster than `VANTARI_GLOBAL_RATE_PER_TARGET` (default 10).
+No target may be contacted faster than `EXACTSURFACE_GLOBAL_RATE_PER_TARGET` (default 10).
 
 ```bash
 # During/after a scan, scrape the worker's metrics:
-curl -s localhost:9100/metrics | grep vantari_subprocess_per_target_pps
+curl -s localhost:9100/metrics | grep exactsurface_subprocess_per_target_pps
 ```
 
 Every `{tool="…"}` line must be **≤ 10**. This is the §15 exit criterion, verified by
@@ -136,7 +136,7 @@ metrics. The `SubprocessRateExceedsPolitenessCap` alert pages if any tool crosse
 Also confirm in the logs that naabu/httpx/nuclei were handed a derived rate, not
 their unbounded default.
 
-### 4c. SSRF guard — Vantari must not be steered inward (§3.10)
+### 4c. SSRF guard — ExactSurface must not be steered inward (§3.10)
 
 The takeover probe and secret scanner fetch attacker-influenced content. A target
 must not be able to redirect or DNS-rebind them to the cloud metadata endpoint.
@@ -144,7 +144,7 @@ must not be able to redirect or DNS-rebind them to the cloud metadata endpoint.
 - Unit proof: `tests/security/test_ssrf_guard.py` (metadata/RFC1918/CGNAT/IPv6-local
   all forbidden; redirects are off; IP-literal targets refused).
 - Live proof: stand up a host that returns `302 → http://169.254.169.254/`, add it in
-  scope, run takeover/secrets. Vantari must **refuse the redirect** — no metadata
+  scope, run takeover/secrets. ExactSurface must **refuse the redirect** — no metadata
   fetch, no IAM credentials scanned as a "secret".
 
 ### 4d. Secret handling — never a plaintext honeypot (§9c)
@@ -168,8 +168,8 @@ must not be able to redirect or DNS-rebind them to the cloud metadata endpoint.
 
 ### 4f. Prod-safety refusal
 
-Set `VANTARI_ENV=prod` with the dev-default `VANTARI_JWT_SECRET` and start the API —
-it must **refuse to boot** (`assert_prod_safe`). Same for `VANTARI_LAB_ALLOW_PRIVATE=true`
+Set `EXACTSURFACE_ENV=prod` with the dev-default `EXACTSURFACE_JWT_SECRET` and start the API —
+it must **refuse to boot** (`assert_prod_safe`). Same for `EXACTSURFACE_LAB_ALLOW_PRIVATE=true`
 in prod.
 
 ---
@@ -184,14 +184,14 @@ docker build -f docker/Dockerfile.pipeline .
 docker build -f docker/Dockerfile.api .
 
 # 2. Helm chart renders
-helm template vantari deploy/helm/vantari
+helm template exactsurface deploy/helm/exactsurface
 
 # 3. Prod compose merges and is safe (no daemon needed)
 docker compose -f docker/docker-compose.prod.yml config | grep -E "27017|6379"  # must NOT be published
 
 # 4. THE MOST IMPORTANT ONE — restore a backup into a scratch DB
 python -m scripts.backup run
-python -m scripts.backup restore <archive> --identity id.txt   # into a throwaway VANTARI_MONGO_DB
+python -m scripts.backup restore <archive> --identity id.txt   # into a throwaway EXACTSURFACE_MONGO_DB
 ```
 
 Also verify against **real** Redis and Mongo (the fakes hide behaviour):
@@ -210,8 +210,8 @@ it.
 The literal Phase G exit criterion: **runs 7 days unattended with real tenants and
 hundreds of domains — no intervention, no AUP complaints.** Can only be *run*.
 
-Watch, in Grafana (the `Vantari — Operations` dashboard):
-- **`time() - vantari_scheduler_last_success_timestamp`** stays under a few ticks —
+Watch, in Grafana (the `ExactSurface — Operations` dashboard):
+- **`time() - exactsurface_scheduler_last_success_timestamp`** stays under a few ticks —
   proves scanning is still happening (a crashed-but-up scheduler is the silent killer).
 - **stage failure/timeout rates** stay low — a stage quietly timing out means scans
   "succeed" with missing data.
@@ -299,7 +299,7 @@ missing. (Reflects the app as of the 2026-07-18 review.)
       sections are present.
 
 **Grafana** (`:3001`, admin / `GRAFANA_ADMIN_PASSWORD`, default `admin` in dev)
-- [ ] The `Vantari — Operations` dashboard loads and its panels populate during a scan
+- [ ] The `ExactSurface — Operations` dashboard loads and its panels populate during a scan
       (scheduler liveness, per-target rate, stage outcomes). Nothing to configure —
       datasource + dashboard are auto-provisioned.
 

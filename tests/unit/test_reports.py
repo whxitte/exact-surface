@@ -189,7 +189,7 @@ async def test_generate_report_all_text_formats():
     mongo = FakeMongo()
     await _seed(mongo)
     for fmt, needle in [
-        ("html", "Vantari Attack-Surface Report"),
+        ("html", "ExactSurface Attack-Surface Report"),
         ("hackerone", "## [CRITICAL] Exposed .env"),
         ("executive", "Executive Summary"),
     ]:

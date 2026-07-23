@@ -1,4 +1,4 @@
-# Vantari Frontend
+# ExactSurface Frontend
 
 Next.js 14 (App Router) + Tailwind. Dark-first security dashboard. Talks to the
 FastAPI backend through the `/api/*` proxy (see `next.config.mjs`), so no CORS in dev.

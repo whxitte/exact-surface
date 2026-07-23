@@ -23,7 +23,7 @@ def render_executive_summary(ctx: ReportContext) -> str:
         f"_Generated {ctx.generated_at}_",
         "",
         "## Posture",
-        f"External attack-surface posture: **{posture}**. Vantari observed "
+        f"External attack-surface posture: **{posture}**. ExactSurface observed "
         f"{c['assets']} assets, {c['endpoints']} live endpoints, {c['open_ports']} open ports, "
         f"and {c['findings']} findings ({critical} critical, {high} high).",
         "",
@@ -58,7 +58,7 @@ def render_executive_summary(ctx: ReportContext) -> str:
     lines += [
         "## Recommendation",
         "Prioritise remediation of the attack chains above, rotate all exposed credentials, "
-        "and patch KEV-listed vulnerabilities first. Vantari will re-verify automatically and "
+        "and patch KEV-listed vulnerabilities first. ExactSurface will re-verify automatically and "
         "alert on any regression.",
     ]
     return "\n".join(lines)

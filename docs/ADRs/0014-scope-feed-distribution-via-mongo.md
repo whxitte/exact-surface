@@ -6,7 +6,7 @@ Status: Accepted
 ## Context
 
 `core/data/cloud_ranges.json` is the CDN/cloud range feed. The engine classifies an
-IP as CDN or CLOUD_SHARED from it, and those classes are what confine Vantari to
+IP as CDN or CLOUD_SHARED from it, and those classes are what confine ExactSurface to
 HTTP-layer probing (§3.9). It is a safety control, not a cache.
 
 ADR-0013's predecessor commit made the *updater* safe (merge-not-clobber, validate,

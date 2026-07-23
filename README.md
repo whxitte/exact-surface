@@ -1,8 +1,8 @@
-# Vantari
+# ExactSurface
 
 **Continuous external attack-surface intelligence — detection only.**
 
-Vantari continuously answers one question for every domain a customer owns:
+ExactSurface continuously answers one question for every domain a customer owns:
 *"What does an external attacker see right now, and what can they do with it?"*
 It runs the tooling real attackers use (subfinder, httpx, nuclei, katana, naabu,
 wordlist fuzzing), is state-aware (one alert per genuinely new fact, not per
@@ -19,7 +19,7 @@ re-scan), multi-tenant from line one, and **never exploits — only detects**.
 | [`docs/TESTING.md`](docs/TESTING.md) | run it end-to-end against a target you own (quick) |
 | [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | **full test coverage** — the 7 layers, what to test when, security/safety verification |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | roles, images, sizing, observability (scraping only the api shows you nothing about scanning) |
-| [`VANTARI_BUILD_SPEC.md`](VANTARI_BUILD_SPEC.md) | the full original design spec (authoritative) |
+| [`EXACTSURFACE_BUILD_SPEC.md`](EXACTSURFACE_BUILD_SPEC.md) | the full original design spec (authoritative) |
 | [`context.md`](context.md) | running engineering log: what's done, what's known-broken, and why |
 
 New to the codebase? `ARCHITECTURE.md` → `SECURITY.md` §2 (why domain control ≠
@@ -127,7 +127,7 @@ Open http://localhost:3000 →
 
 Create account (this makes your fresh tenant + user).
 Go to Programs → add quipohealth.com.
-Stop there — don't try to verify in the UI. (Email verification is off in dev by default, so signup + add-program won't be blocked. If your .env set VANTARI_REQUIRE_EMAIL_VERIFICATION=true, the verification link is printed in the API logs: docker compose -f docker/docker-compose.yml logs api | grep verify.)
+Stop there — don't try to verify in the UI. (Email verification is off in dev by default, so signup + add-program won't be blocked. If your .env set EXACTSURFACE_REQUIRE_EMAIL_VERIFICATION=true, the verification link is printed in the API logs: docker compose -f docker/docker-compose.yml logs api | grep verify.)
 
 4 · Bypass DNS verification (one command)
 
@@ -170,13 +170,13 @@ Two things to expect, so they don't look like bugs:
 
 Port scanning and content-discovery will likely skip with a note like "no confirmed-dedicated hosts." That's correct — those only run on IPs confirmed as yours via asnmap (§9b), which the DNS bypass doesn't do. Probe, crawl, nuclei (safe), and secrets will all run over HTTP. If you want port scans against your own infra, set scan_shared_infra=true on the program (add await ProgramRepo.from_mongo(m).save(...) or a Mongo update) — but only because you own it.
 This is a real scan hitting quipohealth.com over the network, rate-limited to 10 req/s per target. Fine, since it's your domain.
-⚠️ One honest caveat: only ever do this bypass for a domain you actually own, on your own instance. Domain verification is the control that keeps Vantari from scanning someone else's property — bypassing it for a domain you don't control is exactly the AUP/legal violation the whole authorization chain exists to prevent. quipohealth.com is yours, so you're clear.
+⚠️ One honest caveat: only ever do this bypass for a domain you actually own, on your own instance. Domain verification is the control that keeps ExactSurface from scanning someone else's property — bypassing it for a domain you don't control is exactly the AUP/legal violation the whole authorization chain exists to prevent. quipohealth.com is yours, so you're clear.
 
 It's posible to set  a quick mongosh one-liner to flip scan_shared_infra on (so this run includes port + content-discovery against our own infra)
 
 ---
 
-Email — why/what/where? It's for signup email verification only (the confirm-your-address link), and it's config, not a UI setting — that's why you don't see it in the app. In dev, VANTARI_EMAIL_TRANSPORT=log just prints the link to the API logs (no provider needed). To send real mail, set smtp + any provider's SMTP creds in .env. "Provider-agnostic" means it speaks plain SMTP, so Resend/Brevo/SES all work. Nothing to configure to test scanning.
+Email — why/what/where? It's for signup email verification only (the confirm-your-address link), and it's config, not a UI setting — that's why you don't see it in the app. In dev, EXACTSURFACE_EMAIL_TRANSPORT=log just prints the link to the API logs (no provider needed). To send real mail, set smtp + any provider's SMTP creds in .env. "Provider-agnostic" means it speaks plain SMTP, so Resend/Brevo/SES all work. Nothing to configure to test scanning.
 
 Tech-aware nuclei — will it lose generic findings (expired TLS, etc.)? No. The safe baseline is still exposure, misconfig, tech, ssl, cve, default-login — TLS/expiry, generic misconfigs, CVEs all still run. The tech tags are added on top (a WordPress host also gets WordPress templates). It's strictly more coverage, never less, on the safe scan. Only the aggressive run (confirmed-dedicated infra) uses the full library.
 
@@ -186,5 +186,5 @@ How is the "point x.mydomain.com at any IP, declare /24 dedicated, scan third-pa
 
 What is nuclei_watch? It baselines which nuclei templates currently match your stack, then alerts when a NEW template starts matching (e.g. a fresh CVE template now fires on your host). It's opt-in because its template-lister contract is unverified against the pinned binary.
 
-Grafana — creds/config? http://localhost:3001, login admin / admin in dev (set GRAFANA_ADMIN_PASSWORD to change). Nothing to configure — the Prometheus datasource and the "Vantari — Operations" dashboard are auto-provisioned. Panels populate during a scan (worker/scheduler are scraped on :9100).
+Grafana — creds/config? http://localhost:3001, login admin / admin in dev (set GRAFANA_ADMIN_PASSWORD to change). Nothing to configure — the Prometheus datasource and the "ExactSurface — Operations" dashboard are auto-provisioned. Panels populate during a scan (worker/scheduler are scraped on :9100).
 

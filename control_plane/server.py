@@ -2,10 +2,10 @@
 
 Run it wherever you host your control plane:
 
-    VANTARI_CP_PRIVATE_KEY_FILE=./license-keys/private.pem \
-    VANTARI_CP_PUBLIC_KEY_FILE=./license-keys/public.pem \
-    VANTARI_CP_STORE=./cp/licenses.json \
-    VANTARI_CP_MANIFEST=./cp/bundle_manifest.json \
+    EXACTSURFACE_CP_PRIVATE_KEY_FILE=./license-keys/private.pem \
+    EXACTSURFACE_CP_PUBLIC_KEY_FILE=./license-keys/public.pem \
+    EXACTSURFACE_CP_STORE=./cp/licenses.json \
+    EXACTSURFACE_CP_MANIFEST=./cp/bundle_manifest.json \
     uvicorn control_plane.server:app --port 8800
 
 Endpoints:
@@ -110,7 +110,7 @@ def _read(env: str) -> str | None:
 
 
 def _load_manifest() -> dict:
-    path = os.environ.get("VANTARI_CP_MANIFEST")
+    path = os.environ.get("EXACTSURFACE_CP_MANIFEST")
     if path and Path(path).exists():
         return json.loads(Path(path).read_text())
     return {"version": "0", "templates_url": None, "sha256": None, "tool_versions": {}}
@@ -119,10 +119,10 @@ def _load_manifest() -> dict:
 def create_app() -> Any:  # pragma: no cover - thin wrapper; logic is tested directly
     from fastapi import Body, FastAPI, Header, Response
 
-    private_key = _read("VANTARI_CP_PRIVATE_KEY") or ""
-    public_key = _read("VANTARI_CP_PUBLIC_KEY") or ""
-    store = LicenseStore(os.environ.get("VANTARI_CP_STORE", "./cp/licenses.json"))
-    app = FastAPI(title="Vantari control plane", version="1.0.0")
+    private_key = _read("EXACTSURFACE_CP_PRIVATE_KEY") or ""
+    public_key = _read("EXACTSURFACE_CP_PUBLIC_KEY") or ""
+    store = LicenseStore(os.environ.get("EXACTSURFACE_CP_STORE", "./cp/licenses.json"))
+    app = FastAPI(title="ExactSurface control plane", version="1.0.0")
 
     def _respond(result: tuple[int, dict]) -> Response:
         status_code, body = result
@@ -152,6 +152,6 @@ def create_app() -> Any:  # pragma: no cover - thin wrapper; logic is tested dir
     return app
 
 
-app = create_app() if os.environ.get("VANTARI_CP_PRIVATE_KEY") or os.environ.get(
-    "VANTARI_CP_PRIVATE_KEY_FILE"
+app = create_app() if os.environ.get("EXACTSURFACE_CP_PRIVATE_KEY") or os.environ.get(
+    "EXACTSURFACE_CP_PRIVATE_KEY_FILE"
 ) else None

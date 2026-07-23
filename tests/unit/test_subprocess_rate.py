@@ -59,9 +59,9 @@ def test_it_publishes_a_verifiable_per_tool_metric(monkeypatch):
     derive_subprocess_rate(5, 10.0, tool="feroxbuster")
 
     out = reg.render()
-    assert 'vantari_subprocess_per_target_pps{tool="feroxbuster"} 10.0' in out
-    assert 'vantari_subprocess_rate_pps{tool="feroxbuster"} 50.0' in out
-    assert "vantari_politeness_rate_limit_pps 10.0" in out
+    assert 'exactsurface_subprocess_per_target_pps{tool="feroxbuster"} 10.0' in out
+    assert 'exactsurface_subprocess_rate_pps{tool="feroxbuster"} 50.0' in out
+    assert "exactsurface_politeness_rate_limit_pps 10.0" in out
 
 
 # -- the source-level guard: wrappers must actually pass the flag ------------

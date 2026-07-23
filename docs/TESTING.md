@@ -1,4 +1,4 @@
-# Testing Vantari on a MacBook (Apple Silicon) + Kali VM
+# Testing ExactSurface on a MacBook (Apple Silicon) + Kali VM
 
 This guide gets you from zero to a full end-to-end test: sign up, add a target you
 control, watch the continuous pipeline discover → probe → scan → find an exposure,
@@ -21,7 +21,7 @@ Fastest way to click through the product with seeded demo data. Runs only the
 datastores in Docker; API + frontend run natively on your Mac. No scanning happens.
 
 ```bash
-cd ~/Projects/vantari
+cd ~/Projects/exactsurface
 
 # 1. datastores only
 docker compose -f docker/docker-compose.yml up -d mongo redis
@@ -36,13 +36,13 @@ cp .env.example .env            # fine as-is for local dev
 make api                        # → http://localhost:8000  (docs at /docs)
 
 # 5. seed a demo tenant with sample findings (new terminal)
-make seed                       # login: demo@vantari.io / demo-password-123
+make seed                       # login: demo@exactsurface.com / demo-password-123
 
 # 6. run the frontend (new terminal)
 cd frontend && npm install && npm run dev   # → http://localhost:3000
 ```
 
-Open **http://localhost:3000**, log in with **demo@vantari.io / demo-password-123**.
+Open **http://localhost:3000**, log in with **demo@exactsurface.com / demo-password-123**.
 You'll immediately see the seeded program, a critical `.env` finding, a masked
 secret, and can download HackerOne/Executive/HTML/PDF reports and add notification
 channels. No real scanning happens on this path.
@@ -53,7 +53,7 @@ scheduler, pipeline, mongo, redis**. Workers run the real recon tools; the
 scheduler drives continuous scanning.
 
 ```bash
-cd ~/Projects/vantari
+cd ~/Projects/exactsurface
 cp .env.example .env
 docker compose -f docker/docker-compose.yml up --build   # first build is slow
 ```
@@ -68,14 +68,14 @@ docker compose -f docker/docker-compose.yml up --build   # first build is slow
 > expect **5–15 min** and a few GB. Subsequent starts are fast.
 >
 > To actually scan a target, add + verify + authorize a program in the UI (see
-> Part 2). For a local lab VM set `VANTARI_LAB_ALLOW_PRIVATE=true` in `.env`
+> Part 2). For a local lab VM set `EXACTSURFACE_LAB_ALLOW_PRIVATE=true` in `.env`
 > before `up`.
 
 ---
 
 ## Part 2 — Testing REAL scans safely (the important part)
 
-Vantari only scans what you **verify and authorize**, and its scope engine
+ExactSurface only scans what you **verify and authorize**, and its scope engine
 **hard-denies private IPs by default**. To test the real pipeline you need a
 target you legally control. Three options, easiest first.
 
@@ -91,14 +91,14 @@ This is the most complete test and uses your Kali VM as the victim.
    python3 -m http.server 8080 --directory /var/www/html
    ```
 2. **Find the Kali VM's IP** (from Kali): `ip a` → e.g. `192.168.64.5`.
-3. **Enable lab mode** on the Mac (dev-only; lets Vantari scan private IPs):
-   in `.env` set `VANTARI_LAB_ALLOW_PRIVATE=true` and restart the API/stack.
-4. **Make a hostname** for it. Vantari verifies *domains*, so add a line to your
+3. **Enable lab mode** on the Mac (dev-only; lets ExactSurface scan private IPs):
+   in `.env` set `EXACTSURFACE_LAB_ALLOW_PRIVATE=true` and restart the API/stack.
+4. **Make a hostname** for it. ExactSurface verifies *domains*, so add a line to your
    Mac's `/etc/hosts`:
    ```
    192.168.64.5   lab.local www.lab.local
    ```
-   (Vantari resolves via DNS-over-HTTPS for *verification*, but scanning uses the
+   (ExactSurface resolves via DNS-over-HTTPS for *verification*, but scanning uses the
    resolved IP; for a pure-IP lab, use Target option 2's IP note below.)
 5. In the UI: **add program** `lab.local`. Because public DNS can't verify a
    made-up domain, seed an already-verified+authorized program for it instead:
@@ -117,13 +117,13 @@ This is the most complete test and uses your Kali VM as the victim.
 
 ### Target option 2 — A public host you own
 If you have any domain + a small VPS (DigitalOcean/Hetzner droplet), point the
-domain at it, add it as a program in Vantari, complete **DNS-TXT verification**
-(add the `_vantari` TXT record it gives you), authorize, and scan. This exercises
-the real verification flow. Keep `VANTARI_LAB_ALLOW_PRIVATE=false`.
+domain at it, add it as a program in ExactSurface, complete **DNS-TXT verification**
+(add the `_exactsurface` TXT record it gives you), authorize, and scan. This exercises
+the real verification flow. Keep `EXACTSURFACE_LAB_ALLOW_PRIVATE=false`.
 
 ### Target option 3 — Sanctioned scan targets (no setup)
 - Port scanning: `scanme.nmap.org` (nmap explicitly permits scanning it).
-- Web: only scan sites you own — do **not** point Vantari at third-party sites.
+- Web: only scan sites you own — do **not** point ExactSurface at third-party sites.
 
 ---
 
@@ -157,11 +157,11 @@ curl localhost:8000/healthz ; curl localhost:8000/readyz ; curl localhost:8000/m
 Common issues:
 - **API 500s / `/readyz` 503**: Mongo or Redis not up. `docker compose ps`.
 - **Scan does nothing**: program not verified or not authorized; or target is a
-  private IP and `VANTARI_LAB_ALLOW_PRIVATE` is false.
+  private IP and `EXACTSURFACE_LAB_ALLOW_PRIVATE` is false.
 - **Frontend can't reach API**: it proxies `/api/*` → `http://localhost:8000`
   (set `API_PROXY_TARGET` in `frontend/.env` to change).
 - **Slow first Docker build**: normal — it compiles the Go recon tools.
 
-Ethics: Vantari is **detection only** and scans only verified, authorized targets.
+Ethics: ExactSurface is **detection only** and scans only verified, authorized targets.
 Keep it that way — scan your own lab, your own domains, or explicitly sanctioned
 hosts.

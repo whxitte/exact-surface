@@ -1,6 +1,6 @@
 """Exhaustive tests for the central scope engine — the most important control.
 
-If any of these fail, Vantari could scan something it must never touch. Treat a
+If any of these fail, ExactSurface could scan something it must never touch. Treat a
 failure here as a release blocker.
 """
 

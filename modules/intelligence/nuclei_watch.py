@@ -1,6 +1,6 @@
 """Nuclei template watch (module 25) — state-aware new-template → asset matcher.
 
-When the nuclei-templates repo publishes new templates, Vantari should re-scan
+When the nuclei-templates repo publishes new templates, ExactSurface should re-scan
 *only* the assets those templates could match, not everything (§3.1 state-awareness).
 These pure functions compute the new templates since last check and which of them
 are relevant to the tenant's fingerprinted tech; the scheduler turns the result

@@ -8,7 +8,7 @@
 # numbers. If you change the setting, change the rule: they are duplicated here
 # because Prometheus cannot read the app's config.
 groups:
-  - name: vantari-compliance
+  - name: exactsurface-compliance
     rules:
       # §15 exit criterion: "naabu never exceeds the global rate cap (verified by
       # metrics)". Now covers EVERY scanner subprocess, not just naabu — httpx,
@@ -17,14 +17,14 @@ groups:
       # slipped. Pages because exceeding the cap is an AUP breach against a third
       # party, not a degraded-service issue.
       - alert: SubprocessRateExceedsPolitenessCap
-        expr: vantari_subprocess_per_target_pps > 10
+        expr: exactsurface_subprocess_per_target_pps > 10
         for: 0m
         labels: { severity: page }
         annotations:
           summary: "{{ $labels.tool }} exceeded the per-target politeness cap"
           description: >-
             {{ $labels.tool }} was handed {{ $value }} req/pps per target, above the
-            VANTARI_GLOBAL_RATE_PER_TARGET cap of 10. A token bucket cannot govern a
+            EXACTSURFACE_GLOBAL_RATE_PER_TARGET cap of 10. A token bucket cannot govern a
             subprocess, so this means the derived rate flag was wrong. Threshold must
             match global_rate_per_target.
 
@@ -32,46 +32,46 @@ groups:
       # scans are being slowed — worth knowing, not worth waking someone.
       - alert: PolitenessThrottlingSustained
         expr: |
-          rate(vantari_politeness_decisions_total{decision="throttled"}[15m])
-            / clamp_min(rate(vantari_politeness_decisions_total[15m]), 0.001) > 0.5
+          rate(exactsurface_politeness_decisions_total{decision="throttled"}[15m])
+            / clamp_min(rate(exactsurface_politeness_decisions_total[15m]), 0.001) > 0.5
         for: 30m
         labels: { severity: warn }
         annotations:
           summary: "Over half of politeness decisions have been throttled for 30m"
 
-  - name: vantari-liveness
+  - name: exactsurface-liveness
     rules:
       # The scheduler is the single point whose silent death stops ALL scanning.
       # run_forever() swallows tick exceptions so the process stays up and the port
       # keeps answering while nothing is ever enqueued again — a plain "is it up?"
       # check cannot see this. Tick is 60s; 10m is ~10 missed ticks.
       - alert: SchedulerNotTicking
-        expr: time() - vantari_scheduler_last_success_timestamp > 600
+        expr: time() - exactsurface_scheduler_last_success_timestamp > 600
         for: 0m
         labels: { severity: page }
         annotations:
           summary: "No successful scheduler tick in over 10 minutes"
           description: >-
             The scheduler process may be up and still enqueueing nothing. Check
-            vantari_scheduler_ticks_total{status="failed"} and the process logs.
+            exactsurface_scheduler_ticks_total{status="failed"} and the process logs.
 
       # Absent (not just failing) — covers the crashed/unscheduled case that the
       # gauge above cannot report, because a dead process reports nothing at all.
-      - alert: VantariProcessDown
-        expr: up{job=~"vantari-.*"} == 0
+      - alert: ExactSurfaceProcessDown
+        expr: up{job=~"exactsurface-.*"} == 0
         for: 5m
         labels: { severity: page }
         annotations:
           summary: "{{ $labels.job }} target {{ $labels.instance }} is unreachable"
 
-  - name: vantari-pipeline-health
+  - name: exactsurface-pipeline-health
     rules:
       # A stage that quietly starts timing out is the Phase G failure mode: scans
       # "succeed" with missing data and nobody notices for days.
       - alert: ScanStageFailureRateHigh
         expr: |
-          sum by (stage) (rate(vantari_scan_stage_total{status=~"failed|timeout"}[1h]))
-            / clamp_min(sum by (stage) (rate(vantari_scan_stage_total[1h])), 0.001) > 0.25
+          sum by (stage) (rate(exactsurface_scan_stage_total{status=~"failed|timeout"}[1h]))
+            / clamp_min(sum by (stage) (rate(exactsurface_scan_stage_total[1h])), 0.001) > 0.25
         for: 1h
         labels: { severity: warn }
         annotations:

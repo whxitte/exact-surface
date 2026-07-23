@@ -1,6 +1,6 @@
 """Idempotency + is_new-exactly-once tests — the core of §3.2.
 
-If these regress, Vantari would either alert repeatedly on unchanged assets or
+If these regress, ExactSurface would either alert repeatedly on unchanged assets or
 lose new-asset alerts. Both are product-defining bugs.
 """
 

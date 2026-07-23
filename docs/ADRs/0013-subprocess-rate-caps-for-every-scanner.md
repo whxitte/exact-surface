@@ -59,9 +59,9 @@ That reduction is now load-bearing for the rate math, and is commented as such �
 it ever changes to multiple URLs per host, the derivation silently grants that host
 N× the cap.
 
-The metric family is unified: `vantari_subprocess_rate_pps{tool}` and
-`vantari_subprocess_per_target_pps{tool}` replace the naabu-specific
-`vantari_port_scan_*` gauges. The §15 alert (`SubprocessRateExceedsPolitenessCap`)
+The metric family is unified: `exactsurface_subprocess_rate_pps{tool}` and
+`exactsurface_subprocess_per_target_pps{tool}` replace the naabu-specific
+`exactsurface_port_scan_*` gauges. The §15 alert (`SubprocessRateExceedsPolitenessCap`)
 and the dashboard panel now cover every tool, with the `tool` label identifying
 which one slipped.
 
@@ -111,5 +111,5 @@ third-party APIs/resolvers, governed by those services' own limits, not §3.8b.
   to httpx at 10 rps aggregate is 0.2 rps each (needlessly slow), while 1 host at a
   fixed aggregate could exceed the cap. The rate has to be derived from the actual
   host count, which is what the helper does.
-- **A separate metric per tool** (`vantari_httpx_rate_pps`, …). More series, and the
+- **A separate metric per tool** (`exactsurface_httpx_rate_pps`, …). More series, and the
   alert would need one rule per tool. A `tool` label gives one rule and one panel.

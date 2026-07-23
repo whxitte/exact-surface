@@ -91,14 +91,14 @@ def get_email_sender(settings: Settings | None = None) -> EmailSender:
 
 def build_verification_email(*, to: str, link: str) -> EmailMessage:
     text = (
-        "Welcome to Vantari.\n\n"
+        "Welcome to ExactSurface.\n\n"
         "Confirm your email address to activate your account:\n"
         f"{link}\n\n"
         "This link expires in 24 hours. If you didn't sign up, ignore this email."
     )
     html = (
-        f"<p>Welcome to Vantari.</p><p>Confirm your email to activate your account:</p>"
+        f"<p>Welcome to ExactSurface.</p><p>Confirm your email to activate your account:</p>"
         f'<p><a href="{link}">Verify my email</a></p>'
         "<p>This link expires in 24 hours. If you didn't sign up, ignore this email.</p>"
     )
-    return EmailMessage(to=to, subject="Verify your Vantari email", text=text, html=html)
+    return EmailMessage(to=to, subject="Verify your ExactSurface email", text=text, html=html)
