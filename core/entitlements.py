@@ -136,6 +136,15 @@ async def _online_refresh(settings: Any, current_token: str | None) -> str | Non
         return None
 
 
+def watermark() -> str:
+    """A traceable per-deployment tag — ``<customer_id>:<build_id>`` — stamped on
+    exported reports and a response header, so a leaked instance's output can be traced
+    back to the licensee. Falls back to ``unlicensed`` when no license is present."""
+    st = current()
+    cid = st.entitlements.customer_id if st.entitlements else "unlicensed"
+    return f"{cid}:{get_settings().build_id}"
+
+
 def summary() -> dict:
     """A JSON-safe snapshot of the license state for the UI (banner + settings)."""
     st = current()

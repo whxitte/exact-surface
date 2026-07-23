@@ -55,3 +55,14 @@ class LicenseStateRepo:
             {"$set": {"token": token, "token_updated_at": datetime.now(UTC)}},
             upsert=True,
         )
+
+    async def applied_update_version(self) -> str | None:
+        """The template/tool bundle version currently applied (for the update feed)."""
+        return (await self.get() or {}).get("update_version")
+
+    async def set_applied_update_version(self, version: str) -> None:
+        await self._c.update_one(
+            {"_id": _DOC_ID},
+            {"$set": {"update_version": version, "update_applied_at": datetime.now(UTC)}},
+            upsert=True,
+        )

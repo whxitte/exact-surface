@@ -176,6 +176,15 @@ class Settings(BaseSettings):
     # Optional online-refresh endpoint (hybrid model). When set, the instance periodically
     # asks it for a fresh signed license extending the paid period; empty = pure offline.
     license_refresh_url: str | None = Field(default=None)
+    # License-gated update feed (vendor control plane). When set, the instance periodically
+    # pulls the latest signed template/tool bundle; a lapsed subscription is refused fresh
+    # detections (freshness enforcement). Empty = no auto-updates.
+    update_feed_url: str | None = Field(default=None)
+    # Where verified template bundles are extracted (point the scanner's templates here).
+    update_templates_dir: str = Field(default="./data/nuclei-templates")
+    # Deployment/build watermark stamped on exported reports + a response header, so a
+    # leaked instance's output is traceable. Set per-build (e.g. the git sha or a tag).
+    build_id: str = Field(default="dev")
 
     # -- backups (§7 Phase G, §9 retention) ------------------------------
     backup_dir: str = Field(default="./backups")

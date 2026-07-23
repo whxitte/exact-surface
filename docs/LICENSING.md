@@ -100,6 +100,53 @@ the scheduler/worker), so a patched frontend cannot re-enable scanning.
 The customer never loses visibility of their attack surface — a security tool going fully
 dark is dangerous — but it stops *advancing* until they renew.
 
+## The control plane (the only thing you host)
+
+Customer instances run everything (DB, backend, frontend, scanning) in their own infra.
+You host one tiny stateless service — `control_plane/server.py` — that their instances
+phone home to. That outbound call is your control point.
+
+```bash
+# populate the subscription store as you sell (issue also registers with --store):
+python -m scripts.license issue --private-key ./license-keys/private.pem \
+    --customer "Acme Corp" --plan business --months 1 --store ./cp/licenses.json --out acme.vlic
+
+# run the control plane
+VANTARI_CP_PRIVATE_KEY_FILE=./license-keys/private.pem \
+VANTARI_CP_PUBLIC_KEY_FILE=./license-keys/public.pem \
+VANTARI_CP_STORE=./cp/licenses.json \
+VANTARI_CP_MANIFEST=./cp/bundle_manifest.json \
+uvicorn control_plane.server:app --port 8800
+```
+
+Point customer instances at it: `VANTARI_LICENSE_REFRESH_URL=https://cp.you.com/v1/license/refresh`
+and `VANTARI_UPDATE_FEED_URL=https://cp.you.com`.
+
+- **`POST /v1/license/refresh`** — the instance sends its token; if the store shows the
+  subscription current (`status: active`, `paid_until` in the future) it gets a renewed,
+  freshly-signed token rolling up to `paid_until`. To **stop** a customer: let `paid_until`
+  lapse or `suspend` them in the store → refresh returns 402 → their instance goes
+  read-only when its current token expires. This is your recurring-revenue lever.
+- **`GET /v1/updates/manifest`** — the license-gated update feed. Returns a **signed**
+  manifest `{version, templates_url, sha256}` for the latest Nuclei-template / tool bundle;
+  a lapsed subscriber is refused (402). Your CI produces the signed bundle + manifest;
+  point `VANTARI_CP_MANIFEST` at it. The instance verifies the signature against the
+  embedded public key and the bundle against `sha256` before applying — a hostile mirror
+  can't inject templates you didn't sign.
+
+## Freshness enforcement (the durable lock)
+
+The update feed is why the subscription actually sticks: a customer who lapses (or blocks
+your control plane) keeps their data but their **detections stop updating**. A security
+scanner running months-old templates misses current CVEs and is worthless — so renewal is
+self-enforcing, independent of any client-side check they might patch.
+
+## Watermarking
+
+Every response carries an `X-Vantari-Instance: <customer_id>:<build_id>` header, and every
+exported HTML report is footer-stamped with the same tag (`VANTARI_BUILD_ID` set per
+build). A leaked instance or a leaked report is therefore traceable to the licensee.
+
 ## Security notes
 
 - The **private key is your revenue** — keep it offline, backed up, never in a repo or image.

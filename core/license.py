@@ -162,6 +162,31 @@ def sign_license(entitlements: Entitlements, private_key_pem: str) -> str:
     return f"{TOKEN_PREFIX}.{payload}.{_b64url_encode(signature)}"
 
 
+# -- generic blob signing (reused by the update feed's signed bundles) -------
+def sign_blob(data: bytes, private_key_pem: str) -> str:
+    """Sign arbitrary bytes with the Ed25519 private key → base64url signature. Used to
+    sign update-bundle manifests so a customer instance trusts only content you signed."""
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+    priv = load_pem_private_key(private_key_pem.encode(), password=None)
+    return _b64url_encode(priv.sign(data))  # type: ignore[attr-defined]
+
+
+def verify_blob(data: bytes, signature_b64: str, public_key_pem: str) -> bool:
+    """Return True iff *signature_b64* is a valid Ed25519 signature of *data*."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
+    try:
+        pub = load_pem_public_key(public_key_pem.encode())
+        if not isinstance(pub, Ed25519PublicKey):
+            return False
+        pub.verify(_b64url_decode(signature_b64), data)
+        return True
+    except Exception:  # noqa: BLE001 - any failure (bad sig, bad key, bad b64) = invalid
+        return False
+
+
 # -- verification (public key — the running instance) ------------------------
 def verify_license(token: str, public_key_pem: str) -> Entitlements:
     """Verify *token*'s signature with *public_key_pem* and return its entitlements.

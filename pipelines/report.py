@@ -59,6 +59,14 @@ async def generate_report(
     program = await ProgramRepo.from_mongo(mongo).get(tenant.tenant_id, program_id)
     apex = program["apex_domain"] if program else program_id
     ctx = build_report_context(program=apex, **await _gather(mongo, tenant.tenant_id, program_id))
+    # Stamp the deployment watermark so an exported/leaked report is traceable to the
+    # licensee (§ commercial). Best-effort — never fail a report over a watermark.
+    try:
+        from core.entitlements import watermark
+
+        ctx.watermark = watermark()
+    except Exception:  # noqa: BLE001, S110
+        pass
     stem = apex.replace(".", "-")
 
     if fmt == "html":

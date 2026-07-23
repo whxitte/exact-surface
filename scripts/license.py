@@ -85,6 +85,24 @@ def _cmd_issue(args: argparse.Namespace) -> int:
         print(f"wrote license to {args.out}")
     else:
         print(token)
+    # Optionally register the subscription in the control-plane store so the online
+    # refresh endpoint will renew this customer up to the paid-through date.
+    if args.store:
+        from control_plane.store import LicenseRecord, LicenseStore
+
+        LicenseStore(args.store).upsert(
+            LicenseRecord(
+                license_id=ent.license_id,
+                customer_id=ent.customer_id,
+                customer_name=ent.customer_name,
+                plan=plan.value,
+                max_domains=domains,
+                paid_until=ent.expires_at.isoformat(),
+                status="active",
+                grace_days=args.grace,
+            )
+        )
+        print(f"# registered in control-plane store: {args.store}", file=sys.stderr)
     exp = ent.expires_at.date()
     cap = "unlimited" if domains is None else domains
     print(
@@ -136,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     p_iss.add_argument("--months", type=float, default=1.0, help="subscription length in months")
     p_iss.add_argument("--grace", type=int, default=14, help="grace days after expiry (default 14)")
     p_iss.add_argument("--out", help="write the token to this file (else stdout)")
+    p_iss.add_argument("--store", help="also register in this control-plane store (online refresh)")
     p_iss.set_defaults(func=_cmd_issue)
 
     p_ins = sub.add_parser("inspect", help="verify + print a license token")
