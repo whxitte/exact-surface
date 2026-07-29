@@ -70,11 +70,26 @@ _CALL_RE = re.compile(
 #: //# sourceMappingURL=app.js.map — a published map exposes the original source.
 _SOURCEMAP_RE = re.compile(r"//[#@]\s*sourceMappingURL\s*=\s*(\S+)")
 
-#: Bare hostnames inside strings (api.internal.corp, s3.eu-west-1.amazonaws.com …).
+#: Hostnames, extracted ONLY from a URL context (``//host`` or ``scheme://host``).
+#: Matching bare dotted strings looks tempting but is catastrophic in minified code:
+#: ``array.prototype.find``, ``object.entries`` and every ``model.field.subfield`` in
+#: the app read as "hostnames". A host the app actually talks to appears in a URL.
 _HOST_RE = re.compile(
-    r"(?:\"|'|`|//)([a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?"
-    r"(?:\.[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?)+)(?:\"|'|`|/|:)",
+    r"//([a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?"
+    r"(?:\.[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?)+)(?=[/:\"'`?\s]|$)",
     re.IGNORECASE,
+)
+
+#: Public suffixes we accept for an extracted hostname. Deliberately a fixed list:
+#: it is the difference between "a host" and "a property chain that ends in .name".
+_VALID_TLDS: frozenset[str] = frozenset(
+    """com net org io dev app co uk us ca au de fr nl eu in jp cn br it es se no fi dk
+    pl ru ch at be cz gr pt ie nz za mx ar cl kr sg hk tw th my id ph vn tr il ae sa
+    ai cloud tech online site xyz info biz me tv cc gg sh st ly to fm am pro live
+    world space store shop blog wiki news email cool link click page host press
+    agency company solutions services digital network systems software media group
+    center global today report zone team works studio design partners capital fund
+    edu gov mil int arpa local internal test example invalid localhost""".split()
 )
 
 # --------------------------------------------------------------------------- #
@@ -87,12 +102,17 @@ _LIBRARY_MARKERS: tuple[str, ...] = (
     "lodash", "moment", "polyfill", "runtime~", "chunk-vendors", "modernizr",
     "popper", "tailwind", "fontawesome", "swiper", "gtm.js", "analytics.js",
     "recaptcha", "hotjar", "intercom", "stripe.js", "googletagmanager",
+    "moment", "axios", "core-js", "zone.js", "rxjs", "d3.", "chart.", "three.",
+    "highcharts", "pdf.worker", "mapbox", "leaflet", "sentry", "datadog", "segment",
 )
 
-#: Extensions that are assets, not endpoints.
+#: Extensions that are assets, not endpoints. **Script files belong here**: a path to
+#: another bundle is not attack surface, and treating one as an endpoint is how
+#: ``/js/admin.6fd71600.js`` ends up flagged "admin" hundreds of times.
 _ASSET_EXT: frozenset[str] = frozenset(
     {"png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "css", "woff", "woff2", "ttf",
-     "eot", "otf", "mp4", "webm", "mp3", "pdf", "map", "txt", "md", "avif"}
+     "eot", "otf", "mp4", "webm", "mp3", "pdf", "map", "txt", "md", "avif",
+     "js", "mjs", "cjs", "jsx", "ts", "tsx", "vue", "scss", "less", "wasm"}
 )
 
 #: Hosts that only ever appear as XML/schema namespaces or standards references —
@@ -131,10 +151,26 @@ _INTEREST: tuple[tuple[re.Pattern[str], str], ...] = (
 )
 
 
+#: Directory segments that mean "not the app's own code". Locale/i18n bundles are the
+#: worst offenders: a single library ships ~100 of them, each yielding identical noise.
+_LIBRARY_PATH_SEGMENTS: tuple[str, ...] = (
+    "/locale/", "/locales/", "/i18n/", "/lang/", "/langs/", "/translations/",
+    "/vendor/", "/vendors/", "/node_modules/", "/dist/lib/", "/polyfills/",
+)
+
+
 def is_library_file(url: str) -> bool:
-    """True for well-known third-party bundles, which are noise to mine."""
-    name = urlsplit(url).path.rsplit("/", 1)[-1].lower()
-    return any(marker in name for marker in _LIBRARY_MARKERS)
+    """True for third-party bundles, which are noise to mine — their routes belong to
+    the library, not to the target."""
+    path = urlsplit(url).path.lower()
+    name = path.rsplit("/", 1)[-1]
+    if any(seg in path for seg in _LIBRARY_PATH_SEGMENTS):
+        return True
+    if any(marker in name for marker in _LIBRARY_MARKERS):
+        return True
+    # A percent-encoded "filename" is a mangled string that was mistaken for a URL
+    # upstream (e.g. a package description ending in "node.js"), never a real bundle.
+    return "%20" in name
 
 
 def _is_plausible_path(candidate: str) -> bool:
@@ -236,10 +272,9 @@ def mine(js_text: str, source_url: str, *, own_domains: tuple[str, ...] = ()) ->
         if host == self_host or "." not in host:
             continue
         tld = host.rsplit(".", 1)[-1]
-        # A TLD is alphabetic and ≥2 chars — filters "1.2.3" and "app.js"-style noise.
-        if not tld.isalpha() or len(tld) < 2:
-            continue
-        if tld in _ASSET_EXT or tld in {"js", "ts", "jsx", "tsx", "min", "vue"}:
+        # Must end in a real public suffix. Without this, every dotted identifier in
+        # minified code (`array.prototype.find`) is reported as a host.
+        if tld not in _VALID_TLDS:
             continue
         hosts.add(host)
     result.hostnames = sorted(hosts)

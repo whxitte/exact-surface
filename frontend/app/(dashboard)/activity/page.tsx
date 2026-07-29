@@ -135,10 +135,15 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
   );
 }
 
-// Live log tail for one scan — polls while the panel is open; auto-scrolls.
+// Live log tail for one scan — polls while the panel is open.
+//
+// Scrolling follows the terminal convention: it sticks to the bottom while you are
+// there, but the moment you scroll up to read something it stops yanking you back.
+// Scroll to the bottom again and it resumes following.
 function ScanLogs({ programId, scanId, active }: { programId: string; scanId: string; active: boolean }) {
   const [lines, setLines] = useState<string[]>([]);
   const [err, setErr] = useState(false);
+  const [following, setFollowing] = useState(true);
   const boxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -165,17 +170,38 @@ function ScanLogs({ programId, scanId, active }: { programId: string; scanId: st
   }, [programId, scanId, active]);
 
   useEffect(() => {
-    if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
-  }, [lines]);
+    if (following && boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
+  }, [lines, following]);
+
+  function onScroll() {
+    const el = boxRef.current;
+    if (!el) return;
+    // 24px of slack so a near-bottom position still counts as "following".
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    setFollowing(atBottom);
+  }
 
   return (
     <div className="mt-3">
       <div className="mb-1 flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
         <Terminal className="h-3.5 w-3.5" /> Live logs
+        {lines.length > 0 && <span className="normal-case">({lines.length} lines)</span>}
+        {!following && (
+          <button
+            onClick={() => {
+              setFollowing(true);
+              if (boxRef.current) boxRef.current.scrollTop = boxRef.current.scrollHeight;
+            }}
+            className="ml-auto rounded border border-border px-1.5 py-0.5 text-[10px] normal-case text-primary hover:bg-muted"
+          >
+            Jump to latest
+          </button>
+        )}
       </div>
       <div
         ref={boxRef}
-        className="max-h-56 overflow-auto rounded-md border border-border bg-background/60 p-2 font-mono text-[11px] leading-relaxed"
+        onScroll={onScroll}
+        className="max-h-96 overflow-auto rounded-md border border-border bg-background/60 p-2 font-mono text-[11px] leading-relaxed"
       >
         {lines.length === 0 ? (
           <span className="text-muted-foreground">

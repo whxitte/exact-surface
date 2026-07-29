@@ -260,3 +260,53 @@ def test_own_domains_are_not_external():
     assert bl.is_external("https://evil.com/x", ("acme.com",)) is True
     assert bl.is_external("https://app.acme.com/x", ("acme.com",)) is False
     assert bl.is_external("https://example.com/x", ("acme.com",)) is False  # skip-listed
+
+
+# --------------------------------------------------------------------------- #
+# JS mining — regressions from the first real-world run (divii.ca)
+# --------------------------------------------------------------------------- #
+def test_script_paths_are_not_reported_as_endpoints():
+    """`/js/admin.6fd71600.js` is another bundle, not an admin endpoint. The first
+    real run reported it hundreds of times tagged ADMIN, which drowned the signal."""
+    out = js_miner.mine('var a="/js/admin.6fd71600.js";', "https://x.com/app.js")
+    assert [i.value for i in out.items] == []
+
+
+def test_property_chains_are_not_reported_as_hostnames():
+    """Minified code is full of `a.b.c` identifiers. Matching bare dotted strings made
+    `array.prototype.find` and `legalhistory.marriageagreement` look like hosts."""
+    js = '"array.prototype.find";"object.entries";"legalhistory.marriageagreement";'
+    js += '"account.name";"child.dob";"string.prototype.includes";'
+    assert js_miner.mine(js, "https://x.com/app.js").hostnames == []
+
+
+def test_hostnames_are_still_found_in_url_context():
+    js = 'fetch("https://api.internal.acme.com/v1");var w="//cdn.acme.io/x.png";'
+    hosts = js_miner.mine(js, "https://acme.com/app.js").hostnames
+    assert "api.internal.acme.com" in hosts
+    assert "cdn.acme.io" in hosts
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://x.com/js/moment/locale/af.js",     # ~100 identical locale bundles
+        "https://x.com/js/i18n/de.js",
+        "https://x.com/static/vendor/thing.js",
+        "https://x.com/node_modules/pkg/index.js",
+        "https://x.com/js/axios.min.js",
+        "https://x.com/js/core-js.bundle.js",
+        "https://x.com/Promise%20based%20HTTP%20client%20node.js",  # mangled string
+    ],
+)
+def test_third_party_and_mangled_bundles_are_skipped(url):
+    assert js_miner.is_library_file(url) is True
+
+
+def test_app_bundles_are_still_mined():
+    for url in (
+        "https://x.com/js/app.93b6cdae.js",
+        "https://x.com/js/agreementsHome.79a8edf8.js",
+        "https://x.com/static/main.a1b2.js",
+    ):
+        assert js_miner.is_library_file(url) is False

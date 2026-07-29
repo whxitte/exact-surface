@@ -18,7 +18,10 @@ from core.logging import logger
 
 CHANNEL_PREFIX = "exactsurface:activity:"
 LOG_KEY_PREFIX = "exactsurface:logs:"
-LOG_MAX_LINES = 500  # keep the last N log lines per scan
+# A full run emits thousands of lines (js_mine alone logs one per bundle), and the
+# whole point of the live log is that the user can read the run from the start. 500
+# truncated away most of it.
+LOG_MAX_LINES = 5000
 LOG_TTL_SECONDS = 86400  # logs expire after a day
 
 

@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     brave_api_key: SecretStr | None = Field(default=None)
     serpapi_key: SecretStr | None = Field(default=None)
 
+    # Secret scanning fetches each discovered URL's body. The cap bounds the stage's
+    # runtime, but every skipped URL is a finding we can never make — so it is set high
+    # and exposed here rather than buried in the module. Raise it if your surface is
+    # large and the stage still finishes inside its timeout.
+    secret_scan_max_urls: int = Field(default=5000, ge=100)
+
     # -- content discovery -----------------------------------------------
     wordlist_dir: str = Field(
         default="/opt/wordlists",
