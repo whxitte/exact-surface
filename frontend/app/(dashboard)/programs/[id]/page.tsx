@@ -5,12 +5,12 @@ import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
   Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
-  Bug, GitBranch, Boxes, Clock, Search, Unlock,
+  Bug, GitBranch, Boxes, Clock, Search, Unlock, Square, AlertTriangle,
 } from "lucide-react";
 import {
   api, downloadReport,
   type Asset, type BypassEntry, type Correlation, type Cve, type Endpoint, type Finding, type Leak,
-  type Port, type Program, type Secret, type Verification,
+  type Port, type Program, type ScanRun, type Secret, type Verification,
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,9 @@ export default function ProgramDetail() {
   const [findingSearch, setFindingSearch] = useState("");
   const [prioritySort, setPrioritySort] = useState<"risk" | "severity" | "host">("risk");
   const [endpointSource, setEndpointSource] = useState<string>("all");
+  const [activeRun, setActiveRun] = useState<ScanRun | null>(null);
+  const [stopConfirm, setStopConfirm] = useState(false);
+  const [stopBusy, setStopBusy] = useState(false);
   const [bypassBusy, setBypassBusy] = useState(false);
   const [bypassMsg, setBypassMsg] = useState("");
   const [selectedBypass, setSelectedBypass] = useState<Endpoint | null>(null);
@@ -87,6 +90,47 @@ export default function ProgramDetail() {
     api.listLeaks(id).then(setLeaks).catch(() => {});
     api.getCorrelation(id).then(setCorrelation).catch(() => {});
   }, [program, id]);
+
+  // Track the in-flight full run so we can offer (and then withdraw) a Stop button.
+  // Polling — rather than only reacting to our own click — means the button is right
+  // even when the scan was started by the scheduler or by a teammate.
+  useEffect(() => {
+    if (!program) return;
+    let alive = true;
+    const tick = async () => {
+      try {
+        const runs = await api.listScanRuns(id);
+        if (!alive) return;
+        const live = runs.find(
+          (r) => r.pipeline === "full" && (r.status === "running" || r.status === "queued"),
+        );
+        setActiveRun(live ?? null);
+      } catch {
+        /* transient — keep the last known state */
+      }
+    };
+    tick();
+    const timer = setInterval(tick, 5000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [program, id]);
+
+  async function stopScan() {
+    if (!activeRun) return;
+    setStopBusy(true);
+    try {
+      const res = await api.cancelScanRun(id, activeRun.scan_id);
+      setMsg(res.detail || "Stop requested.");
+      setStopConfirm(false);
+      setActiveRun({ ...activeRun, cancel_requested: true });
+    } catch (e) {
+      setMsg((e as Error).message || "Could not stop the scan.");
+    } finally {
+      setStopBusy(false);
+    }
+  }
 
   // On-demand 403/401-bypass: fire the run, then poll for results (it runs in the
   // worker and streams to the Activity tab). Bounded so it self-stops.
@@ -369,9 +413,21 @@ export default function ProgramDetail() {
                 <ShieldCheck className="h-4 w-4" /> Authorize scanning
               </Button>
             )}
-            <Button onClick={scan} disabled={scanBusy || authorized === false}>
-              <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
-            </Button>
+            {activeRun ? (
+              <Button
+                onClick={() => setStopConfirm(true)}
+                variant="danger"
+                disabled={stopBusy || !!activeRun.cancel_requested}
+                title="Stop the scan that is currently running"
+              >
+                <Square className="h-4 w-4" />
+                {activeRun.cancel_requested ? "Stopping…" : "Stop scan"}
+              </Button>
+            ) : (
+              <Button onClick={scan} disabled={scanBusy || authorized === false}>
+                <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
+              </Button>
+            )}
             <label className="flex cursor-pointer items-center gap-3 text-xs text-muted-foreground ml-2">
               <Switch
                 checked={!!program.scan_shared_infra}
@@ -1018,6 +1074,61 @@ export default function ProgramDetail() {
             )}
           </div>
         )}
+      </Modal>
+
+      <Modal
+        open={stopConfirm}
+        onClose={() => setStopConfirm(false)}
+        title={
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-severity-medium" /> Stop this scan?
+          </span>
+        }
+      >
+        <div className="space-y-4 text-sm">
+          <p className="text-muted-foreground">
+            The scan will wind down safely rather than being killed mid-write. Here&apos;s
+            exactly what happens:
+          </p>
+          <ul className="space-y-2">
+            <li className="flex gap-2">
+              <span className="text-primary">•</span>
+              <span>
+                The step running right now is stopped and its tool is shut down, so no
+                further requests are sent to your targets.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary">•</span>
+              <span>
+                <strong>Everything already discovered is kept</strong> — assets, endpoints
+                and findings from the steps that finished stay exactly as they are.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary">•</span>
+              <span>The remaining steps are skipped and marked as stopped.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary">•</span>
+              <span>
+                The run is recorded as <strong>cancelled</strong> — not failed — and you can
+                start a fresh scan straight afterwards, which runs normally from the top.
+              </span>
+            </li>
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            Stopping can take up to a minute while the current step winds down.
+          </p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setStopConfirm(false)} disabled={stopBusy}>
+              Keep scanning
+            </Button>
+            <Button variant="danger" onClick={stopScan} disabled={stopBusy}>
+              <Square className="h-4 w-4" /> {stopBusy ? "Stopping…" : "Stop the scan"}
+            </Button>
+          </div>
+        </div>
       </Modal>
 
       <Modal

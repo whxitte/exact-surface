@@ -181,6 +181,7 @@ export interface ScanRun {
   note?: string; // why skipped (single-pipeline runs)
   stats?: Record<string, number>;
   stages?: ScanStage[];
+  cancel_requested?: boolean; // a stop was asked for; the worker is winding down
 }
 export interface Verification { method: string; token: string; instructions: string }
 export interface Channel {
@@ -441,6 +442,12 @@ export const api = {
     ),
   triggerScan: (id: string) =>
     request<{ status: string; detail?: string }>(`/programs/${id}/scan`, { method: "POST" }),
+  listScanRuns: (id: string) => request<ScanRun[]>(`/programs/${id}/scan-runs`),
+  cancelScanRun: (id: string, scanId: string) =>
+    request<{ status: string; detail?: string }>(
+      `/programs/${id}/scan-runs/${scanId}/cancel`,
+      { method: "POST" },
+    ),
   triggerBypass403: (id: string) =>
     request<{ status: string; scan_id: string; detail?: string }>(`/programs/${id}/bypass-403`, {
       method: "POST",

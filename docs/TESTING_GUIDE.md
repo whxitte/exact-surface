@@ -184,7 +184,7 @@ docker build -f docker/Dockerfile.pipeline .
 docker build -f docker/Dockerfile.api .
 
 # 2. Helm chart renders
-helm template exactsurface deploy/helm/exactsurface
+# (no Helm chart — Docker Compose is the supported deployment)
 
 # 3. Prod compose merges and is safe (no daemon needed)
 docker compose -f docker/docker-compose.prod.yml config | grep -E "27017|6379"  # must NOT be published

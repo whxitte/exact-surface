@@ -579,6 +579,45 @@ async def trigger_scan(
     }
 
 
+@router.post("/{program_id}/scan-runs/{scan_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+async def cancel_scan_run(
+    scan_id: str,
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Ask a running scan to stop.
+
+    Cooperative, not a kill: this records the request and returns immediately. The
+    worker notices it within one heartbeat (~45s at worst, usually sooner), kills the
+    tool it is running, marks the remaining stages cancelled, and finishes the run in a
+    clean ``cancelled`` state. Everything discovered up to that point is kept — every
+    write is an idempotent upsert — and a new scan can be started straight after.
+
+    Deliberately no licence gate: stopping work must always be possible, even read-only.
+    """
+    run = await ScanRunRepo.from_mongo(mongo).get(principal.tenant_id, scan_id)
+    if not run or run.get("program_id") != program["program_id"]:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "scan run not found")
+    if run.get("status") not in (ScanStatus.QUEUED.value, ScanStatus.RUNNING.value):
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"this scan is already {run.get('status')} — nothing to stop",
+        )
+
+    await ScanRunRepo.from_mongo(mongo).request_cancel(
+        principal.tenant_id, scan_id, actor=principal.user_id
+    )
+    return {
+        "status": "stopping",
+        "scan_id": scan_id,
+        "detail": (
+            "Stop requested. The current step is being wound down; findings already "
+            "discovered are kept. You can start a new scan once it finishes."
+        ),
+    }
+
+
 # -- 403-bypass (on-demand, user-triggered; NOT a pipeline phase) ------------
 @router.post("/{program_id}/bypass-403", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_bypass_403(

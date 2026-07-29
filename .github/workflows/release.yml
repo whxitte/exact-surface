@@ -3,13 +3,15 @@
 #   git tag v0.2.0 && git push origin v0.2.0
 #
 # Produces, for that version:
-#   * exactsurface/api, exactsurface/frontend, exactsurface/pipeline on Docker Hub
-#     (tagged :X.Y.Z and :latest), with the licence verify-key and build id baked in
-#   * a packaged Helm chart + image digests attached to a GitHub Release
+#   * api, frontend and pipeline images on GHCR (ghcr.io), tagged :X.Y.Z and :latest,
+#     with the licence verify-key and build id baked in
+#   * a GitHub Release recording the image digests
 #
-# Required repository secrets:
-#   DOCKERHUB_USERNAME    Docker Hub account that owns the exactsurface/* repos
-#   DOCKERHUB_TOKEN       Docker Hub access token (not the password)
+# Registry: GHCR, not Docker Hub. Docker Hub's free tier allows only ONE private repo
+# and we publish three images; GHCR gives unlimited private packages and authenticates
+# with the built-in GITHUB_TOKEN, so there are no registry secrets to manage.
+#
+# Required repository secret (one):
 #   LICENSE_PUBLIC_KEY    Ed25519 PUBLIC key PEM — verify-only, safe to bake in.
 #                         The PRIVATE key never touches CI; it stays on your machine
 #                         and on the control plane.
@@ -26,9 +28,11 @@ on:
 
 permissions:
   contents: write # create the GitHub Release
+  packages: write # push images to GHCR
 
 env:
-  REGISTRY_NAMESPACE: exactsurface
+  # ghcr.io/<owner>/<image> — lowercased at use, since GHCR rejects uppercase paths.
+  REGISTRY_NAMESPACE: ghcr.io/${{ github.repository_owner }}
 
 jobs:
   # A release must never ship a red build. This repeats CI deliberately: tags can be
@@ -56,7 +60,7 @@ jobs:
           PY_VERSION=$(grep -m1 '^version' pyproject.toml | cut -d'"' -f2)
           if [ "$PY_VERSION" != "${{ steps.v.outputs.version }}" ]; then
             echo "::error::tag ${{ steps.v.outputs.version }} != pyproject version $PY_VERSION."
-            echo "Bump pyproject.toml (and deploy/helm/exactsurface/Chart.yaml) before tagging."
+            echo "Bump pyproject.toml before tagging."
             exit 1
           fi
 
@@ -106,10 +110,14 @@ jobs:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
+      - name: Lowercase the registry namespace (GHCR requires it)
+        id: ns
+        run: echo "value=$(echo '${{ env.REGISTRY_NAMESPACE }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build + push ${{ matrix.name }}
         id: build
@@ -121,8 +129,8 @@ jobs:
           push: true
           provenance: false
           tags: |
-            ${{ env.REGISTRY_NAMESPACE }}/${{ matrix.name }}:${{ needs.verify.outputs.version }}
-            ${{ env.REGISTRY_NAMESPACE }}/${{ matrix.name }}:latest
+            ${{ steps.ns.outputs.value }}/${{ matrix.name }}:${{ needs.verify.outputs.version }}
+            ${{ steps.ns.outputs.value }}/${{ matrix.name }}:latest
           build-args: |
             BUILD_ID=${{ needs.verify.outputs.version }}
             LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
@@ -132,7 +140,7 @@ jobs:
       - name: Record digest
         run: |
           mkdir -p digests
-          echo "${{ env.REGISTRY_NAMESPACE }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}" \
+          echo "${{ steps.ns.outputs.value }}/${{ matrix.name }}@${{ steps.build.outputs.digest }}" \
             > "digests/${{ matrix.name }}.txt"
       - uses: actions/upload-artifact@v4
         with:
@@ -144,16 +152,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Package Helm chart
-        run: |
-          VERSION="${{ needs.verify.outputs.version }}"
-          # Keep the chart's versions in lockstep with the release so a customer can
-          # never install a chart that points at a different appVersion.
-          sed -i "s/^version:.*/version: $VERSION/" deploy/helm/exactsurface/Chart.yaml
-          sed -i "s/^appVersion:.*/appVersion: \"$VERSION\"/" deploy/helm/exactsurface/Chart.yaml
-          helm lint deploy/helm/exactsurface
-          helm package deploy/helm/exactsurface --destination ./dist
 
       - uses: actions/download-artifact@v4
         with:
@@ -167,11 +165,12 @@ jobs:
           {
             echo "## ExactSurface $VERSION"
             echo
+            NS=$(echo "ghcr.io/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
             echo "### Images"
             echo '```'
-            echo "docker pull exactsurface/api:$VERSION"
-            echo "docker pull exactsurface/frontend:$VERSION"
-            echo "docker pull exactsurface/pipeline:$VERSION"
+            echo "docker pull $NS/api:$VERSION"
+            echo "docker pull $NS/frontend:$VERSION"
+            echo "docker pull $NS/pipeline:$VERSION"
             echo '```'
             echo
             echo "### Digests"
@@ -188,4 +187,3 @@ jobs:
           name: ExactSurface ${{ needs.verify.outputs.version }}
           tag_name: v${{ needs.verify.outputs.version }}
           body_path: notes.md
-          files: dist/*.tgz

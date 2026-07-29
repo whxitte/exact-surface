@@ -81,6 +81,18 @@ async def signup(
     if await users.get_by_email(body.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "email already registered")
 
+    # Self-hosted instances serve one organisation. The first signup bootstraps the
+    # owner; after that public signup is closed, so someone who merely reaches this
+    # instance cannot create their own tenant on the customer's server. Additional
+    # people are added by the owner under Settings → members.
+    tenants = TenantRepo.from_mongo(mongo)
+    if not get_settings().public_signup_open and await tenants.count() > 0:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "this instance is already set up — ask its owner to add you under "
+            "Settings → members",
+        )
+
     tenant_id = "t_" + uuid.uuid4().hex[:12]
     user_id = "u_" + uuid.uuid4().hex[:12]
     await TenantRepo.from_mongo(mongo).create(Tenant(tenant_id=tenant_id, name=body.tenant_name))

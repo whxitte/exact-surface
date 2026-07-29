@@ -61,6 +61,20 @@ class TenantIsolationError(ExactSurfaceError):
     """A caller attempted to reach data belonging to another tenant."""
 
 
+class ScanCancelled(ExactSurfaceError):
+    """A user asked to stop this run.
+
+    Deliberately NOT a failure: everything discovered before the stop is already
+    persisted (every write is an idempotent upsert), so the run finishes in a clean
+    ``CANCELLED`` state rather than an error state. Raised by the orchestrator's
+    cancellation check, never by a scanning module.
+    """
+
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        super().__init__(f"run stopped by user during stage {stage!r}")
+
+
 class ToolNotFound(ExactSurfaceError):
     """A required external binary is not installed or not on PATH."""
 

@@ -16,7 +16,7 @@ YOU HOST (tiny, ~free)              THEY HOST (everything heavy)
 │  /v1/updates/manifest  │  outbound│ all scanning, all their data     │
 │  /bundles/*.tar.gz     │  calls   │ (never touches your infra)       │
 └────────────────────────┘          └──────────────────────────────────┘
-   + Docker Hub images                 + a signed licence token you issued
+   + container images (GHCR)           + a signed licence token you issued
    + the Ed25519 PRIVATE key
 ```
 
@@ -33,8 +33,18 @@ compute bill, or liability for their scanning.
 
 ### 1.1 Generate your signing keypair — the single most important asset
 
+> **How many keypairs do I need? Exactly ONE — for the whole product, forever.**
+>
+> Not one per customer. Not one per release. One keypair signs every licence you will
+> ever issue, and its public half is baked into the single image that every customer
+> runs. What is *per-customer* is the **licence token** you mint in §3.2 — that's the
+> thing you generate again for each client and each renewal.
+>
+> You only ever generate a second keypair if the private key is compromised (§5.7),
+> and that forces a rebuild + re-issue for everyone.
+
 ```bash
-python -m scripts.license keygen --out-dir ~/exactsurface-keys
+python -m scripts.license keygen --out-dir ~/exactsurface-keys   # ONCE, ever
 ```
 
 - `private.pem` — **this is your revenue.** Anyone holding it can mint free, unlimited,
@@ -54,24 +64,29 @@ python -m scripts.license keygen --out-dir ~/exactsurface-keys
 > The control plane needs the private key to sign renewals, so it will live on that
 > server too. That is the only machine besides yours that should ever hold it.
 
-### 1.2 Docker Hub
+### 1.2 Container registry — use GHCR, not Docker Hub
 
-Create the account and three repos: `exactsurface/api`, `exactsurface/frontend`,
-`exactsurface/pipeline`. Make them **private** if you want to gate image pulls per
-customer (recommended — it's a third enforcement lever); public is simpler but means
-anyone can pull the image (they still can't run it without a licence).
+The release workflow publishes to **GHCR** (`ghcr.io/<your-github-account>/api`,
+`/frontend`, `/pipeline`). Nothing to set up: the three packages are created on the
+first release, Actions authenticates itself, and there is **no registry secret to
+manage**.
 
-Create an access token (not your password): Docker Hub → Account Settings → Personal
-access tokens.
+Why not Docker Hub: its free tier allows only **one private repo**, and we publish
+three images. GHCR gives unlimited private packages on a free account.
+
+Choose one access model:
+- **Private packages** (recommended): invite each customer's GitHub account to the
+  package (Package → Settings → Manage Actions/collaborators). Revoking that invite is a
+  third enforcement lever alongside licence + updates.
+- **Public packages**: simpler, no per-customer admin. Anyone can pull the image but
+  **cannot run it without a licence**, so this is a reasonable choice too.
 
 ### 1.3 GitHub secrets
 
-Repo → Settings → Secrets and variables → Actions:
+Repo → Settings → Secrets and variables → Actions — exactly one secret:
 
 | Secret | Value |
 |---|---|
-| `DOCKERHUB_USERNAME` | your Docker Hub account |
-| `DOCKERHUB_TOKEN` | the access token from 1.2 |
 | `LICENSE_PUBLIC_KEY` | contents of `public.pem` (the **public** one — never the private) |
 
 ### 1.4 Stand up the control plane
@@ -118,8 +133,8 @@ docker cp ./cp-data/bundle_manifest.json exactsurface-control-plane-control-plan
 
 - [ ] Keypair generated
 - [ ] `private.pem` backed up **twice**, offline, verified readable
-- [ ] Docker Hub repos created + access token issued
-- [ ] GitHub secrets set (public key, not private)
+- [ ] `LICENSE_PUBLIC_KEY` secret set in GitHub (the public key — never the private)
+- [ ] First release tagged, and the three GHCR packages exist + are pullable
 - [ ] Control-plane server up, DNS pointed, TLS working, `/healthz` returns ok
 - [ ] First bundle published and `GET /v1/updates/manifest` gated correctly
 - [ ] `.env`-style secrets for the control plane are **not** in git
@@ -128,12 +143,10 @@ docker cp ./cp-data/bundle_manifest.json exactsurface-control-plane-control-plan
 
 ## 2. Cutting a release
 
-Version lives in three places and CI enforces that they agree:
+The version lives in `pyproject.toml`, and CI refuses to release if the tag disagrees:
 
 ```bash
-# 1. bump
-#    pyproject.toml            version = "0.2.0"
-#    deploy/helm/exactsurface/Chart.yaml   (CI rewrites this, but keep it tidy)
+# 1. bump pyproject.toml → version = "0.2.0"
 # 2. commit, tag, push
 git commit -am "Release 0.2.0"
 git tag v0.2.0
@@ -141,9 +154,14 @@ git push origin main --tags
 ```
 
 The `Release` workflow then: runs the full test suite + lint + frontend build → builds
-and pushes `exactsurface/{api,frontend,pipeline}:0.2.0` and `:latest` with your public
-key and the build id baked in → packages the Helm chart → publishes a GitHub Release
-with image digests.
+and pushes the `api`, `frontend` and `pipeline` images tagged `:0.2.0` and `:latest`
+with your public key and the build id baked in → publishes a GitHub Release with the image digests.
+
+Images go to **GHCR** (`ghcr.io/<your-github-account>/…`), not Docker Hub: the free
+Docker Hub tier allows one private repo and we publish three images, while GHCR gives
+unlimited private packages and needs no registry secret (Actions authenticates itself).
+Give a customer access by inviting them to the package, or make the packages public —
+they still cannot run the product without a licence.
 
 **If the tag doesn't match `pyproject.toml`, the release fails on purpose** — that
 mismatch is how customers end up on a build you can't identify.
@@ -195,8 +213,8 @@ Send these five things — nothing more, nothing less:
 1. **The licence token** (`acme.vlic`) — treat as a credential; send over something
    better than plain email if you can.
 2. **[`CLIENT_GUIDE.md`](CLIENT_GUIDE.md)** — their complete deploy + operate manual.
-3. **Image access** — either the public image names, or (private repos) a Docker Hub
-   token scoped to pull only.
+3. **Image access** — the GHCR image names, plus (for private packages) an invite to
+   the packages for their GitHub account.
 4. **Their control-plane URLs** to put in `.env`:
    `EXACTSURFACE_LICENSE_REFRESH_URL=https://cp.exactsurface.com/v1/license/refresh`
    and `EXACTSURFACE_UPDATE_FEED_URL=https://cp.exactsurface.com`
@@ -204,6 +222,26 @@ Send these five things — nothing more, nothing less:
 
 **Never send:** `private.pem`, your control-plane credentials, or another customer's
 anything.
+
+### 3.3b Accounts & email — what to tell them
+
+This is the part that feels odd coming from multi-tenant SaaS, so state it plainly on
+the call:
+
+- **The first person to sign up on their instance becomes the owner** of the one
+  organisation on that server. That's the whole account-creation flow.
+- **After that, public signup is closed automatically.** A stranger who reaches their
+  login page cannot create an account. Extra teammates are added by the owner under
+  *Settings → members*, then placed in a permission group.
+- **Email verification is OFF by default, and that's the right default here.** In
+  multi-tenant SaaS it exists to stop strangers registering with addresses they don't
+  own — but on a single-org, owner-provisioned instance there are no strangers, and
+  owner-created members are marked verified already. Turning it on just means the
+  instance needs working SMTP or nobody can log in.
+- If a customer *wants* verification (some compliance regimes ask for it), they set
+  `EXACTSURFACE_REQUIRE_EMAIL_VERIFICATION=true` **and** configure real SMTP. Tell them
+  it's their SMTP to run, not yours.
+- Email is still worth configuring for **alerts** even with verification off.
 
 ### 3.4 Onboarding call (30 minutes, worth doing)
 
@@ -306,8 +344,10 @@ Ask them to check, in order:
 
 ### 5.5 "We can't pull the images"
 
-Private repos → their token expired or was never scoped. Reissue a pull-only token.
-Public repos → check they're using the right tag and platform (`pipeline` is amd64-only).
+Private packages → their GitHub account isn't invited (or the invite lapsed); re-invite,
+and have them `docker login ghcr.io` with a personal access token that has `read:packages`.
+Either way, check they're using the right tag and platform — `pipeline` is **amd64-only**,
+so it will not pull on an arm64 host (Apple silicon, Graviton).
 
 ### 5.6 Test-restore a backup (do this quarterly — untested backups aren't backups)
 

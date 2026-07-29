@@ -78,6 +78,14 @@ async def run_tool(
         await proc.wait()
         logger.warning("tool {} killed after {:.0f}s timeout", binary, timeout)
         raise ToolTimeout(binary, timeout) from exc
+    except asyncio.CancelledError:
+        # A user-requested stop (or an outer cancel) must actually stop the scanning:
+        # without this the coroutine unwinds but the child keeps running and keeps
+        # sending traffic to the customer's targets. Kill and do NOT await here — we
+        # are already unwinding, and awaiting would re-raise immediately.
+        proc.kill()
+        logger.info("tool {} killed: run cancelled", binary)
+        raise
 
     run = ToolRun(
         binary,
@@ -167,6 +175,11 @@ async def stream_tool(
         proc.kill()
         await proc.wait()
         logger.warning("tool {} killed after {:.0f}s (partial output kept)", binary, timeout)
+    except asyncio.CancelledError:
+        # Same as run_tool: a stop must terminate the child, not just abandon it.
+        proc.kill()
+        logger.info("tool {} killed: run cancelled", binary)
+        raise
     return proc.returncode or 0, stdout_lines, "\n".join(stderr_lines), timed_out
 
 

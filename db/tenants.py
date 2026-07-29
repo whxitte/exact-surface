@@ -16,6 +16,12 @@ class TenantRepo:
     def from_mongo(cls, mongo: Any) -> TenantRepo:
         return cls(mongo.collection("tenants"))
 
+    async def count(self) -> int:
+        """How many tenants exist on this instance. A self-hosted deployment is
+        single-organisation: the first signup bootstraps the owner, and further public
+        signups are refused unless explicitly allowed (see api.routes.auth.signup)."""
+        return await self._c.count_documents({})
+
     async def get(self, tenant_id: str) -> dict | None:
         return await self._c.find_one({"tenant_id": tenant_id})
 

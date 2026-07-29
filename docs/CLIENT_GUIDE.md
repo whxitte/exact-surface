@@ -118,6 +118,24 @@ owner** of your organisation.
 
 ---
 
+## 3.4 Accounts on a self-hosted instance
+
+Your instance serves **one organisation — yours**. Accounts work accordingly:
+
+- **The first person to sign up becomes the owner.** Do this yourself, immediately after
+  the stack starts.
+- **Public signup then closes automatically.** Someone who reaches your login page cannot
+  create an account. Add teammates under *Settings → members*, then put them in a
+  permission group (a new member has no access until you do).
+- **Email verification is off by default.** On a single-organisation instance there are
+  no strangers signing up, and members you create are already trusted — so it would only
+  add an SMTP dependency between your team and the login page. Turn it on
+  (`EXACTSURFACE_REQUIRE_EMAIL_VERIFICATION=true`) **only if** you want it and have SMTP
+  configured; otherwise nobody can complete verification.
+- You can still configure SMTP purely for **alerts** without turning verification on.
+
+---
+
 ## 4. First scan — the authorisation flow
 
 ExactSurface **will not scan a domain you haven't proven you control.** This is
@@ -159,6 +177,21 @@ group.** Only the owner can manage members — that's what prevents privilege es
 
 **Alerts.** Settings → notification channels (Slack, Discord, Telegram, email, webhook)
 with a severity threshold, so you're told about what matters rather than everything.
+
+**Stopping a scan.** While a scan is running, the program page shows a **Stop scan**
+button. It asks for confirmation and tells you exactly what will happen, because a stop
+is a real operation, not a cancel-and-forget:
+
+- the step running right now is wound down and its tool shut down, so no further requests
+  reach your targets;
+- **everything already discovered is kept** — assets, endpoints and findings from
+  completed steps stay exactly as they are;
+- the remaining steps are skipped and marked stopped;
+- the run is recorded as **cancelled**, not failed, and you can start a fresh scan right
+  away — it runs normally from the beginning.
+
+Stopping can take up to a minute while the current step winds down; the button shows
+"Stopping…" until it's finished.
 
 **403 bypass.** On the Endpoints tab, when forbidden endpoints exist you can run a
 detection-only check for whether that 403 is actually bypassable. It uses safe methods
@@ -295,6 +328,9 @@ misses new CVEs. Don't firewall it off.
 | "No confirmed-dedicated hosts — ports withheld" | Expected. Your hosts are on shared/cloud infra, so intrusive checks are withheld. Enable "scan my cloud infra" only if you own it. |
 | Scan is slow | By design — requests are rate-limited per target so scanning never looks like abuse. |
 | Findings show but tiles look wrong | Refresh; counts update as the scan progresses. |
+| A teammate can't sign up | Correct — public signup closes after the owner account. Add them under Settings → members. |
+| Stuck on "verify your email" | Either configure SMTP, or leave `EXACTSURFACE_REQUIRE_EMAIL_VERIFICATION` unset (the default). |
+| Stop button doesn't end the scan instantly | Expected — it winds the current step down cleanly, which can take up to a minute. |
 
 ---
 

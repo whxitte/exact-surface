@@ -359,6 +359,7 @@ class ScanStatus(str, Enum):
     SUCCESS = "success"
     FAILED = "failed"
     SKIPPED = "skipped"  # e.g. state-aware no-op or out-of-scope
+    CANCELLED = "cancelled"  # stopped by the user mid-run (not a failure)
 
 
 class ScanStage(BaseModel):
@@ -393,3 +394,8 @@ class ScanRun(TenantScopedModel):
     targets: list[str] = Field(default_factory=list)
     note: str | None = None  # why skipped / short explanation (single-pipeline runs)
     error: str | None = None
+    #: set when a user asks to stop this run. The orchestrator polls it between stages
+    #: and on each heartbeat, then unwinds gracefully — see pipelines.orchestrate.
+    cancel_requested: bool = False
+    cancelled_at: datetime | None = None
+    cancelled_by: str | None = None

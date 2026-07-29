@@ -49,7 +49,7 @@ makes `assert_prod_safe()` refuse insecure secrets. Grafana is published on
 ## Kubernetes (Helm)
 ```bash
 kubectl create secret generic exactsurface-secrets --from-env-file=.env
-helm install exactsurface deploy/helm/exactsurface -f my-values.yaml
+# (Kubernetes/Helm is not shipped — the supported deployment is Docker Compose above.)
 ```
 The chart deploys api (2), workers (3, autoscale to scan load), and a **singleton**
 scheduler (`strategy: Recreate`). Point `EXACTSURFACE_MONGO_URI` / `EXACTSURFACE_REDIS_URI`

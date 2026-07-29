@@ -147,6 +147,22 @@ class Settings(BaseSettings):
         default="http://localhost:3000",
         description="Public frontend URL — used to build verification links.",
     )
+    # A self-hosted deployment serves ONE organisation. The first signup bootstraps the
+    # owner; after that, public signup is closed and the owner adds people via
+    # Settings → members (which is also what the RBAC model expects). Leaving it open
+    # would let anyone who can reach the login page create their own tenant on someone
+    # else's server. Set true only for a multi-tenant/SaaS-style deployment.
+    allow_public_signup: bool = Field(default=False)
+
+    @property
+    def public_signup_open(self) -> bool:
+        """Whether a *second* organisation may sign itself up on this instance.
+
+        Dev/local is open so tests and local work aren't blocked. Production is closed
+        unless the operator explicitly opts in — that's the safe default for a
+        single-organisation self-hosted deployment.
+        """
+        return self.allow_public_signup or not self.is_prod
     require_email_verification: bool = Field(
         default=False,
         description=(

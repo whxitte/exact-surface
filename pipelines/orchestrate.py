@@ -9,11 +9,12 @@ program + authorization, (3) runs the three pipelines in order, and (4) records 
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from core.errors import AuthorizationRequired
+from core.errors import AuthorizationRequired, ScanCancelled
 from core.logging import bind_context, logger
 from core.metrics import REGISTRY
 from core.models import ScanRun, ScanStage, ScanStatus
@@ -176,12 +177,20 @@ def _observe_run(run: ScanRun) -> None:
 STAGE_HEARTBEAT_SECONDS = 45
 
 
-async def _run_stage_with_heartbeat(coro, *, budget: float, run, audit) -> dict:
+async def _run_stage_with_heartbeat(
+    coro, *, budget: float, run, audit, stage_name: str = "", cancel_check=None
+) -> dict:
     """Await a stage coroutine with a hard *budget*, re-saving *run* every
     ``STAGE_HEARTBEAT_SECONDS`` so ``updated_at`` reflects that work is ongoing — a
     single stage (nuclei) can run for an hour, and without a heartbeat the UI would
     label an actively-working scan "stalled". Raises ``TimeoutError`` past the budget,
-    propagates the stage's own exception, and re-raises an outer ``CancelledError``."""
+    propagates the stage's own exception, and re-raises an outer ``CancelledError``.
+
+    The heartbeat tick is also where a user's **stop** request is noticed: ``cancel_check``
+    is polled once per tick, and when it returns True the in-flight stage task is
+    cancelled (which kills the running tool's subprocess — see ``modules.exec``) and
+    :class:`ScanCancelled` is raised for the caller to finalise the run.
+    """
     task = asyncio.ensure_future(coro)
     elapsed = 0.0
     try:
@@ -195,6 +204,13 @@ async def _run_stage_with_heartbeat(coro, *, budget: float, run, audit) -> dict:
             if task in done:
                 return task.result()
             elapsed += wait
+            if cancel_check is not None and await cancel_check():
+                task.cancel()
+                # Let the cancellation propagate into the stage so its tool subprocess
+                # is killed and its `finally` blocks run, before we unwind.
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
+                raise ScanCancelled(stage_name)
             run.updated_at = datetime.now(UTC)
             await audit.save(run)  # heartbeat
     except asyncio.CancelledError:
@@ -411,10 +427,45 @@ async def run_full_pipeline(
 
     results: dict[str, dict] = {}
     failed: list[str] = []  # stages that errored/timed out (run continues past them)
+
+    async def _cancel_requested() -> bool:
+        """Has a user asked to stop this run? Read fresh from the DB — the API that
+        records the request runs in a different process. Never let a DB blip look like
+        a stop (that would abort a healthy scan), so failures answer 'no'."""
+        try:
+            return await audit.is_cancel_requested(tenant.tenant_id, scan_id)
+        except Exception:  # noqa: BLE001 - a read failure must not abort a good run
+            return False
+
+    def _finalise_cancelled(current: ScanStage | None, stage_name: str) -> None:
+        """Mark the in-flight stage and every stage after it as CANCELLED. Everything
+        already discovered stays — each write was an idempotent upsert, so the data on
+        disk is simply 'as far as the scan got'."""
+        now = datetime.now(UTC)
+        if current is not None:
+            current.status = ScanStatus.CANCELLED
+            current.finished_at = now
+            current.note = "stopped by user"
+        for pending in run.stages:
+            if pending.status == ScanStatus.QUEUED:
+                pending.status = ScanStatus.CANCELLED
+                pending.note = "not run — scan stopped"
+        run.status = ScanStatus.CANCELLED
+        run.finished_at = now
+        run.note = f"stopped by user during {stage_name}"
+
     with bind_context(tenant_id=tenant.tenant_id, scan_id=scan_id, program_id=program_id):
         logger.info("full scan started: {} ({} stages)", apex, len(stage_defs))
         for stage_obj, (name, factory) in zip(run.stages, stage_defs, strict=True):
             with bind_context(pipeline=name):
+                # Cheap pre-stage check: catches a stop requested while the previous
+                # stage was finishing, so we never start new work after a stop.
+                if await _cancel_requested():
+                    _finalise_cancelled(None, name)
+                    _observe_run(run)
+                    await audit.save(run)
+                    logger.info("scan stopped by user before stage {}", name)
+                    return {"scan_id": scan_id, "cancelled": True, **results}
                 stage_obj.status = ScanStatus.RUNNING
                 stage_obj.started_at = datetime.now(UTC)
                 await audit.save(run)  # flip to running so the poller sees the stage start
@@ -425,8 +476,23 @@ async def run_full_pipeline(
                 logger.info("stage {} started (limit {:.0f}s)", name, phase_timeout)
                 try:
                     res = await _run_stage_with_heartbeat(
-                        factory(phase_timeout), budget=stage_budget, run=run, audit=audit
+                        factory(phase_timeout),
+                        budget=stage_budget,
+                        run=run,
+                        audit=audit,
+                        stage_name=name,
+                        cancel_check=_cancel_requested,
                     )
+                except ScanCancelled:
+                    # A user pressed stop. This is a clean outcome, not a failure: the
+                    # in-flight tool has been killed, everything found so far is saved,
+                    # and the run ends CANCELLED so a new scan can be started normally.
+                    _finalise_cancelled(stage_obj, name)
+                    _observe_stage(name, ScanStatus.CANCELLED.value, stage_obj)
+                    _observe_run(run)
+                    await audit.save(run)
+                    logger.info("scan stopped by user during stage {}", name)
+                    return {"scan_id": scan_id, "cancelled": True, **results}
                 except asyncio.CancelledError:
                     # Outer cancellation (the whole arq job is being killed) — persist
                     # FAILED (not stuck RUNNING) and abort the run.

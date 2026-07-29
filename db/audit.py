@@ -40,6 +40,39 @@ class ScanRunRepo:
     async def get(self, tenant_id: str, scan_id: str) -> dict | None:
         return await self._c.find_one({"tenant_id": tenant_id, "scan_id": scan_id})
 
+    async def request_cancel(
+        self, tenant_id: str, scan_id: str, *, actor: str | None = None
+    ) -> bool:
+        """Ask a running scan to stop. Cooperative by design: this only sets a flag —
+        the worker polls it between stages and on each heartbeat, then unwinds
+        gracefully (killing in-flight tools, keeping everything already discovered).
+
+        Only an in-flight run can be cancelled; a finished one is left alone so a late
+        click can't rewrite history. Returns True if the request was recorded.
+        """
+        res = await self._c.update_one(
+            {
+                "tenant_id": tenant_id,
+                "scan_id": scan_id,
+                "status": {"$in": [ScanStatus.QUEUED.value, ScanStatus.RUNNING.value]},
+            },
+            {
+                "$set": {
+                    "cancel_requested": True,
+                    "cancelled_at": datetime.now(UTC),
+                    "cancelled_by": actor,
+                    "updated_at": datetime.now(UTC),
+                }
+            },
+        )
+        return bool(getattr(res, "modified", 0) or getattr(res, "modified_count", 0))
+
+    async def is_cancel_requested(self, tenant_id: str, scan_id: str) -> bool:
+        """Read the stop flag straight from the DB (never a cached copy) — the API and
+        the worker are different processes, so this is the handoff."""
+        doc = await self._c.find_one({"tenant_id": tenant_id, "scan_id": scan_id})
+        return bool((doc or {}).get("cancel_requested"))
+
     async def list(
         self, tenant_id: str, program_id: str | None = None, limit: int = 100
     ) -> list[dict]:

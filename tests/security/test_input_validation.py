@@ -123,3 +123,41 @@ def test_oversized_body_is_rejected_with_413(app_ctx):  # noqa: F811
     big = "a" * (600 * 1024)
     r = client.post("/programs", headers=auth(tok), json={"apex_domain": "ok.com", "note": big})
     assert r.status_code == 413
+
+
+# -- self-hosted signup lock -------------------------------------------------
+def test_public_signup_closes_after_the_first_org_in_prod(app_ctx, monkeypatch):  # noqa: F811
+    """A self-hosted instance serves ONE organisation. The first signup bootstraps the
+    owner; after that, a stranger who reaches the login page must not be able to create
+    their own tenant on the customer's server."""
+    from core.config import get_settings
+
+    client, _ = app_ctx
+    # First signup always works — that's how the owner is created.
+    signup(client, email="owner@self.host", name="Self Hosted")
+
+    monkeypatch.setattr(get_settings(), "env", "prod")
+    monkeypatch.setattr(get_settings(), "allow_public_signup", False)
+
+    r = client.post(
+        "/auth/signup",
+        json={"email": "stranger@evil.com", "password": "supersecret1", "tenant_name": "Evil"},
+    )
+    assert r.status_code == 403
+    assert "already set up" in r.json()["detail"]
+
+
+def test_operator_can_opt_into_multi_tenant_signup(app_ctx, monkeypatch):  # noqa: F811
+    """The lock is a safe default, not a hard limit — a multi-tenant deployment opts in."""
+    from core.config import get_settings
+
+    client, _ = app_ctx
+    signup(client, email="a@multi.host", name="A")
+    monkeypatch.setattr(get_settings(), "env", "prod")
+    monkeypatch.setattr(get_settings(), "allow_public_signup", True)
+
+    r = client.post(
+        "/auth/signup",
+        json={"email": "b@multi.host", "password": "supersecret1", "tenant_name": "B"},
+    )
+    assert r.status_code == 201
