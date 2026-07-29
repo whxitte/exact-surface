@@ -261,6 +261,24 @@ class Endpoint(StatefulModel):
     bypasses: list[dict] = Field(default_factory=list)
 
 
+class JsFile(StatefulModel):
+    """A JavaScript bundle that was mined, plus everything extracted from it.
+
+    Bug hunters read these by hand because a SPA ships its whole routing table to the
+    browser. Storing the file with its extracted items keeps the evidence next to the
+    finding — the UI can always show which bundle a path came from.
+    """
+
+    url: str
+    size: int = 0
+    #: each: {value, kind, tags[], absolute} — see modules.scanning.js_miner.MinedItem
+    items: list[dict] = Field(default_factory=list)
+    hostnames: list[str] = Field(default_factory=list)
+    source_map: str | None = None
+    interesting_count: int = 0
+    on_page: str = ""  # where the bundle was referenced from
+
+
 class Port(StatefulModel):
     """An open port + service banner on an IP."""
 

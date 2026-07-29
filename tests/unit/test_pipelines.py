@@ -223,6 +223,7 @@ async def test_full_pipeline_records_per_stage_progress():
     assert run["status"] == "success"
     names = [s["name"] for s in run["stages"]]
     assert names == [
+        "domain_intel",
         "ingest",
         "uncover",
         "probe",
@@ -230,6 +231,8 @@ async def test_full_pipeline_records_per_stage_progress():
         "takeover",
         "crawl",
         "content_discovery",
+        "js_mine",
+        "broken_links",
         "port_scan",
         "service_scan",
         "scan",

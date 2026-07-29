@@ -74,7 +74,8 @@ async def test_data_found_before_the_stop_is_kept():
 
     async def cancel_after_first_stage(self, tenant_id, scan_id):
         calls["n"] += 1
-        return calls["n"] > 1  # let the first pre-stage check pass, then stop
+        # domain_intel runs first, then ingest; stop after ingest has persisted.
+        return calls["n"] > 2
 
     audit.__class__.is_cancel_requested = cancel_after_first_stage
     try:

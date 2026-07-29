@@ -122,6 +122,23 @@ export interface Endpoint {
   bypasses?: BypassEntry[]; // successful 403/401 bypasses (blue "403 bypassed" label)
   bypass_checked_at?: string;
 }
+export interface JsItem {
+  value: string;        // the path/URL exactly as it appeared in the bundle
+  kind: string;         // path | url
+  tags: string[];       // admin, api, internal, auth, graphql, own-domain, …
+  absolute?: string | null;
+}
+export interface JsFile {
+  fingerprint: string;
+  url: string;          // the bundle we mined
+  size: number;
+  items: JsItem[];
+  hostnames: string[];  // hosts named inside the bundle
+  source_map?: string | null;
+  interesting_count: number;
+  first_seen?: string;
+  last_seen?: string;
+}
 export interface Port {
   fingerprint: string;
   ip: string;
@@ -489,6 +506,7 @@ export const api = {
   listAssets: (id: string) => request<Asset[]>(`/programs/${id}/assets`),
   listEndpoints: (id: string) => request<Endpoint[]>(`/programs/${id}/endpoints`),
   listPorts: (id: string) => request<Port[]>(`/programs/${id}/ports`),
+  listJsFiles: (id: string) => request<JsFile[]>(`/programs/${id}/js-files`),
   listLeaks: (id: string) => request<Leak[]>(`/programs/${id}/leaks`),
   listCves: (id: string) => request<Cve[]>(`/programs/${id}/cves`),
   getCorrelation: (id: string) => request<Correlation>(`/programs/${id}/correlation`),

@@ -58,6 +58,7 @@ from db.cves import CveMatchRepo
 from db.deltas import DeltaRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
+from db.jsfiles import JsFileRepo
 from db.leaks import LeakRepo
 from db.ports import PortRepo
 from db.programs import (
@@ -755,6 +756,8 @@ router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"]
 router.add_api_route(
     "/{program_id}/scan-runs", _reader(ScanRunRepo), methods=["GET"], tags=["data"]
 )
+# Mined JavaScript bundles + everything extracted from them (the JS Mine view).
+router.add_api_route("/{program_id}/js-files", _reader(JsFileRepo), methods=["GET"], tags=["data"])
 
 
 @router.get("/{program_id}/scan-runs/{scan_id}/logs", tags=["data"])

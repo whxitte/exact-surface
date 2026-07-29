@@ -5,12 +5,12 @@ import { useParams } from "next/navigation";
 import {
   Globe, CheckCircle2, ShieldCheck, Play, Pause, Copy, RefreshCw, KeyRound, Server, ShieldAlert,
   Activity, Eye, EyeOff, Link2, Network, FileText, FileCode, FileBarChart, FileType,
-  Bug, GitBranch, Boxes, Clock, Search, Unlock, Square, AlertTriangle,
+  Bug, GitBranch, Boxes, Clock, Search, Unlock, Square, AlertTriangle, FileCode2,
 } from "lucide-react";
 import {
   api, downloadReport,
   type Asset, type BypassEntry, type Correlation, type Cve, type Endpoint, type Finding, type Leak,
-  type Port, type Program, type ScanRun, type Secret, type Verification,
+  type JsFile, type Port, type Program, type ScanRun, type Secret, type Verification,
 } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,14 +19,18 @@ import { ScheduleCard } from "@/components/schedule-card";
 import { AlertPolicySettings } from "@/components/alert-policy-settings";
 import { PortsTable } from "@/components/ports-table";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
+import { JsMineView } from "@/components/js-mine-view";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
 import { timeAgo } from "@/lib/utils";
 
+/** Display names for tabs whose key doesn't capitalise nicely. */
+const TAB_LABELS: Partial<Record<string, string>> = { jsmine: "JS Mine", cves: "CVEs" };
+
 type Tab =
   | "surface" | "priorities" | "findings" | "cves" | "assets"
-  | "endpoints" | "ports" | "secrets" | "leaks";
+  | "endpoints" | "jsmine" | "ports" | "secrets" | "leaks";
 
 export default function ProgramDetail() {
   const { id } = useParams<{ id: string }>();
@@ -41,6 +45,7 @@ export default function ProgramDetail() {
   const [secrets, setSecrets] = useState<Secret[]>([]);
   const [cves, setCves] = useState<Cve[]>([]);
   const [leaks, setLeaks] = useState<Leak[]>([]);
+  const [jsFiles, setJsFiles] = useState<JsFile[]>([]);
   const [correlation, setCorrelation] = useState<Correlation | null>(null);
   const [selected, setSelected] = useState<Finding | null>(null);
   const [reportBusy, setReportBusy] = useState("");
@@ -88,6 +93,7 @@ export default function ProgramDetail() {
     api.listSecrets(id).then(setSecrets).catch(() => {});
     api.listCves(id).then(setCves).catch(() => {});
     api.listLeaks(id).then(setLeaks).catch(() => {});
+    api.listJsFiles(id).then(setJsFiles).catch(() => {});
     api.getCorrelation(id).then(setCorrelation).catch(() => {});
   }, [program, id]);
 
@@ -511,6 +517,7 @@ export default function ProgramDetail() {
           ["cves", Bug, cves.length],
           ["assets", Server, assets.length],
           ["endpoints", Link2, endpoints.length],
+          ["jsmine", FileCode2, jsFiles.length],
           ["ports", Network, ports.length],
           ["secrets", KeyRound, secrets.length],
           ["leaks", Boxes, leaks.length],
@@ -524,7 +531,7 @@ export default function ProgramDetail() {
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Icon className="h-4 w-4" /> {key}
+            <Icon className="h-4 w-4" /> {TAB_LABELS[key] ?? key}
             {count != null && (
               <span className="rounded-full bg-muted px-1.5 text-xs">{count}</span>
             )}
@@ -965,6 +972,8 @@ export default function ProgramDetail() {
           ))}
         </div>
       )}
+
+      {tab === "jsmine" && <JsMineView files={jsFiles} />}
 
       {tab === "ports" && <PortsTable ports={ports} hostsByIp={hostsByIp} />}
 

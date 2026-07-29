@@ -80,3 +80,24 @@ async def resolve_one(host: str, timeout: float, *, runner: Runner = run_tool_js
     """Resolve a single host (the scope resolver signature: ``(host) -> [ip]``)."""
     resolved = await resolve_hosts([host], timeout, runner=runner)
     return resolved.get(host.lower().rstrip("."), [])
+
+
+async def resolve_txt_records(
+    hostname: str, timeout: float = 20.0, *, runner: Runner = run_tool_jsonl
+) -> list[str]:
+    """TXT records for one hostname. Used for SPF/DMARC/DKIM assessment, where the
+    interesting names are ``_dmarc.<domain>`` and ``<selector>._domainkey.<domain>``
+    rather than the hosts we already resolve during ingest."""
+    rows = await runner(
+        "dnsx",
+        ["-silent", "-json", "-txt", "-resp"],
+        timeout=timeout,
+        stdin=hostname,
+    )
+    out: list[str] = []
+    for r in rows:
+        for value in r.get("txt") or []:
+            cleaned = str(value).strip().strip('"')
+            if cleaned:
+                out.append(cleaned)
+    return out

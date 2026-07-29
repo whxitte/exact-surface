@@ -24,14 +24,17 @@ from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo, program_within_plan
+from pipelines.broken_links import run_broken_links
 from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
 from pipelines.correlate import run_correlate
 from pipelines.crawl import run_crawl
 from pipelines.cve_watch import run_cve_watch
+from pipelines.domain_intel import run_domain_intel
 from pipelines.dork import run_dork
 from pipelines.github_osint import run_github_leak_scan
 from pipelines.ingest import run_ingest
+from pipelines.js_mine import run_js_mine
 from pipelines.notify import run_notify
 from pipelines.nuclei_watch import run_nuclei_watch
 from pipelines.port_scan import run_port_scan
@@ -240,6 +243,7 @@ OPTIONAL_MODULES: tuple[str, ...] = (
 #: stepper. Core stages self-skip when they have nothing to do; the OPTIONAL_MODULES
 #: stages self-skip as "disabled" unless enabled for the program.
 FULL_STAGE_NAMES: tuple[str, ...] = (
+    "domain_intel",  # passive: email spoofability + domain registration risk
     "ingest",
     "uncover",  # optional — Shodan/Censys passive discovery
     "probe",
@@ -247,6 +251,8 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "takeover",
     "crawl",
     "content_discovery",
+    "js_mine",  # mine the app's own JavaScript for routes/hosts
+    "broken_links",  # hijackable outbound links
     "port_scan",
     "service_scan",  # optional
     "scan",
@@ -323,6 +329,12 @@ async def run_full_pipeline(
     # tool budget; DB-only stages ignore it (bounded only by the wait_for ceiling).
     stage_defs: list[tuple[str, Any]] = [
         (
+            # Passive and instant: email spoofability + registration risk, straight from
+            # DNS and the registry. Runs before anything touches a host.
+            "domain_intel",
+            lambda t: run_domain_intel(**core, apex=apex, **inj("resolve_txt", "rdap_fetch")),
+        ),
+        (
             "ingest",
             lambda t: run_ingest(
                 **common, timeout=t, apex=apex, **inj("subfinder", "crtsh", "resolve")
@@ -347,6 +359,20 @@ async def run_full_pipeline(
         (
             "content_discovery",
             lambda t: run_content_discovery(**common, timeout=t, **inj("discover")),
+        ),
+        (
+            # Reads the app's own JavaScript for routes/hosts the crawl never saw, and
+            # feeds them back as endpoints for the stages below.
+            "js_mine",
+            lambda t: run_js_mine(**common, timeout=t, limiter=limiter, **inj("js_fetch")),
+        ),
+        (
+            # Needs the outbound links that crawl + js_mine collected.
+            "broken_links",
+            lambda t: run_broken_links(
+                mongo=mongo, scope=scope, tenant=tenant, program_id=program_id,
+                timeout=t, limiter=limiter, **inj("blh_resolve", "blh_status"),
+            ),
         ),
         ("port_scan", lambda t: run_port_scan(**common, timeout=t, **inj("naabu"))),
         (

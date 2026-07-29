@@ -17,6 +17,7 @@ HOUR = 60 * MINUTE
 
 #: stage -> max runtime seconds. Covers every full-pipeline stage (14).
 DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
+    "domain_intel": 3 * MINUTE,  # DNS + one registry lookup
     "ingest": 5 * MINUTE,
     "uncover": 5 * MINUTE,
     "probe": 5 * MINUTE,
@@ -24,6 +25,8 @@ DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "takeover": 5 * MINUTE,
     "crawl": 10 * MINUTE,
     "content_discovery": 10 * MINUTE,
+    "js_mine": 10 * MINUTE,  # fetch + parse up to 150 bundles
+    "broken_links": 10 * MINUTE,  # DNS + status checks on outbound links
     "port_scan": 10 * MINUTE,
     "service_scan": 10 * MINUTE,
     "scan": 60 * MINUTE,  # nuclei — the slow one
