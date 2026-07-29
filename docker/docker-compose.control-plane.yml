@@ -1,0 +1,62 @@
+# ExactSurface CONTROL PLANE — the only thing the vendor hosts.
+#
+#   docker compose -f docker/docker-compose.control-plane.yml up -d --build
+#
+# Customers run the product stack (docker-compose.prod.yml) in their own infra. This
+# stack is yours alone. It does two jobs:
+#   * renews subscription licences  (POST /v1/license/refresh)
+#   * serves the licence-gated update manifest + template bundles
+#
+# Required environment (put in docker/cp.env, which is gitignored):
+#   CP_DOMAIN=cp.exactsurface.com     — Caddy gets a TLS cert for this
+#   ACME_EMAIL=you@exactsurface.com   — Let's Encrypt contact
+#
+# Required files, mounted read-only and NEVER committed:
+#   ./cp-secrets/private.pem   the Ed25519 signing key  (BACK THIS UP OFFLINE)
+#   ./cp-secrets/public.pem    the matching verify key
+# Data (subscriptions + published bundles) lives in the cp_data volume.
+name: exactsurface-control-plane
+
+services:
+  control-plane:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.control-plane
+    image: exactsurface/control-plane:latest
+    restart: unless-stopped
+    environment:
+      EXACTSURFACE_CP_PRIVATE_KEY_FILE: /run/secrets/private.pem
+      EXACTSURFACE_CP_PUBLIC_KEY_FILE: /run/secrets/public.pem
+      EXACTSURFACE_CP_STORE: /data/licenses.json
+      EXACTSURFACE_CP_MANIFEST: /data/bundle_manifest.json
+    volumes:
+      - ./cp-secrets:/run/secrets:ro
+      - cp_data:/data
+    # No host port — Caddy is the only ingress.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8800/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # Single public ingress: TLS + routing. /v1/* → control plane (licence-gated),
+  # /bundles/* → static template bundles served straight off the data volume.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    env_file: cp.env
+    volumes:
+      - ./Caddyfile.control-plane:/etc/caddy/Caddyfile:ro
+      - cp_data:/srv:ro
+      - cp_caddy_data:/data
+      - cp_caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      control-plane: { condition: service_started }
+
+volumes:
+  cp_data:
+  cp_caddy_data:
+  cp_caddy_config:

@@ -1,0 +1,34 @@
+# Ingress for the vendor control plane. Automatic TLS via Let's Encrypt.
+{
+	email {$ACME_EMAIL}
+}
+
+{$CP_DOMAIN} {
+	encode gzip
+
+	# Licence renewal + the licence-gated update manifest.
+	handle /v1/* {
+		reverse_proxy control-plane:8800
+	}
+
+	handle /healthz {
+		reverse_proxy control-plane:8800
+	}
+
+	# Template/tool bundles, served straight off the data volume.
+	#
+	# These are unauthenticated by design: the *manifest* is the gate (a lapsed
+	# customer never learns the URL or the expected hash), and the bundle itself is
+	# signed — a tampered copy is rejected by the instance. If you later ship
+	# proprietary detections in the bundle, put an auth check in front of this
+	# handler too.
+	handle /bundles/* {
+		root * /srv
+		file_server
+	}
+
+	# Anything else is not part of the contract.
+	handle {
+		respond "ExactSurface control plane" 200
+	}
+}
