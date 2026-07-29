@@ -96,7 +96,12 @@ async def run_secret_scan(
         if r.inserted:
             new.append({"kind": m.kind, "masked": m.masked, "where": m.source_locator})
 
-    hits = await scan_urls(urls, fetch=fetch, on_hit=_persist)
+    hits = await scan_urls(
+        urls,
+        fetch=fetch,
+        on_hit=_persist,
+        max_urls=get_settings().secret_scan_max_urls,
+    )
     # Backstop: upsert any hit the callback didn't already store (idempotent).
     leftover = [_model(h) for h in hits if _model(h).fingerprint not in seen]
     if leftover:

@@ -132,3 +132,31 @@ async def test_cancel_kills_the_running_tool_subprocess():
         await task
     # If the child were still alive this would hang; a killed one reaps immediately.
     await asyncio.sleep(0.2)
+
+
+async def test_scheduler_does_not_restart_a_cancelled_scan():
+    """Pressing stop must mean stopped: the bootstrap re-enqueued the very run the
+    user had just cancelled, seconds later, because initial_scan_completed_at is
+    still unset. Found on the first real test run."""
+    from datetime import UTC, datetime, timedelta
+
+    from core.models import ScanRun
+
+    mongo = FakeMongo()
+    audit = ScanRunRepo.from_mongo(mongo)
+    now = datetime.now(UTC)
+    await audit.save(
+        ScanRun(
+            tenant_id="t1",
+            scan_id="cancelled-1",
+            program_id="p1",
+            pipeline="full",
+            status=ScanStatus.CANCELLED,
+            finished_at=now,
+        )
+    )
+    # Just cancelled → the scheduler must back off.
+    assert await audit.recent_cancelled_full("t1", "p1", within_seconds=1800, now=now) is not None
+    # Long past → normal scheduling resumes.
+    later = now + timedelta(hours=2)
+    assert await audit.recent_cancelled_full("t1", "p1", within_seconds=1800, now=later) is None

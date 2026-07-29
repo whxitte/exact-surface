@@ -37,6 +37,10 @@ Enqueuer = Callable[[Job], Awaitable[None]]
 #: enqueuer routes it to ``run_program_task`` (the ordered 14-stage pipeline).
 FULL_PIPELINE = "full"
 
+#: How long the scheduler leaves a program alone after a user cancels its scan, so a
+#: deliberate stop is not undone by the next tick.
+CANCEL_COOLOFF_SECONDS: float = 30 * 60
+
 #: If a bootstrap full job is enqueued but never lands (worker died, redis flushed),
 #: re-arm it after this long. While queued arq dedups it; while running
 #: ``find_active_full`` blocks a duplicate — so this only fires for genuinely lost jobs.
@@ -172,6 +176,14 @@ class Scheduler:
                 tid, pid, now=now, stale_seconds=self._settings.scan_run_stale_seconds
             )
             if active_full is not None:
+                continue
+
+            # A user who pressed "stop" meant it. Without this the bootstrap below
+            # re-enqueues the very run they just cancelled, seconds later. A manual
+            # "Run scan" still works immediately — that path is the API, not here.
+            if await audit.recent_cancelled_full(
+                tid, pid, within_seconds=CANCEL_COOLOFF_SECONDS, now=now
+            ):
                 continue
 
             # -- bootstrap: first full run before any per-phase cadence ----------

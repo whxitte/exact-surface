@@ -67,6 +67,32 @@ class ScanRunRepo:
         )
         return bool(getattr(res, "modified", 0) or getattr(res, "modified_count", 0))
 
+    async def recent_cancelled_full(
+        self, tenant_id: str, program_id: str, *, within_seconds: float, now: datetime | None = None
+    ) -> dict | None:
+        """The most recent user-cancelled full run, if it was cancelled recently.
+
+        The scheduler consults this so a scan the user just stopped is not immediately
+        re-enqueued by the bootstrap/cadence logic. Pressing stop must mean stopped.
+        """
+        now = now or datetime.now(UTC)
+        cutoff = now - timedelta(seconds=within_seconds)
+        rows = (
+            await self._c.find(
+                {
+                    "tenant_id": tenant_id,
+                    "program_id": program_id,
+                    "pipeline": "full",
+                    "status": ScanStatus.CANCELLED.value,
+                }
+            ).to_list(None)
+        )
+        for doc in rows:
+            finished = _as_aware(doc.get("finished_at") or doc.get("cancelled_at"))
+            if finished and finished >= cutoff:
+                return doc
+        return None
+
     async def is_cancel_requested(self, tenant_id: str, scan_id: str) -> bool:
         """Read the stop flag straight from the DB (never a cached copy) — the API and
         the worker are different processes, so this is the handoff."""

@@ -28,7 +28,7 @@ DEEP_SCAN_TIMEOUT = 180.0
 #: fetch many URLs at once, and cap the set — content discovery can surface tens of
 #: thousands of paths and fetching each body serially would never finish in budget.
 CONCURRENCY = 25
-MAX_SECRET_URLS = 1500
+MAX_SECRET_URLS = 5000  # default; overridden by settings.secret_scan_max_urls
 #: high-yield content scanned first (JS/config/data often carry keys), so the cap
 #: keeps the most valuable targets.
 _PRIORITY_EXTENSIONS = (
