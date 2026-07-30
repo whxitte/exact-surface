@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { Menu, Radar } from "lucide-react";
+import { Menu } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { BrandLogo } from "@/components/brand-logo";
 import { LicenseBanner } from "@/components/license-banner";
 import { isAuthed } from "@/lib/auth";
 
@@ -43,9 +44,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/15 text-primary">
-              <Radar className="h-4 w-4" />
-            </div>
+            <BrandLogo className="h-7 w-7" />
             <span className="font-semibold tracking-tight">ExactSurface</span>
           </div>
         </header>

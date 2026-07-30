@@ -3,10 +3,11 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { CheckCircle2, Radar, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
 import { ApiError, api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { BrandLogo } from "@/components/brand-logo";
 
 type State = "checking" | "ok" | "error";
 
@@ -64,9 +65,7 @@ function VerifyEmailInner() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center gap-2 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/15 text-primary">
-          <Radar className="h-6 w-6" />
-        </div>
+        <BrandLogo className="h-12 w-12" size={96} />
         <h1 className="text-xl font-semibold tracking-tight">Email verification</h1>
       </div>
 
