@@ -122,6 +122,28 @@ export interface Endpoint {
   bypasses?: BypassEntry[]; // successful 403/401 bypasses (blue "403 bypassed" label)
   bypass_checked_at?: string;
 }
+export interface DomainIntel {
+  email?: {
+    spf?: string | null;
+    spf_present?: boolean;
+    dmarc?: string | null;
+    dmarc_present?: boolean;
+    dmarc_policy?: string | null;
+    dkim_selectors?: string[];
+    spoofable?: boolean;   // no enforcing DMARC ⇒ phishing "from" this domain works
+  };
+  registration?: {
+    registrar?: string | null;
+    created_at?: string | null;
+    expires_at?: string | null;
+    days_to_expiry?: number | null;
+    statuses?: string[];
+    nameservers?: string[];
+    dnssec?: boolean;
+    transfer_locked?: boolean;
+  };
+  checked_at?: string;
+}
 export interface ModuleInfo {
   name: string;
   label: string;
@@ -523,6 +545,7 @@ export const api = {
   listEndpoints: (id: string) => request<Endpoint[]>(`/programs/${id}/endpoints`),
   listPorts: (id: string) => request<Port[]>(`/programs/${id}/ports`),
   listJsFiles: (id: string) => request<JsFile[]>(`/programs/${id}/js-files`),
+  getDomainIntel: (id: string) => request<DomainIntel>(`/programs/${id}/domain-intel`),
   listLeaks: (id: string) => request<Leak[]>(`/programs/${id}/leaks`),
   listCves: (id: string) => request<Cve[]>(`/programs/${id}/cves`),
   getCorrelation: (id: string) => request<Correlation>(`/programs/${id}/correlation`),

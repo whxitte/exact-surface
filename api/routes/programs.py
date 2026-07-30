@@ -56,6 +56,7 @@ from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.cves import CveMatchRepo
 from db.deltas import DeltaRepo
+from db.domain_intel import DomainIntelRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
 from db.jsfiles import JsFileRepo
@@ -759,14 +760,22 @@ async def _phase_refs(mongo: Any, tenant_id: str, program_id: str) -> dict:
     return phase_reference_starts(runs)
 
 
-def _reader(repo_cls, *, phase_of=None):
+#: Default page size for a data reader. Endpoints override it: a real surface produces
+#: far more than 1000 (crawl + archives + content discovery + JS mining), and a short
+#: page silently hides whole SOURCES — the feroxbuster/JS endpoints simply fell off the
+#: end, so their filter chips and the 403-bypass button never appeared.
+_READ_LIMIT = 1000
+_ENDPOINT_READ_LIMIT = 10_000
+
+
+def _reader(repo_cls, *, phase_of=None, limit: int = _READ_LIMIT):
     async def read(
         program: dict = Depends(require_program),
         principal: Principal = Depends(get_principal),
         mongo: Any = Depends(get_mongo_dep),
     ) -> list[dict]:
         docs = await repo_cls.from_mongo(mongo).list(
-            principal.tenant_id, program["program_id"], limit=1000
+            principal.tenant_id, program["program_id"], limit=limit
         )
         if phase_of is not None:
             refs = await _phase_refs(mongo, principal.tenant_id, program["program_id"])
@@ -784,7 +793,7 @@ router.add_api_route(
 )
 router.add_api_route(
     "/{program_id}/endpoints",
-    _reader(EndpointRepo, phase_of=endpoint_phase),
+    _reader(EndpointRepo, phase_of=endpoint_phase, limit=_ENDPOINT_READ_LIMIT),
     methods=["GET"],
     tags=["data"],
 )
@@ -806,6 +815,20 @@ router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"]
 router.add_api_route(
     "/{program_id}/scan-runs", _reader(ScanRunRepo), methods=["GET"], tags=["data"]
 )
+@router.get("/{program_id}/domain-intel", tags=["data"])
+async def get_domain_intel(
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Email posture + registration facts for this domain — the current state, as
+    opposed to the Findings the same assessment raised."""
+    doc = await DomainIntelRepo.from_mongo(mongo).get(
+        principal.tenant_id, program["program_id"]
+    )
+    return clean_doc(doc) or {"email": {}, "registration": {}}
+
+
 # Mined JavaScript bundles + everything extracted from them (the JS Mine view).
 router.add_api_route("/{program_id}/js-files", _reader(JsFileRepo), methods=["GET"], tags=["data"])
 

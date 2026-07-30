@@ -188,3 +188,38 @@ What is nuclei_watch? It baselines which nuclei templates currently match your s
 
 Grafana — creds/config? http://localhost:3001, login admin / admin in dev (set GRAFANA_ADMIN_PASSWORD to change). Nothing to configure — the Prometheus datasource and the "ExactSurface — Operations" dashboard are auto-provisioned. Panels populate during a scan (worker/scheduler are scraped on :9100).
 
+## Scan modules
+
+The pipeline mirrors a real black-box engagement, in order:
+
+| Module | What it does |
+|---|---|
+| Domain intelligence | Email spoofability (SPF/DMARC/DKIM) + registration risk (expiry, transfer lock, DNSSEC). Fully passive. |
+| Subdomain discovery | subfinder + crt.sh + DNS, plus **alterx permutations** (only names DNS confirms are kept). *Required.* |
+| Internet-index search | Shodan/Censys/Fofa via uncover. Opt-in. |
+| Live-host probing | httpx — alive check + technology fingerprint. *Required.* |
+| TLS inspection | Certificate expiry and weak configuration. Opt-in. |
+| Subdomain takeover | Dangling DNS pointing at claimable cloud services. |
+| Crawling & archives | katana + gau/waybackurls. |
+| Content discovery | feroxbuster (ffuf fallback), tech-aware wordlists. |
+| **JavaScript mining** | Mines your own JS bundles for API routes, internal hostnames and source maps; discovered paths feed back as endpoints. |
+| **Broken-link hijacking** | Outbound links to unregistered domains or unclaimed social handles. |
+| Port scanning | naabu, on confirmed-dedicated infrastructure only. |
+| Service fingerprinting | nmap -sV. Opt-in. |
+| Vulnerability scanning | Full nuclei corpus, tech-targeted. |
+| Exposed secrets | Page/script bodies scanned for keys and tokens (masked, never stored raw). |
+| CVE watch | NVD + CISA KEV matched to fingerprinted software. |
+| Public code leaks | GitHub code search for secrets tied to the domain. |
+| Cloud storage exposure | S3/GCS/Azure bucket enumeration. Opt-in. |
+| New-template watch | Alerts when a newly published nuclei template starts matching your stack. Opt-in. |
+| Search-engine exposure | Dorking. Opt-in (needs a search API key). |
+| Risk correlation | Groups findings per host into ranked attack chains. |
+| Alerting | Delivers new findings to your channels. |
+
+On-demand (not scheduled): **403/401 bypass** — from the Endpoints tab.
+
+Every module can be turned on or off per program, and each has its own re-run cadence.
+Modules depend on each other, so disabling one also stops what consumes its output —
+the UI states this before you confirm. Subdomain discovery and live-host probing are
+required and cannot be disabled.
+

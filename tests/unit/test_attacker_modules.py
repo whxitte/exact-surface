@@ -310,3 +310,55 @@ def test_app_bundles_are_still_mined():
         "https://x.com/static/main.a1b2.js",
     ):
         assert js_miner.is_library_file(url) is False
+
+
+# --------------------------------------------------------------------------- #
+# Domain intel is persisted as STATE, not only as findings
+# --------------------------------------------------------------------------- #
+async def test_domain_intel_persists_posture_for_the_ui():
+    """The email/registration summary used to be computed and thrown away (only int
+    stats survive into the ScanRun), so the UI had nothing to show. It is now stored."""
+    from core.tenant import TenantContext
+    from db.domain_intel import DomainIntelRepo
+    from pipelines.domain_intel import run_domain_intel
+    from tests.fakes import FakeMongo
+
+    mongo = FakeMongo()
+
+    async def resolve_txt(host):
+        if host.startswith("_dmarc."):
+            return ["v=DMARC1; p=none"]
+        if "_domainkey" in host:
+            return []
+        return ["v=spf1 include:_spf.google.com ~all"]
+
+    async def rdap_fetch(_url):
+        return {
+            "events": [{"eventAction": "expiration", "eventDate": "2027-01-01T00:00:00Z"}],
+            "status": ["client transfer prohibited"],
+            "entities": [
+                {
+                    "roles": ["registrar"],
+                    "vcardArray": ["vcard", [["fn", {}, "text", "Acme Registrar"]]],
+                }
+            ],
+            "secureDNS": {"delegationSigned": False},
+        }
+
+    res = await run_domain_intel(
+        mongo=mongo,
+        tenant=TenantContext("t1", "u1"),
+        program_id="p1",
+        apex="acme.com",
+        resolve_txt=resolve_txt,
+        rdap_fetch=rdap_fetch,
+    )
+    assert res["spoofable"] is True  # p=none does not stop spoofing
+
+    stored = await DomainIntelRepo.from_mongo(mongo).get("t1", "p1")
+    assert stored["email"]["dmarc_policy"] == "none"
+    assert stored["email"]["spoofable"] is True
+    assert stored["email"]["spf"].startswith("v=spf1")  # raw record kept for verification
+    assert stored["registration"]["registrar"] == "Acme Registrar"
+    assert stored["registration"]["transfer_locked"] is True
+    assert stored["registration"]["dnssec"] is False

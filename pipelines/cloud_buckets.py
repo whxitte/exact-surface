@@ -34,6 +34,7 @@ from core.severity import Severity
 from core.tenant import TenantContext
 from db.findings import FindingRepo
 from modules.osint.cloud_buckets import enumerate_buckets
+from modules.osint.cloud_buckets import permutations as bucket_permutations
 
 #: Bucket probes are cheap GETs against three public providers, but there are
 #: ~45 of them per program — keep the fan-out polite.
@@ -76,7 +77,27 @@ async def run_cloud_buckets(
 ) -> dict:
     checker = checker or default_checker
     sem = asyncio.Semaphore(CHECK_CONCURRENCY)
+
+    # Show the work: which names we derived and which providers we are asking. A bare
+    # "0 candidates checked" tells the user nothing about what was actually attempted.
+    candidates = bucket_permutations(apex)
+    providers = sorted({p for p, _n, _u in candidates})
+    logger.info(
+        "cloud-buckets {}: derived {} candidate name(s) across {} → probing {} URL(s)",
+        apex,
+        len({n for _p, n, _u in candidates}),
+        ", ".join(providers),
+        len(candidates),
+    )
     found = await enumerate_buckets(apex, checker=_bounded(checker, sem))
+    for bucket in found:
+        logger.info(
+            "cloud-buckets: {} {} → HTTP {} ({})",
+            bucket.get("provider"),
+            bucket.get("name"),
+            bucket.get("status"),
+            "PUBLIC" if bucket.get("public") else "exists but private",
+        )
 
     public = [b for b in found if b.get("public")]
     private = [b for b in found if not b.get("public")]

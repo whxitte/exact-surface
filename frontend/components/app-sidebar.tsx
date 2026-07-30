@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  LayoutDashboard, Globe, ShieldAlert, Activity, Settings, LogOut, Radar, Network,
+  LayoutDashboard, Globe, ShieldAlert, Activity, Settings, LogOut, Network,
   GitCompareArrows, BookOpen, X,
 } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 import { clearSession } from "@/lib/auth";
 
@@ -44,8 +45,8 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
         )}
       >
         <div className="flex items-center gap-2 px-5 py-5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary/15 text-primary">
-            <Radar className="h-5 w-5" />
+          <div className="flex h-8 w-8 items-center justify-center text-primary">
+            <BrandLogo className="h-7 w-7" />
           </div>
           <div className="leading-tight">
             <div className="font-semibold tracking-tight">ExactSurface</div>
