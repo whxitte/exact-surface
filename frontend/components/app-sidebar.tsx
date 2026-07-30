@@ -45,8 +45,8 @@ export function AppSidebar({ open = false, onClose }: { open?: boolean; onClose?
         )}
       >
         <div className="flex items-center gap-2 px-5 py-5">
-          <div className="flex h-8 w-8 items-center justify-center text-primary">
-            <BrandLogo className="h-7 w-7" />
+          <div className="flex h-8 w-8 items-center justify-center">
+            <BrandLogo className="h-8 w-8" />
           </div>
           <div className="leading-tight">
             <div className="font-semibold tracking-tight">ExactSurface</div>

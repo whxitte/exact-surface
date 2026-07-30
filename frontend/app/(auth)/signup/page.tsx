@@ -3,12 +3,12 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Radar } from "lucide-react";
 import { api } from "@/lib/api";
 import { setSession } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { BrandLogo } from "@/components/brand-logo";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -36,9 +36,7 @@ export default function SignupPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center gap-2 text-center">
-        <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/15 text-primary">
-          <Radar className="h-6 w-6" />
-        </div>
+        <BrandLogo className="h-12 w-12" size={96} />
         <h1 className="text-xl font-semibold tracking-tight">Create your workspace</h1>
         <p className="text-sm text-muted-foreground">Add a domain and see findings in minutes</p>
       </div>
