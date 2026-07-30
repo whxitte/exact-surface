@@ -249,11 +249,11 @@ async def test_full_pipeline_records_per_stage_progress():
     assert all(s["status"] in ("success", "skipped") for s in run["stages"])
     by = {s["name"]: s for s in run["stages"]}
     assert by["ingest"]["status"] == "success"
-    # optional modules are off by default → rendered as a disabled/skipped node
-    assert (
-        by["tls"]["status"] == "skipped"
-        and by["tls"]["note"] == "not enabled — turn on in settings"
-    )
+    # optional modules are off by default → skipped, and the note now says WHY it is
+    # opt-in rather than a generic "turn it on", so the user can judge the trade-off.
+    assert by["tls"]["status"] == "skipped"
+    assert by["tls"]["note"].startswith("not enabled")
+    assert "TLS handshake" in by["tls"]["note"]
     assert by["service_scan"]["status"] == "skipped"
     assert by["dork"]["status"] == "skipped"
 
@@ -479,3 +479,62 @@ async def test_paused_program_still_runs_when_forced():
     finally:
         orch.run_full_pipeline = orig
     assert res == {"ran": True}  # bypassed the pause and ran the pipeline
+
+
+async def test_disabling_a_module_also_skips_what_depends_on_it():
+    """Turning off crawl must not leave js_mine/broken_links running against nothing —
+    they self-skip naming the dependency, which is what the settings UI warns about."""
+    mongo = FakeMongo()
+    result = await run_full_pipeline(
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=5,
+        disabled_modules=("crawl",),
+    )
+    run = await mongo.collection("scan_runs").find_one({"scan_id": result["scan_id"]})
+    by = {s["name"]: s for s in run["stages"]}
+    assert by["crawl"]["status"] == "skipped"
+    assert by["crawl"]["note"] == "turned off in settings"
+    for dependent in ("js_mine", "broken_links"):
+        assert by[dependent]["status"] == "skipped"
+        assert "Crawling" in by[dependent]["note"], by[dependent]["note"]
+    # unrelated stages are unaffected
+    assert by["port_scan"]["status"] in ("success", "skipped")
+
+
+async def test_ingest_keeps_only_permutations_that_resolve():
+    """alterx guesses names; DNS decides. A guess that doesn't resolve must never be
+    persisted as an asset — that's the line between permutation and wordlist spam."""
+    mongo = FakeMongo()
+
+    async def subfinder(_apex, _t):
+        return ["api.customer.com"]
+
+    async def crtsh(_apex):
+        return []
+
+    async def permute(_hosts, _t):
+        return ["api-dev.customer.com", "api-ghost.customer.com"]
+
+    async def resolve(hosts, _t):
+        # only the dev box actually exists
+        live = {"api.customer.com": ["1.2.3.4"], "api-dev.customer.com": ["1.2.3.5"]}
+        return {h: live[h] for h in hosts if h in live}
+
+    async def dns_recon(_hosts, _t):
+        return {}
+
+    await run_ingest(
+        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT, program_id="p1",
+        apex="customer.com", timeout=5,
+        subfinder=subfinder, crtsh=crtsh, resolve=resolve, dns_recon=dns_recon,
+        permute=permute,
+    )
+    assets = await AssetRepo(mongo.collection("assets")).list("t1", "p1", limit=50)
+    hosts = {a["hostname"] for a in assets}
+    assert "api-dev.customer.com" in hosts      # confirmed by DNS
+    assert "api-ghost.customer.com" not in hosts  # guessed but does not resolve

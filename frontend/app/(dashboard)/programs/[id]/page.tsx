@@ -20,6 +20,7 @@ import { AlertPolicySettings } from "@/components/alert-policy-settings";
 import { PortsTable } from "@/components/ports-table";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { JsMineView } from "@/components/js-mine-view";
+import { ModuleControls } from "@/components/module-controls";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
@@ -249,16 +250,6 @@ export default function ProgramDetail() {
       setMsg((e as Error).message || "Could not update scan config.");
     }
   }
-  async function toggleModule(mod: string, on: boolean) {
-    const current = program?.enabled_modules || [];
-    const next = on ? [...new Set([...current, mod])] : current.filter((m) => m !== mod);
-    try {
-      await api.setModules(id, next);
-      loadProgram();
-    } catch (e) {
-      setMsg((e as Error).message || "Could not update modules.");
-    }
-  }
   async function toggleMonitoring() {
     if (!program) return;
     try {
@@ -445,35 +436,8 @@ export default function ProgramDetail() {
         )
       )}
 
-      {/* Optional modules */}
-      {program?.verified && (
-        <Card>
-          <CardContent className="p-4">
-            <div className="mb-2 text-sm font-medium text-muted-foreground">Optional modules</div>
-            <div className="flex flex-wrap gap-x-6 gap-y-2">
-              {(
-                [
-                  ["uncover", "Shodan/Censys", "passive host discovery (needs Shodan/Censys key)"],
-                  ["tls", "TLS inspection", "cert chain + expiry (tlsx)"],
-                  ["service_scan", "Service ID", "nmap -sV on open ports"],
-                  ["dork", "Dorking", "search-engine exposures (needs Google/Brave/SerpAPI key)"],
-                  ["cloud_buckets", "Cloud buckets", "guess S3/GCS/Azure buckets from your name (name-derived, review before trusting)"],
-                  ["nuclei_watch", "Nuclei watch", "alert when a NEW nuclei template starts matching your stack"],
-                ] as const
-              ).map(([mod, label, hint]) => (
-                <label key={mod} className="flex cursor-pointer items-center gap-3 text-sm">
-                  <Switch
-                    checked={(program.enabled_modules || []).includes(mod)}
-                    onChange={(val) => toggleModule(mod, val)}
-                  />
-                  <span>{label}</span>
-                  <span className="text-xs text-muted-foreground">— {hint}</span>
-                </label>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Scan modules — every module, with dependency-aware on/off */}
+      {program?.verified && <ModuleControls programId={id} />}
 
       {/* Scan schedule (cadence + last/next scan breakdown) */}
       {program?.verified && <ScheduleCard programId={id} />}

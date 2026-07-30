@@ -164,9 +164,12 @@ class Program(TenantScopedModel):
     #: §9b opt-in: customer attests they own the cloud infra their domain runs on,
     #: unlocking port/content/active scans on cloud/public IPs (not third-party CDNs).
     scan_shared_infra: bool = False
-    #: optional modules turned on for this program (see orchestrate.OPTIONAL_MODULES);
-    #: disabled ones render as a gray node and do no work.
+    #: opt-IN for modules that are off by default (see core.modules.OPT_IN).
     enabled_modules: list[str] = Field(default_factory=list)
+    #: opt-OUT for modules that are on by default. Essential modules (ingest, probe)
+    #: are never honoured here — see core.modules.sanitize_disabled. Turning one off
+    #: also stops whatever depends on it; core.modules.resolve reports that.
+    disabled_modules: list[str] = Field(default_factory=list)
     #: nuclei template ids relevant to this program's fingerprinted tech, as of the
     #: last watch run (module 22). ``None`` = never baselined. Only *relevant* ids are
     #: stored (tens), never the full ~10k corpus. See pipelines/nuclei_watch.py.

@@ -5,12 +5,19 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from core.models import Authorization, Program
+from core.modules import resolve as resolve_modules
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
 from taskqueue.cadence import DEFAULT_CADENCE_SECONDS, is_due
 from taskqueue.jobs import Priority
 from taskqueue.scheduler import FULL_PIPELINE, Scheduler
 from tests.fakes import FakeMongo
+
+
+def _schedulable_default_on() -> set[str]:
+    """Pipelines the scheduler should enqueue for a program with default settings."""
+    enabled = resolve_modules().enabled
+    return {p for p in DEFAULT_CADENCE_SECONDS if p in enabled}
 
 NOW = datetime(2026, 7, 4, 12, 0, 0, tzinfo=UTC)
 
@@ -63,7 +70,10 @@ async def test_plan_only_ready_programs():
     jobs = await Scheduler(mongo, FakeEnqueuer()).plan(NOW)
     assert {j.program_id for j in jobs} == {"ready"}
     # every cadence pipeline is due first-run, at NEW_ASSET priority
-    assert {j.pipeline for j in jobs} == set(DEFAULT_CADENCE_SECONDS)
+    # Only modules that are actually enabled get scheduled: opt-in ones (uncover,
+    # cloud_buckets, nuclei_watch, …) stay off until the user turns them on, so the
+    # cadence loop must not enqueue them.
+    assert {j.pipeline for j in jobs} == _schedulable_default_on()
     assert all(j.priority == Priority.NEW_ASSET for j in jobs)
 
 
@@ -82,7 +92,7 @@ async def test_run_once_enqueues_then_is_idempotent_within_interval():
     sched = Scheduler(mongo, enq)
 
     first = await sched.run_once(NOW)
-    assert first == len(DEFAULT_CADENCE_SECONDS) and len(enq.jobs) == first
+    assert first == len(_schedulable_default_on()) and len(enq.jobs) == first
 
     # same tick time → nothing is due again
     second = await sched.run_once(NOW)
@@ -90,7 +100,7 @@ async def test_run_once_enqueues_then_is_idempotent_within_interval():
 
     # far in the future → everything is due again
     later = await sched.run_once(NOW + timedelta(days=2))
-    assert later == len(DEFAULT_CADENCE_SECONDS)
+    assert later == len(_schedulable_default_on())
 
 
 async def test_cve_watch_recurs_faster_than_ingest():
@@ -163,7 +173,10 @@ async def test_program_switches_to_per_phase_after_initial_scan():
     await _seed_ready(mongo, bootstrapped=True)
     jobs = await Scheduler(mongo, FakeEnqueuer()).plan(NOW)
     assert FULL_PIPELINE not in {j.pipeline for j in jobs}
-    assert {j.pipeline for j in jobs} == set(DEFAULT_CADENCE_SECONDS)
+    # Only modules that are actually enabled get scheduled: opt-in ones (uncover,
+    # cloud_buckets, nuclei_watch, …) stay off until the user turns them on, so the
+    # cadence loop must not enqueue them.
+    assert {j.pipeline for j in jobs} == _schedulable_default_on()
 
 
 async def test_per_program_cadence_override_changes_due_set():

@@ -34,12 +34,16 @@ def _lister(templates):
     return list_templates
 
 
-async def test_no_lister_skips_honestly():
-    """Rather than silently reporting 0 new templates forever."""
+async def test_uses_the_real_corpus_by_default():
+    """The lister used to be un-wired, so this stage always skipped with "no template
+    lister configured" — dead code in the pipeline. It now defaults to the corpus
+    installed in the scanning image; with no corpus present (as in CI) it degrades to
+    "no templates" rather than claiming everything is new."""
     mongo = FakeMongo()
     await _seed(mongo)
     res = await run_nuclei_watch(mongo=mongo, tenant=TENANT, program_id="p1")
-    assert res["skipped"] is True and "lister" in res["note"]
+    assert "lister" not in (res.get("note") or "")
+    assert res.get("new_templates") == []
 
 
 async def test_no_tech_skips():

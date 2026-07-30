@@ -30,6 +30,7 @@ from core.tenant import TenantContext
 from db.endpoints import EndpointRepo
 from db.programs import ProgramRepo
 from modules.intelligence.nuclei_watch import new_template_ids, relevant_templates
+from modules.scanning.nuclei import list_templates as list_installed_templates
 
 
 def _tech_products(endpoints: list[dict]) -> set[str]:
@@ -61,15 +62,10 @@ async def run_nuclei_watch(
     program_id: str,
     templates=None,
 ) -> dict:
-    """``templates`` is an async callable returning ``[{id, product?, tags?}, ...]``."""
-    if templates is None:
-        logger.info("nuclei-watch {}: skipped (no template lister configured)", program_id)
-        return {
-            "new_templates": [],
-            "rescan_hosts": [],
-            "skipped": True,
-            "note": "template lister not configured",
-        }
+    """``templates`` is an async callable returning ``[{id, product?, tags?}, ...]``.
+
+    Defaults to the real corpus in the scanning image; injectable for tests."""
+    templates = templates or list_installed_templates
 
     endpoints = await EndpointRepo.from_mongo(mongo).list(
         tenant.tenant_id, program_id, limit=100_000

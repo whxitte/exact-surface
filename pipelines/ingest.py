@@ -20,6 +20,7 @@ from core.models import Asset
 from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.assets import AssetRepo
+from modules.recon.alterx import permute as alterx_permute
 from modules.recon.crtsh import enumerate_subdomains as crtsh_enum
 from modules.recon.dnsx import recon_hosts as dnsx_recon
 from modules.recon.dnsx import resolve_hosts as dnsx_resolve
@@ -39,6 +40,7 @@ async def run_ingest(
     crtsh=crtsh_enum,
     resolve=dnsx_resolve,
     dns_recon=dnsx_recon,
+    permute=alterx_permute,
 ) -> dict:
     logger.info("discovering subdomains of {} (subfinder + crt.sh)", apex)
     subs = await subfinder(apex, timeout)
@@ -53,7 +55,26 @@ async def run_ingest(
 
     # Scope gate: never persist a host outside a verified apex.
     in_scope = [h for h in candidates if scope.owns_host(h)]
-    resolved = await resolve(in_scope, timeout)
+
+    # Permutation: take what we found and guess the neighbours an attacker would try
+    # (api → api-dev, api-staging …). These are unresolved GUESSES, so they are only
+    # kept if dnsx answers for them — that is what separates this from wordlist spam.
+    guesses = await permute(in_scope, timeout)
+    guesses = [h for h in guesses if scope.owns_host(h)]
+    if guesses:
+        logger.info("alterx generated {} permutation candidate(s) to resolve", len(guesses))
+
+    resolved = await resolve(in_scope + guesses, timeout)
+    confirmed_guesses = [h for h in guesses if resolved.get(h)]
+    if guesses:
+        logger.info(
+            "alterx: {}/{} permutation(s) actually resolve{}",
+            len(confirmed_guesses),
+            len(guesses),
+            f" → {confirmed_guesses[:5]}" if confirmed_guesses else "",
+        )
+    # Only permutations that resolve join the real asset list.
+    in_scope = in_scope + confirmed_guesses
     logger.info("dnsx resolved {}/{} in-scope host(s) to live IPs", len(resolved), len(in_scope))
 
     # Full DNS records per host (CNAME/NS/MX/TXT + A/AAAA) — best-effort enrichment.

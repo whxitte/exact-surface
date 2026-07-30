@@ -26,6 +26,17 @@ DEFAULT_CADENCE_SECONDS: dict[str, int] = {
     "content_discovery": 24 * HOUR,
     "secrets": 24 * HOUR,
     "github_osint": 24 * HOUR,
+    # Newer stages. domain_intel is passive and cheap, so it can run often; js_mine and
+    # broken_links follow the crawl they depend on.
+    "domain_intel": 12 * HOUR,
+    "js_mine": 24 * HOUR,
+    "broken_links": 24 * HOUR,
+    "tls": 24 * HOUR,
+    "uncover": 24 * HOUR,
+    "service_scan": 24 * HOUR,
+    "cloud_buckets": 24 * HOUR,
+    "nuclei_watch": 12 * HOUR,
+    "dork": 24 * HOUR,
 }
 
 #: Pipelines a user is allowed to set a custom cadence for.
