@@ -21,6 +21,7 @@ import { PortsTable } from "@/components/ports-table";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { JsMineView } from "@/components/js-mine-view";
 import { ModuleControls } from "@/components/module-controls";
+import { DomainIntelCard } from "@/components/domain-intel-card";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
@@ -503,7 +504,12 @@ export default function ProgramDetail() {
         ))}
       </div>
 
-      {tab === "surface" && <AttackSurfaceView programId={id} />}
+      {tab === "surface" && (
+        <div className="space-y-4">
+          <DomainIntelCard programId={id} />
+          <AttackSurfaceView programId={id} />
+        </div>
+      )}
 
       {tab === "priorities" && (
         <div className="space-y-2">
@@ -820,20 +826,31 @@ export default function ProgramDetail() {
               (e) => !e.gone && (e.status_code === 401 || e.status_code === 403),
             );
             const bypassed = endpoints.filter((e) => (e.bypasses?.length ?? 0) > 0).length;
-            if (forbidden.length === 0) return null;
+            if (endpoints.length === 0) return null;
+            const none = forbidden.length === 0;
             return (
               <div className="flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/30 p-3">
-                <Unlock className="h-4 w-4 shrink-0 text-blue-500" />
+                <Unlock className={`h-4 w-4 shrink-0 ${none ? "text-muted-foreground" : "text-blue-500"}`} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">403 / 401 bypass</p>
                   <p className="text-xs text-muted-foreground">
-                    {forbidden.length} forbidden endpoint{forbidden.length === 1 ? "" : "s"}. Try the
-                    common access-control bypasses an attacker would — detection only, nothing is
-                    changed on the target.
-                    {bypassed > 0 && ` ${bypassed} already bypassable.`}
+                    {none ? (
+                      <>
+                        No forbidden endpoints found yet, so there is nothing to test. When a
+                        scan finds a 401 or 403, this runs the access-control bypasses an
+                        attacker would try — detection only.
+                      </>
+                    ) : (
+                      <>
+                        {forbidden.length} forbidden endpoint{forbidden.length === 1 ? "" : "s"}.
+                        Try the common access-control bypasses an attacker would — detection
+                        only, nothing is changed on the target.
+                        {bypassed > 0 && ` ${bypassed} already bypassable.`}
+                      </>
+                    )}
                   </p>
                 </div>
-                <Button size="sm" onClick={runBypass403} disabled={bypassBusy}>
+                <Button size="sm" onClick={runBypass403} disabled={bypassBusy || none}>
                   <Unlock className="h-4 w-4" />
                   {bypassBusy ? "Running…" : "Try 403 bypass"}
                 </Button>

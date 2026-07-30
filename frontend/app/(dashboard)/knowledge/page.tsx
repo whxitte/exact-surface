@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import {
   BookOpen, Search, Workflow, Radar, RefreshCw, Activity, ShieldAlert, KeyRound,
-  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard, Users, Unlock,
+  GitBranch, Bug, Network, BellRing, Lock, Plug, HelpCircle, CreditCard, Users, Unlock, Mail, FileCode2, Unlink, Boxes,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -231,6 +231,116 @@ const SECTIONS: Section[] = [
           <Code>ssrf</Code>, <Code>payment</Code>, <Code>exposure</Code> — read from the URL path and its
           query parameters (a <Code>?user_id=</Code> is an IDOR surface, a <Code>?url=</Code> an SSRF one).
           The tags show as badges next to each endpoint.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "domain-intel",
+    title: "Domain intelligence — spoofing & registration",
+    icon: Mail,
+    keywords:
+      "spf dmarc dkim email spoofing phishing whois rdap registrar expiry domain expires transfer lock dnssec registration",
+    body: (
+      <>
+        <p>
+          The first two questions an attacker answers about a domain, both from public
+          records and without touching your servers: <Term>can I send mail as you</Term>, and
+          <Term> is the registration itself weak</Term>. This runs first in every scan.
+        </p>
+        <p>
+          <Term>Email spoofing.</Term> If you have no DMARC record — or one set to{" "}
+          <Code>p=none</Code> — anyone can send mail that appears to come from your domain and
+          it will be delivered. We read your SPF, DMARC and DKIM records and show the raw
+          text alongside the verdict, so you can check it yourself. We also catch the subtle
+          failures: <Code>+all</Code> (which authorises the entire internet to send as you),
+          two SPF records (which makes receivers ignore SPF completely), and going over the
+          10-lookup limit (which silently voids the policy while it still looks correct).
+        </p>
+        <p>
+          <Term>Registration.</Term> A domain that expires is a total takeover — the website,
+          the mail, and every login that trusts it. That date lives in a registrar account
+          the security team usually can&apos;t see, so we surface it, along with whether the
+          transfer lock and DNSSEC are enabled. Look for the panel on a program&apos;s{" "}
+          <Term>Surface</Term> tab.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "js-mine",
+    title: "JavaScript mining",
+    icon: FileCode2,
+    keywords:
+      "javascript js bundle endpoints routes api paths source map sourcemap hidden admin internal hostnames spa",
+    body: (
+      <>
+        <p>
+          Your single-page app ships its whole routing table to every visitor. Inside those
+          bundles are the API paths the UI calls, internal hostnames, and admin routes that
+          never appear in a crawl. Reading them by hand is the most tedious part of a real
+          assessment — the <Term>JS Mine</Term> tab does it for you.
+        </p>
+        <p>
+          For each of your own bundles we extract paths and URLs, the hostnames the app talks
+          to, and any published <Code>.map</Code> file (which lets anyone reconstruct your
+          original, unminified source). Everything is filterable by tag, kind and bundle, and
+          every row names the file it came from.
+        </p>
+        <p>
+          It also <Term>compounds</Term>: paths found in JavaScript are added as endpoints, so
+          the next run probes and scans them like any other. Third-party libraries are skipped
+          deliberately — their routes are the library&apos;s, not yours.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "broken-links",
+    title: "Broken-link hijacking",
+    icon: Unlink,
+    keywords:
+      "broken link hijack dead link expired domain unclaimed social handle takeover outbound",
+    body: (
+      <>
+        <p>
+          A page of yours links out to a domain that has since expired, or a social handle
+          that was deleted. Anyone can register that domain or claim that handle and instantly
+          inherit the trust of your page linking to it — used for phishing, malware with a
+          trusted referrer, and (when the dead link is a script) code running in your
+          visitors&apos; browsers.
+        </p>
+        <p>
+          We check the destinations of the outbound links you publish: a domain that no longer
+          resolves is reported as <Term>registerable</Term>, and a social profile returning 404
+          as a <Term>claimable handle</Term>. Nothing is registered or claimed — we only look.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "modules",
+    title: "Turning modules on and off",
+    icon: Boxes,
+    keywords:
+      "modules enable disable turn off schedule cadence dependency required essential settings",
+    body: (
+      <>
+        <p>
+          Every scan step is a module you control, on a program&apos;s page under{" "}
+          <Term>Scan modules</Term>. Each has its own re-run schedule too, under{" "}
+          <Term>Scan schedule</Term>.
+        </p>
+        <p>
+          <Term>Modules depend on each other.</Term> Crawling needs live-host probing;
+          JavaScript mining and broken-link hijacking need crawling. So turning one off also
+          stops everything downstream — the switch tells you exactly what that costs before you
+          flip it, and anything skipped says why (&quot;needs Crawling &amp; archives, which is
+          off&quot;).
+        </p>
+        <p>
+          <Term>Subdomain discovery and live-host probing cannot be turned off.</Term> Every
+          other module reads their output, so without them there is nothing to scan.
         </p>
       </>
     ),

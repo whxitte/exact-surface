@@ -7,6 +7,7 @@ by default it degrades to no results unless a search API is configured.
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from core.hashing import finding_fingerprint
@@ -59,6 +60,13 @@ async def _resolve_engine(mongo: Any, tenant_id: str):
     return None, ""
 
 
+#: Queries in flight at once. Search APIs rate-limit aggressively, so this is small on
+#: purpose — enough to fit the stage budget, not enough to get throttled.
+DORK_CONCURRENCY = 4
+#: Per-query ceiling. A single slow query is dropped rather than starving the rest.
+DORK_QUERY_TIMEOUT = 20.0
+
+
 async def run_dork(
     *,
     mongo: Any,
@@ -84,9 +92,34 @@ async def run_dork(
 
     models: list[Finding] = []
     seen: set[str] = set()
-    for dork in render(domain):
+
+    dorks = render(domain)
+    logger.info(
+        "dork {}: running {} search quer(ies) via {}", domain, len(dorks), engine or "injected"
+    )
+
+    # Run a few at a time rather than strictly sequentially. 29 queries at up to 20s
+    # each is ~10 minutes, which blew the stage budget and failed the whole stage with
+    # "timed out" — losing the results it had already collected. Bounded concurrency
+    # keeps us inside budget while staying gentle on the search API's rate limit.
+    sem = asyncio.Semaphore(DORK_CONCURRENCY)
+
+    async def _one(dork: dict) -> tuple[dict, list[dict]]:
         query = dork["query"]
-        for item in await search(query):
+        async with sem:
+            try:
+                items = await asyncio.wait_for(search(query), timeout=DORK_QUERY_TIMEOUT)
+            except (TimeoutError, Exception) as exc:  # noqa: BLE001
+                # One dead query must not cost us the other 28 — the search APIs are
+                # flaky and rate-limited, and partial dork results are still useful.
+                logger.info("dork: query timed out or failed ({}): {}", type(exc).__name__, query)
+                return dork, []
+        logger.info("dork: {} → {} result(s)", query, len(items))
+        return dork, items
+
+    for dork, items in await asyncio.gather(*(_one(d) for d in dorks)):
+        query = dork["query"]
+        for item in items:
             link = item.get("link")
             if not link or link in seen:
                 continue

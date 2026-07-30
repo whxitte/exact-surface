@@ -17,6 +17,7 @@ from core.hashing import finding_fingerprint
 from core.logging import logger
 from core.models import Finding
 from core.tenant import TenantContext
+from db.domain_intel import DomainIntelRepo
 from db.findings import FindingRepo
 from modules.osint import email_security, rdap
 
@@ -102,6 +103,26 @@ async def run_domain_intel(
         logger.warning("domain_intel: RDAP lookup failed for {}: {}", apex, exc)
 
     total, new = await FindingRepo.from_mongo(mongo).upsert_many(findings)
+
+    registration = (
+        {
+            "registrar": intel.registrar,
+            "created_at": intel.created_at.isoformat() if intel.created_at else None,
+            "expires_at": intel.expires_at.isoformat() if intel.expires_at else None,
+            "days_to_expiry": intel.days_to_expiry,
+            "statuses": list(intel.statuses),
+            "nameservers": list(intel.nameservers),
+            "dnssec": intel.dnssec,
+            "transfer_locked": intel.transfer_locked,
+        }
+        if intel
+        else {}
+    )
+    # Persist the posture itself, not just the findings it produced: "DMARC is none"
+    # and "expires in 214 days" are state the UI shows as a panel.
+    await DomainIntelRepo.from_mongo(mongo).save(
+        tenant.tenant_id, program_id, email=summary, registration=registration
+    )
     logger.info(
         "domain_intel {}: spoofable={} expires_in={} → {} finding(s), {} new",
         apex,
@@ -117,19 +138,7 @@ async def run_domain_intel(
         "days_to_expiry": (intel.days_to_expiry if intel else None),
         # Surfaced verbatim in the UI so the user sees the raw records, not a verdict.
         "email": summary,
-        "registration": (
-            {
-                "registrar": intel.registrar,
-                "created_at": intel.created_at.isoformat() if intel.created_at else None,
-                "expires_at": intel.expires_at.isoformat() if intel.expires_at else None,
-                "statuses": list(intel.statuses),
-                "nameservers": list(intel.nameservers),
-                "dnssec": intel.dnssec,
-                "transfer_locked": intel.transfer_locked,
-            }
-            if intel
-            else {}
-        ),
+        "registration": registration,
     }
 
 

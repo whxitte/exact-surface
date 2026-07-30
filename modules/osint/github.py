@@ -83,8 +83,13 @@ async def search_leaks(
     ]
     seen_urls: set[str] = set()
     hits: list[dict] = []
+    logger.info("github-osint: {} search quer(ies) crafted for {}", len(queries), domain)
     for query in queries:
-        for item in await search(query):
+        # Show the EXACT query, so the user can reproduce the search themselves — the
+        # same transparency rule the dork module follows.
+        results = await search(query)
+        logger.info("github-osint: searching {} → {} result(s)", query, len(results))
+        for item in results:
             url = item.get("html_url", "")
             if url in seen_urls:
                 continue
