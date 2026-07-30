@@ -426,13 +426,15 @@ export default function ProgramDetail() {
                 <Play className="h-4 w-4" /> {scanBusy ? "Starting…" : "Run scan"}
               </Button>
             )}
-            <label className="flex cursor-pointer items-center gap-3 text-xs text-muted-foreground ml-2">
+            {/* The Switch handles its own clicks now, so no <label> wrapper is needed
+                (and a button inside a label would be invalid markup). */}
+            <span className="ml-2 flex items-center gap-3 text-xs text-muted-foreground">
               <Switch
                 checked={!!program.scan_shared_infra}
                 onChange={toggleSharedInfra}
               />
               <span>Scan my cloud infra (ports/content/active on cloud IPs — §9b)</span>
-            </label>
+            </span>
           </div>
         )
       )}

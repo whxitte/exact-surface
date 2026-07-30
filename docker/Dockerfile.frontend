@@ -19,6 +19,7 @@ WORKDIR /app
 COPY --from=build /app/package.json /app/package-lock.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
 COPY --from=build /app/next.config.mjs ./
 EXPOSE 3000
 # API_PROXY_TARGET (set in compose to http://api:8000) routes /api/* to the backend.
