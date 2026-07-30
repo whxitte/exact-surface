@@ -170,3 +170,60 @@ async def scan(
     else:  # injected runner (tests) — plain signature, no real-time hook
         rows = await runner("nuclei", args, timeout=timeout, stdin="\n".join(urls))
     return [_normalize(r) for r in rows]
+
+
+#: Where nuclei keeps its template corpus inside the image (set by -update-templates).
+_TEMPLATE_DIRS: tuple[str, ...] = (
+    "~/nuclei-templates",
+    "/home/exactsurface/nuclei-templates",
+    "/root/nuclei-templates",
+)
+
+
+def _scan_template_dir() -> list[dict]:
+    """Walk the installed corpus. Sync on purpose — see :func:`list_templates`."""
+    import os
+    from pathlib import Path
+
+    root: Path | None = None
+    for candidate in _TEMPLATE_DIRS:
+        path = Path(os.path.expanduser(candidate))
+        if path.is_dir():
+            root = path
+            break
+    if root is None:
+        return []
+
+    out: list[dict] = []
+    for path in root.rglob("*.yaml"):
+        rel = path.relative_to(root)
+        if rel.parts and rel.parts[0].startswith("."):
+            continue
+        template_id = path.stem
+        # The directory layout encodes the classification: http/cves/2024/CVE-…,
+        # http/technologies/…, so the path segments are the tags.
+        tags = [p for p in rel.parts[:-1] if p]
+        # A template's "product" is conventionally the leading token of its id
+        # (wordpress-detect → wordpress), which is what relevant_templates matches on.
+        product = template_id.split("-")[0].lower() if "-" in template_id else template_id.lower()
+        out.append({"id": template_id, "product": product, "tags": tags})
+    return out
+
+
+async def list_templates(timeout: float = 120.0) -> list[dict]:
+    """The installed template corpus as ``[{id, product, tags}, ...]``.
+
+    Feeds nuclei_watch, which diffs this against the program's last-known set so a
+    newly published template that matches the customer's stack triggers a targeted
+    re-scan instead of a full one.
+
+    Implemented by walking the template directory rather than parsing ``nuclei -tl``:
+    the listing flag's output format has changed between releases, and reading the tree
+    is stable across versions and needs no subprocess. The walk touches ~10k files, so
+    it runs in a worker thread — doing it inline would stall the event loop and every
+    other stage sharing it. Unreadable tree ⇒ empty list, so the watch skips rather
+    than reporting a bogus "everything is new".
+    """
+    import asyncio
+
+    return await asyncio.to_thread(_scan_template_dir)

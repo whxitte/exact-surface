@@ -14,6 +14,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
+from core import modules as module_registry
 from core.errors import AuthorizationRequired, ScanCancelled
 from core.logging import bind_context, logger
 from core.metrics import REGISTRY
@@ -278,6 +279,7 @@ async def run_full_pipeline(
     timeout: float,
     scan_id: str | None = None,
     enabled_modules: tuple[str, ...] = (),
+    disabled_modules: tuple[str, ...] = (),
     timeouts: dict[str, int] | None = None,
     # Explicit, NOT left to **injected: a swallowed kwarg here would silently mean
     # unthrottled requests at customer hosts, which is the failure ADR-0012 fixes.
@@ -313,15 +315,18 @@ async def run_full_pipeline(
     def inj(*keys: str) -> dict:
         return {k: injected[k] for k in keys if k in injected}
 
-    enabled = set(enabled_modules)
+    # One resolver decides what runs. It honours opt-ins/opt-outs AND dependencies, so
+    # a stage whose input module is off self-skips with that reason rather than running
+    # against nothing and reporting a misleading zero.
+    module_state = module_registry.resolve(
+        enabled_modules=enabled_modules, disabled_modules=disabled_modules
+    )
 
-    async def _disabled(_t: float = 0) -> dict:
-        return {"skipped": True, "disabled": True, "note": "not enabled — turn on in settings"}
-
-    def optional(module: str, real):
-        """Run *real* (a zero-arg factory) only if the module is enabled; else the
-        stage renders as a disabled node."""
-        return real if module in enabled else _disabled
+    def optional(_module: str, real):
+        """Historically wrapped opt-in stages. Gating now happens once in the stage
+        loop below — for EVERY stage, so a newly added one cannot forget it — leaving
+        this as an identity that keeps the declarations below readable."""
+        return real
 
     # (name, coroutine factory) in execution order — the complete attacker chain.
     # OPTIONAL_MODULES stages (tls/service_scan/dork) self-skip when not enabled.
@@ -492,6 +497,18 @@ async def run_full_pipeline(
                     await audit.save(run)
                     logger.info("scan stopped by user before stage {}", name)
                     return {"scan_id": scan_id, "cancelled": True, **results}
+                # One gate for every stage: honours the user's on/off choices AND the
+                # dependency graph, so a stage whose input module is off is skipped with
+                # that reason instead of running against nothing.
+                if not module_state.is_enabled(name):
+                    stage_obj.status = ScanStatus.SKIPPED
+                    stage_obj.note = module_state.reason(name) or "not enabled"
+                    stage_obj.finished_at = datetime.now(UTC)
+                    results[name] = {"skipped": True, "disabled": True, "note": stage_obj.note}
+                    _observe_stage(name, ScanStatus.SKIPPED.value, stage_obj)
+                    await audit.save(run)
+                    logger.info("stage {} skipped: {}", name, stage_obj.note)
+                    continue
                 stage_obj.status = ScanStatus.RUNNING
                 stage_obj.started_at = datetime.now(UTC)
                 await audit.save(run)  # flip to running so the poller sees the stage start
@@ -658,6 +675,7 @@ async def run_program(
         timeout=timeout,
         scan_id=scan_id,
         enabled_modules=tuple(program.get("enabled_modules", [])),
+        disabled_modules=tuple(program.get("disabled_modules", [])),
         timeouts=timeouts,
         limiter=limiter,
     )

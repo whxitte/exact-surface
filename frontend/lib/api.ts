@@ -122,6 +122,20 @@ export interface Endpoint {
   bypasses?: BypassEntry[]; // successful 403/401 bypasses (blue "403 bypassed" label)
   bypass_checked_at?: string;
 }
+export interface ModuleInfo {
+  name: string;
+  label: string;
+  summary: string;
+  requires: string[];
+  required_by: string[];   // modules that stop working if this one is off
+  essential: boolean;      // the spine — cannot be turned off
+  schedulable: boolean;
+  opt_in: boolean;         // off by default
+  opt_in_reason: string;
+  enabled: boolean;        // resolved: honours dependencies, not just the toggle
+  turned_off: boolean;     // explicitly disabled by the user
+  skip_reason: string;     // why it will not run
+}
 export interface JsItem {
   value: string;        // the path/URL exactly as it appeared in the bundle
   kind: string;         // path | url
@@ -474,10 +488,12 @@ export const api = {
       `/programs/${id}/scan-config?scan_shared_infra=${value}`,
       { method: "POST" },
     ),
-  setModules: (id: string, enabled: string[]) =>
-    request<{ program_id: string; enabled_modules: string[] }>(`/programs/${id}/modules`, {
-      method: "POST",
-      body: JSON.stringify(enabled),
+  getModules: (id: string) =>
+    request<{ program_id: string; modules: ModuleInfo[] }>(`/programs/${id}/modules`),
+  setModules: (id: string, enabled: string[], disabled: string[]) =>
+    request<{ program_id: string; modules: ModuleInfo[] }>(`/programs/${id}/modules`, {
+      method: "PUT",
+      body: JSON.stringify({ enabled, disabled }),
     }),
   getSchedule: (id: string) => request<Schedule>(`/programs/${id}/schedule`),
   setSchedule: (id: string, overrides: Record<string, number>) =>

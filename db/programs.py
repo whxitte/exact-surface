@@ -59,6 +59,9 @@ class ProgramRepo:
     async def set_enabled_modules(self, tenant_id, program_id, modules: list[str]) -> None:
         await self._update(tenant_id, program_id, {"enabled_modules": modules})
 
+    async def set_disabled_modules(self, tenant_id, program_id, modules: list[str]) -> None:
+        await self._update(tenant_id, program_id, {"disabled_modules": modules})
+
     async def set_known_template_ids(self, tenant_id, program_id, ids: list[str]) -> None:
         """Record the nuclei templates relevant to this program (module 22 baseline)."""
         await self._update(tenant_id, program_id, {"known_template_ids": ids})

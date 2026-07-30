@@ -20,6 +20,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from core import modules as module_registry
 from core.config import Settings, get_settings
 from core.logging import logger
 from core.metrics import REGISTRY
@@ -208,7 +209,16 @@ class Scheduler:
             cadence = self._cadence_override or effective_cadence(
                 prog.get("cadence_overrides"), tenant_defaults.get(tid)
             )
+            # A module the user turned off (or whose dependency is off) must not be
+            # scheduled either — otherwise the per-phase cadence would quietly keep
+            # running what the settings screen says is disabled.
+            module_state = module_registry.resolve(
+                enabled_modules=prog.get("enabled_modules"),
+                disabled_modules=prog.get("disabled_modules"),
+            )
             for pipeline, interval in cadence.items():
+                if not module_state.is_enabled(pipeline):
+                    continue
                 last = await schedule.last_run(tid, pid, pipeline)
                 if not is_due(last, now, interval):
                     continue

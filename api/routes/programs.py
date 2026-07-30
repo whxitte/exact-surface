@@ -469,15 +469,65 @@ async def set_modules(
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
-    """Enable/disable optional scan modules (tls, service_scan, dork). Unknown names
-    are ignored; disabled modules render as a gray node and do no work."""
-    from pipelines.orchestrate import OPTIONAL_MODULES
+    """Opt IN to modules that are off by default (tls, dork, uncover, …).
 
-    modules = [m for m in enabled if m in OPTIONAL_MODULES]
+    Kept for backwards compatibility with the program page's module switches. The
+    richer control — including turning default-on modules OFF — is
+    ``PUT /{program_id}/modules``.
+    """
+    from core.modules import OPT_IN
+
+    modules = sorted({m for m in enabled if m in OPT_IN})
     await ProgramRepo.from_mongo(mongo).set_enabled_modules(
         principal.tenant_id, program["program_id"], modules
     )
     return {"program_id": program["program_id"], "enabled_modules": modules}
+
+
+@router.get("/{program_id}/modules", tags=["programs"])
+async def get_modules(program: dict = Depends(require_program)) -> dict:
+    """Every module with its current state, dependencies, and — for anything that will
+    not run — the reason. This is what the settings screen renders, including the
+    warning that turning one module off also stops the modules that depend on it."""
+    from core.modules import catalogue
+
+    return {
+        "program_id": program["program_id"],
+        "modules": catalogue(
+            enabled_modules=program.get("enabled_modules"),
+            disabled_modules=program.get("disabled_modules"),
+        ),
+    }
+
+
+@router.put("/{program_id}/modules", tags=["programs"])
+async def update_modules(
+    body: dict,
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Set which modules run for this program.
+
+    ``{"enabled": [...], "disabled": [...]}``. Essential modules (subdomain discovery,
+    live-host probing) are silently dropped from the disable list — everything reads
+    their output, so switching them off would leave a scanner that finds nothing.
+    """
+    from core.modules import OPT_IN, catalogue, sanitize_disabled
+
+    enabled = sorted({str(m) for m in (body.get("enabled") or []) if str(m) in OPT_IN})
+    disabled = sanitize_disabled(body.get("disabled"))
+
+    repo = ProgramRepo.from_mongo(mongo)
+    tid, pid = principal.tenant_id, program["program_id"]
+    await repo.set_enabled_modules(tid, pid, enabled)
+    await repo.set_disabled_modules(tid, pid, disabled)
+    return {
+        "program_id": pid,
+        "enabled_modules": enabled,
+        "disabled_modules": disabled,
+        "modules": catalogue(enabled_modules=enabled, disabled_modules=disabled),
+    }
 
 
 # -- scan trigger (auth-gated) ----------------------------------------------
