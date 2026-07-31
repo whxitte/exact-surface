@@ -44,6 +44,8 @@ DEFAULT_CADENCE_SECONDS: dict[str, int] = {
     "http_misconfig": 24 * HOUR,
     "supply_chain": 24 * HOUR,
     "typosquat": 24 * HOUR,
+    "reverse_dns": 24 * HOUR,
+    "param_discovery": 24 * HOUR,
 }
 
 #: Pipelines a user is allowed to set a custom cadence for.

@@ -82,6 +82,32 @@ async def resolve_one(host: str, timeout: float, *, runner: Runner = run_tool_js
     return resolved.get(host.lower().rstrip("."), [])
 
 
+async def resolve_ptr(
+    ips: list[str], timeout: float, *, runner: Runner = run_tool_jsonl
+) -> dict[str, str]:
+    """PTR records for many IPs at once → ``{ip: hostname}``.
+
+    One dnsx invocation over the whole address list. dnsx returns the queried address
+    in ``host`` for a PTR lookup, so the mapping is read straight back off that.
+    """
+    ips = [i for i in ips if i]
+    if not ips:
+        return {}
+    rows = await runner(
+        "dnsx",
+        ["-silent", "-json", "-ptr", "-resp"],
+        timeout=timeout,
+        stdin="\n".join(ips),
+    )
+    out: dict[str, str] = {}
+    for r in rows:
+        ip = (r.get("host") or "").strip()
+        names = r.get("ptr") or []
+        if ip and names:
+            out[ip] = str(names[0]).strip().rstrip(".")
+    return out
+
+
 async def resolve_mx_hosts(
     hosts: list[str], timeout: float, *, runner: Runner = run_tool_jsonl
 ) -> dict[str, list[str]]:

@@ -197,6 +197,7 @@ The pipeline mirrors a real black-box engagement, in order:
 | Domain intelligence | Email spoofability (SPF/DMARC/DKIM) + registration risk (expiry, transfer lock, DNSSEC). Fully passive. |
 | Subdomain discovery | subfinder + crt.sh + DNS, plus **alterx permutations** (only names DNS confirms are kept). *Required.* |
 | Internet-index search | Shodan/Censys/Fofa via uncover. Opt-in. |
+| **Reverse-DNS sweep** | PTR-sweeps IP ranges confirmed yours, finding hosts that exist in IP space but were never published in DNS. Opt-in; only runs on ASN-verified ranges and refuses anything wider than a /20. |
 | Live-host probing | httpx — alive check + technology fingerprint. *Required.* |
 | TLS inspection | Certificate expiry and weak configuration. Opt-in. |
 | Subdomain takeover | Dangling DNS pointing at claimable cloud services. |
@@ -205,6 +206,7 @@ The pipeline mirrors a real black-box engagement, in order:
 | **JavaScript mining** | Mines your own JS bundles for API routes, internal hostnames and source maps; discovered paths feed back as endpoints. |
 | **API & path disclosure** | robots.txt + sitemap mining, OpenAPI/Swagger schema detection, GraphQL introspection, `.well-known`. Paths found become endpoints. |
 | **CORS, redirects & WAF** | Reflected/null-origin CORS with credentials, open redirects (only on parameters the site already uses), and which hosts sit behind a WAF. |
+| **Hidden parameters** | Inventories the query parameters your pages already use (free), and probes a curated list for undocumented ones that change behaviour. Opt-in. |
 | **Broken-link hijacking** | Outbound links to unregistered domains or unclaimed social handles. |
 | Port scanning | naabu, on confirmed-dedicated infrastructure only. |
 | Service fingerprinting | nmap -sV. Opt-in. |

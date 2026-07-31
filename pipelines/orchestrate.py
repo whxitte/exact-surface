@@ -40,8 +40,10 @@ from pipelines.ingest import run_ingest
 from pipelines.js_mine import run_js_mine
 from pipelines.notify import run_notify
 from pipelines.nuclei_watch import run_nuclei_watch
+from pipelines.param_discovery import run_param_discovery
 from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
+from pipelines.reverse_dns import run_reverse_dns
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
 from pipelines.service_scan import run_service_scan
@@ -251,6 +253,7 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "domain_intel",  # passive: email spoofability + domain registration risk
     "ingest",
     "uncover",  # optional — Shodan/Censys passive discovery
+    "reverse_dns",  # optional — PTR sweep of ASN-confirmed ranges
     "probe",
     "tls",  # optional
     "takeover",
@@ -259,6 +262,7 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "js_mine",  # mine the app's own JavaScript for routes/hosts
     "api_surface",  # robots/sitemap/OpenAPI/GraphQL/.well-known
     "http_misconfig",  # CORS + open redirect + WAF context
+    "param_discovery",  # optional — hidden query parameters
     "broken_links",  # hijackable outbound links
     "port_scan",
     "service_scan",  # optional
@@ -362,6 +366,18 @@ async def run_full_pipeline(
                 ),
             ),
         ),
+        (
+            # PTR sweep of ASN-confirmed ranges only — see pipelines/reverse_dns.py for
+            # why this stage is the one with the most room to go wrong.
+            "reverse_dns",
+            optional(
+                "reverse_dns",
+                lambda t: run_reverse_dns(
+                    mongo=mongo, scope=scope, tenant=tenant, program_id=program_id,
+                    timeout=t, **inj("ptr_lookup"),
+                ),
+            ),
+        ),
         ("probe", lambda t: run_probe(**common, timeout=t, **inj("probe"))),
         ("tls", optional("tls", lambda t: run_tls_scan(**common, timeout=t, **inj("tlsinspect")))),
         ("takeover", lambda t: run_takeover(**common, timeout=t, limiter=limiter)),
@@ -389,6 +405,15 @@ async def run_full_pipeline(
             "http_misconfig",
             lambda t: run_http_misconfig(
                 **common, timeout=t, limiter=limiter, **inj("misconfig_fetch")
+            ),
+        ),
+        (
+            "param_discovery",
+            optional(
+                "param_discovery",
+                lambda t: run_param_discovery(
+                    **common, timeout=t, limiter=limiter, **inj("param_fetch")
+                ),
             ),
         ),
         (
