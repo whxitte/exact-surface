@@ -319,6 +319,112 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: "api-surface",
+    title: "What each host publishes about itself",
+    icon: Boxes,
+    keywords:
+      "robots sitemap swagger openapi graphql introspection well-known api schema paths hidden",
+    body: (
+      <>
+        <p>
+          Targets hand over more than they realise. <Term>robots.txt</Term> is a public list of
+          the paths an administrator wanted kept out of search results — which is exactly where
+          an attacker looks first. <Term>sitemap.xml</Term> is the site&apos;s own inventory,
+          often including pages nothing links to any more.
+        </p>
+        <p>
+          <Term>API schemas</Term> are the big one. An exposed <Term>swagger.json</Term> or{" "}
+          <Term>openapi.json</Term> documents every route, parameter and auth requirement in a
+          single file, and <Term>GraphQL introspection</Term> does the same for GraphQL — one
+          unauthenticated query returns the complete type system, including mutations that were
+          never linked anywhere. We ask the server to describe itself; we never call a mutation
+          or read data through it.
+        </p>
+        <p>
+          Every path found this way is added to Endpoints, so content discovery and vulnerability
+          scanning test it on the next run.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "misconfig",
+    title: "CORS, open redirects and WAFs",
+    icon: Boxes,
+    keywords: "cors origin credentials open redirect phishing waf cloudflare firewall protected",
+    body: (
+      <>
+        <p>
+          <Term>CORS</Term> decides which other websites may read responses from yours. We send
+          one request with a made-up origin and read the reply. If the server echoes that origin
+          back <em>and</em> allows credentials, any site a logged-in user visits can read their
+          authenticated data — that is reported High. A plain <Term>*</Term> on its own is not
+          reported at all: it is how every public API is configured, and browsers refuse to send
+          credentials with it. Flagging it would bury the real ones.
+        </p>
+        <p>
+          An <Term>open redirect</Term> lets someone send a link that starts on your trusted
+          domain and lands the victim elsewhere — the standard opening move for phishing, and a
+          way to steal OAuth tokens. We only test redirect parameters your own pages already use,
+          we point them at a reserved example domain, and we read the{" "}
+          <Term>Location</Term> header without following it.
+        </p>
+        <p>
+          <Term>WAF detection</Term> is context rather than a finding. Knowing a host sits behind
+          Cloudflare explains why it returned less than its neighbour — and knowing which hosts
+          have no WAF tells you where your unprotected surface actually is.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "lookalikes",
+    title: "Lookalike domains and dependency confusion",
+    icon: Boxes,
+    keywords: "typosquat lookalike phishing homoglyph dependency confusion npm package supply chain",
+    body: (
+      <>
+        <p>
+          <Term>Lookalike domains</Term> invert the usual question. Instead of what you own and
+          forgot, this is what somebody else registered to impersonate you: dropped letters,
+          neighbouring-key typos, homoglyphs (<Term>rn</Term> for <Term>m</Term>), and
+          &ldquo;secure-&rdquo; prefixes. We generate the mutations phishing operators actually
+          use, resolve them, and report only the ones that exist. One with <Term>MX</Term>{" "}
+          records ranks higher — that is a phishing campaign with the mail plumbing already
+          installed. It is off by default because it resolves several hundred names per run.
+        </p>
+        <p>
+          <Term>Dependency confusion</Term> reads the package names inside your published
+          JavaScript and asks the public npm registry whether anyone owns them. A name your build
+          uses that nobody has claimed can be published by an attacker, whose code then runs
+          inside your build with whatever it can reach. We only ever read registry metadata —
+          registering the name defensively is your call, and the finding explains how.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "attack-paths",
+    title: "Attack paths",
+    icon: Boxes,
+    keywords: "attack path chain narrative story correlation phases exploit route",
+    body: (
+      <>
+        <p>
+          On the <Term>Surface</Term> tab, findings that share a host are retold in the order an
+          attacker would use them: an exposure leads to a foothold, which leads to credentials,
+          which leads to access.
+        </p>
+        <p>
+          A host needs findings spanning <Term>at least two</Term> stages of an attack before
+          anything is called a path. A single finding is a finding — presenting it as a chain
+          would overstate what we know, so we do not. Every step names the check it came from,
+          so you can open the finding and verify the claim rather than taking our word for it.
+        </p>
+      </>
+    ),
+  },
+  {
     id: "modules",
     title: "Turning modules on and off",
     icon: Boxes,
