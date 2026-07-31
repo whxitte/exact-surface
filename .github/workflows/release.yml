@@ -133,6 +133,7 @@ jobs:
             ${{ steps.ns.outputs.value }}/${{ matrix.name }}:latest
           build-args: |
             BUILD_ID=${{ needs.verify.outputs.version }}
+            GIT_COMMIT=${{ github.sha }}
             LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}

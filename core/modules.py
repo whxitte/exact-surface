@@ -234,7 +234,10 @@ class ModuleState:
 
 
 def resolve(
-    *, enabled_modules: object = (), disabled_modules: object = ()
+    *,
+    enabled_modules: object = (),
+    disabled_modules: object = (),
+    licensed_modules: object = None,
 ) -> ModuleState:
     """Turn a program's stored choices into what will actually run.
 
@@ -242,9 +245,17 @@ def resolve(
     ``disabled_modules`` opts *out of* anything else. Essential modules ignore the
     disable list. Anything whose requirement is unmet is reported as skipped with the
     dependency named, so a stage never silently does nothing.
+
+    ``licensed_modules`` is the set of opt-in modules the subscription covers, from
+    ``core.plans``. ``None`` means "no licence restriction" (dev). A module outside it
+    cannot be opted into, and says so plainly — the licence gate lives here rather than
+    at the API edge because this is the one function every path already goes through
+    (the settings screen, the orchestrator, the scheduler and dispatch), so a new caller
+    cannot forget it.
     """
     opted_in = {str(m) for m in (enabled_modules or ())}
     opted_out = {str(m) for m in (disabled_modules or ())}
+    licensed = None if licensed_modules is None else {str(m) for m in licensed_modules}
 
     enabled: set[str] = set()
     skipped: dict[str, str] = {}
@@ -255,6 +266,9 @@ def resolve(
             continue
         if spec.name in opted_out:
             skipped[spec.name] = "turned off in settings"
+            continue
+        if not spec.default_enabled and licensed is not None and spec.name not in licensed:
+            skipped[spec.name] = "not included in your subscription"
             continue
         if not spec.default_enabled and spec.name not in opted_in:
             skipped[spec.name] = (
@@ -290,9 +304,19 @@ def sanitize_disabled(names: object) -> list[str]:
     )
 
 
-def catalogue(*, enabled_modules: object = (), disabled_modules: object = ()) -> list[dict]:
+def catalogue(
+    *,
+    enabled_modules: object = (),
+    disabled_modules: object = (),
+    licensed_modules: object = None,
+) -> list[dict]:
     """The full module list with each one's current state — what the settings UI renders."""
-    state = resolve(enabled_modules=enabled_modules, disabled_modules=disabled_modules)
+    state = resolve(
+        enabled_modules=enabled_modules,
+        disabled_modules=disabled_modules,
+        licensed_modules=licensed_modules,
+    )
+    licensed = None if licensed_modules is None else {str(m) for m in licensed_modules}
     opted_out = {str(m) for m in (disabled_modules or ())}
     return [
         {
@@ -308,6 +332,11 @@ def catalogue(*, enabled_modules: object = (), disabled_modules: object = ()) ->
             "enabled": state.is_enabled(spec.name),
             "turned_off": spec.name in opted_out,
             "skip_reason": state.reason(spec.name),
+            # False = the tier does not include it, so the UI shows an upgrade prompt
+            # rather than a switch that would be refused on save.
+            "licensed": (
+                True if licensed is None or spec.default_enabled else spec.name in licensed
+            ),
         }
         for spec in MODULES
     ]

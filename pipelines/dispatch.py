@@ -194,9 +194,13 @@ async def run_pipeline(
     # not — a new host found by crawl would otherwise trigger a `scan` the settings
     # screen says is disabled. Dispatch is where every automated path converges, so the
     # gate belongs here.
+    from db.programs import tenant_limits
+
+    limits = await tenant_limits(mongo, tenant.tenant_id)
     module_state = module_registry.resolve(
         enabled_modules=program.get("enabled_modules"),
         disabled_modules=program.get("disabled_modules"),
+        licensed_modules=limits.optional_modules,
     )
     if pipeline in module_registry.BY_NAME and not module_state.is_enabled(pipeline):
         from core.logging import logger
