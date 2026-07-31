@@ -10,3 +10,4 @@ frontend/out
 .mypy_cache
 backups
 *.log
+devtools

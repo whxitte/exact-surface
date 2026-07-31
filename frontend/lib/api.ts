@@ -533,11 +533,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ enabled, disabled }),
     }),
-  runModule: (id: string, module: string) =>
-    request<{ status: string; module: string; label: string; detail: string }>(
-      `/programs/${id}/run-module`,
-      { method: "POST", body: JSON.stringify({ module }) },
-    ),
   getAttackPaths: (id: string) =>
     request<{ count: number; paths: AttackPath[] }>(`/programs/${id}/attack-paths`),
   getSchedule: (id: string) => request<Schedule>(`/programs/${id}/schedule`),

@@ -203,6 +203,8 @@ The pipeline mirrors a real black-box engagement, in order:
 | Crawling & archives | katana + gau/waybackurls. |
 | Content discovery | feroxbuster (ffuf fallback), tech-aware wordlists. |
 | **JavaScript mining** | Mines your own JS bundles for API routes, internal hostnames and source maps; discovered paths feed back as endpoints. |
+| **API & path disclosure** | robots.txt + sitemap mining, OpenAPI/Swagger schema detection, GraphQL introspection, `.well-known`. Paths found become endpoints. |
+| **CORS, redirects & WAF** | Reflected/null-origin CORS with credentials, open redirects (only on parameters the site already uses), and which hosts sit behind a WAF. |
 | **Broken-link hijacking** | Outbound links to unregistered domains or unclaimed social handles. |
 | Port scanning | naabu, on confirmed-dedicated infrastructure only. |
 | Service fingerprinting | nmap -sV. Opt-in. |
@@ -213,7 +215,9 @@ The pipeline mirrors a real black-box engagement, in order:
 | Cloud storage exposure | S3/GCS/Azure bucket enumeration. Opt-in. |
 | New-template watch | Alerts when a newly published nuclei template starts matching your stack. Opt-in. |
 | Search-engine exposure | Dorking. Opt-in (needs a search API key). |
-| Risk correlation | Groups findings per host into ranked attack chains. |
+| **Dependency confusion** | Internal package names in your public JS that nobody has claimed on npm — an attacker who publishes one lands code in your build. |
+| **Lookalike domains** | Registered typosquats aimed at phishing your staff and customers; MX records rank higher. Opt-in (resolves ~600 names per run). |
+| Risk correlation | Groups findings per host into ranked attack chains, and retells them as an **attack path** in attacker order (needs 2+ phases on one host — a single finding is never called a chain). |
 | Alerting | Delivers new findings to your channels. |
 
 On-demand (not scheduled): **403/401 bypass** — from the Endpoints tab.

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ExactSurface Workbench</title>
+<style>
+  :root{
+    --bg:#0c1215; --surface:#121a1e; --surface2:#182228; --text:#e6edef; --muted:#93a4ab;
+    --border:#243137; --teal:#2dd4bf; --red:#e86a5b; --green:#45c485; --amber:#e0b040;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif}
+  header{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface)}
+  header h1{margin:0;font-size:15px;font-weight:700;letter-spacing:-.01em}
+  .badge{font:11px var(--mono);background:#e86a5b22;border:1px solid #e86a5b55;color:var(--red);padding:2px 8px;border-radius:5px}
+  .tabs{display:flex;gap:2px;margin-left:auto}
+  .tabs button{background:none;border:1px solid transparent;color:var(--muted);padding:5px 12px;border-radius:6px;cursor:pointer;font-size:13px}
+  .tabs button.on{background:var(--surface2);border-color:var(--border);color:var(--text)}
+  main{display:grid;grid-template-columns:330px 1fr 1fr;gap:1px;background:var(--border);height:calc(100vh - 49px)}
+  @media(max-width:1100px){main{grid-template-columns:1fr;height:auto}}
+  .pane{background:var(--bg);overflow-y:auto;padding:14px}
+  .pane h2{font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:600}
+  input,select,textarea,button{font-family:inherit;font-size:13px}
+  input,select,textarea{width:100%;background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px}
+  textarea{font-family:var(--mono);font-size:12px;min-height:56px;resize:vertical}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--teal);outline-offset:-1px}
+  .search{margin-bottom:10px}
+  .grp{font:10px var(--mono);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:12px 0 4px;padding-top:8px;border-top:1px solid var(--border)}
+  .item{padding:6px 8px;border-radius:6px;cursor:pointer;border:1px solid transparent}
+  .item:hover{background:var(--surface)}
+  .item.on{background:var(--surface2);border-color:var(--teal)}
+  .item .n{font:12px var(--mono);color:var(--text)}
+  .item .m{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row{margin-bottom:10px}
+  .row label{display:block;font:11px var(--mono);color:var(--muted);margin-bottom:3px}
+  .row .req{color:var(--red)}
+  .hint{font-size:11px;color:var(--muted);margin-top:2px}
+  .btn{background:var(--teal);color:#06231f;border:none;border-radius:6px;padding:7px 14px;font-weight:650;cursor:pointer}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .btn.ghost{background:none;border:1px solid var(--border);color:var(--muted)}
+  .btn.danger{background:none;border:1px solid #e86a5b55;color:var(--red)}
+  pre{background:#000a;border:1px solid var(--border);border-radius:6px;padding:10px;font:11.5px/1.6 var(--mono);overflow:auto;max-height:44vh;white-space:pre-wrap;word-break:break-word;color:var(--muted)}
+  .doc{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:12px;color:var(--muted);white-space:pre-wrap;margin-bottom:12px;max-height:30vh;overflow:auto}
+  .st{font:10px var(--mono);text-transform:uppercase;padding:1px 6px;border-radius:4px}
+  .st.success{background:#45c48522;color:var(--green)} .st.failed{background:#e86a5b22;color:var(--red)}
+  .st.running{background:#2dd4bf22;color:var(--teal)} .st.cancelled{background:#93a4ab22;color:var(--muted)}
+  .runrow{display:flex;align-items:center;gap:8px;padding:5px 6px;border-radius:5px;cursor:pointer}
+  .runrow:hover{background:var(--surface)}
+  .runrow.on{background:var(--surface2)}
+  .runrow .l{flex:1;min-width:0;font:11.5px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .warn{background:#e0b04012;border:1px solid #e0b04044;color:var(--amber);border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>ExactSurface Workbench</h1>
+  <span class="badge">INTERNAL · LOCAL ONLY</span>
+  <div class="tabs">
+    <button id="tab-fn" class="on" onclick="setTab('fn')">Functions</button>
+    <button id="tab-stage" onclick="setTab('stage')">Pipeline stages</button>
+  </div>
+</header>
+
+<main>
+  <div class="pane">
+    <h2 id="listTitle">Functions</h2>
+    <input class="search" id="q" placeholder="filter…" oninput="renderList()">
+    <div id="list"></div>
+  </div>
+
+  <div class="pane">
+    <h2>Parameters</h2>
+    <div id="form"><p class="hint">Pick something on the left.</p></div>
+  </div>
+
+  <div class="pane">
+    <h2>Runs</h2>
+    <div id="runs"></div>
+    <div id="detail"></div>
+  </div>
+</main>
+
+<script>
+let TAB = "fn", FNS = [], STAGES = [], PROGRAMS = [], SEL = null, WATCH = null;
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+async function boot() {
+  const [f, s, p] = await Promise.all([
+    fetch("/api/callables").then(r => r.json()),
+    fetch("/api/stages").then(r => r.json()),
+    fetch("/api/programs").then(r => r.json()),
+  ]);
+  FNS = f.items; STAGES = s.items; PROGRAMS = p.items || [];
+  renderList(); pollRuns(); setInterval(pollRuns, 1500);
+}
+
+function setTab(t) {
+  TAB = t; SEL = null;
+  document.getElementById("tab-fn").className = t === "fn" ? "on" : "";
+  document.getElementById("tab-stage").className = t === "stage" ? "on" : "";
+  document.getElementById("listTitle").textContent = t === "fn" ? "Functions" : "Pipeline stages";
+  document.getElementById("form").innerHTML = '<p class="hint">Pick something on the left.</p>';
+  renderList();
+}
+
+function renderList() {
+  const q = document.getElementById("q").value.toLowerCase();
+  const el = document.getElementById("list");
+  if (TAB === "stage") {
+    el.innerHTML = STAGES.filter(s => (s.name + s.label).toLowerCase().includes(q)).map(s => `
+      <div class="item ${SEL?.name === s.name ? "on" : ""}" onclick='pickStage(${JSON.stringify(s.name)})'>
+        <div class="n">${esc(s.name)}${s.opt_in ? " ·opt-in" : ""}</div>
+        <div class="m">${esc(s.label)}</div>
+      </div>`).join("");
+    return;
+  }
+  let html = "", group = "";
+  for (const c of FNS.filter(c => (c.qualname + c.doc).toLowerCase().includes(q))) {
+    if (c.group !== group) { group = c.group; html += `<div class="grp">${esc(group)}</div>`; }
+    html += `<div class="item ${SEL?.qualname === c.qualname ? "on" : ""}" onclick='pickFn(${JSON.stringify(c.qualname)})'>
+      <div class="n">${esc(c.name)}${c.is_async ? " ·async" : ""}</div>
+      <div class="m">${esc(c.module.replace("modules.", ""))}</div>
+    </div>`;
+  }
+  el.innerHTML = html || '<p class="hint">nothing matches.</p>';
+}
+
+function pickFn(qualname) {
+  SEL = FNS.find(c => c.qualname === qualname);
+  renderList();
+  const rows = SEL.params.map(p => {
+    const big = p.kind === "dict" || p.kind === "list" || p.kind === "any";
+    const dv = p.default === null || p.default === undefined ? "" : (typeof p.default === "object" ? JSON.stringify(p.default) : p.default);
+    const field = p.kind === "bool"
+      ? `<select data-p="${p.name}"><option value="">(default${dv === "" ? "" : ": " + dv})</option><option value="true">true</option><option value="false">false</option></select>`
+      : big
+      ? `<textarea data-p="${p.name}" placeholder="${esc(p.annotation || p.kind)} — JSON, or comma-separated"></textarea>`
+      : `<input data-p="${p.name}" placeholder="${esc(dv !== "" ? "default: " + dv : p.annotation || p.kind)}">`;
+    return `<div class="row"><label>${esc(p.name)}${p.required ? ' <span class="req">*</span>' : ""}
+      <span style="color:#5a6a70">${esc(p.kind)}</span></label>${field}</div>`;
+  }).join("");
+  document.getElementById("form").innerHTML = `
+    <div class="doc"><b>${esc(SEL.qualname)}</b>${SEL.returns ? " → " + esc(SEL.returns) : ""}\n\n${esc(SEL.doc || "(no docstring)")}</div>
+    ${rows || '<p class="hint">Takes no arguments.</p>'}
+    <button class="btn" onclick="runFn()">Run</button>`;
+}
+
+function pickStage(name) {
+  SEL = STAGES.find(s => s.name === name);
+  renderList();
+  const opts = PROGRAMS.map(p => `<option value="${p.program_id}|${p.tenant_id}">${esc(p.apex_domain)} (${esc(p.program_id)})${p.verified ? "" : " — UNVERIFIED"}</option>`).join("");
+  document.getElementById("form").innerHTML = `
+    <div class="doc"><b>${esc(SEL.name)}</b> — ${esc(SEL.label)}\n\n${esc(SEL.summary)}${SEL.requires.length ? "\n\nrequires: " + esc(SEL.requires.join(", ")) : ""}</div>
+    <div class="warn">Runs the real stage through the product dispatcher — scope, authorization,
+      module on/off and rate limits all apply, exactly as in production.</div>
+    <div class="row"><label>program</label>
+      ${PROGRAMS.length ? `<select id="prog">${opts}</select>` : '<p class="hint">No programs found (is Mongo running?).</p>'}</div>
+    <div class="row"><label>timeout (s)</label><input id="tmo" value="300"></div>
+    <button class="btn" onclick="runStage()" ${PROGRAMS.length ? "" : "disabled"}>Run stage</button>`;
+}
+
+async function runFn() {
+  const args = {};
+  document.querySelectorAll("[data-p]").forEach(el => { if (el.value !== "") args[el.dataset.p] = el.value; });
+  const r = await post("/api/call", { qualname: SEL.qualname, args });
+  if (r) { WATCH = r.run_id; pollRuns(); }
+}
+
+async function runStage() {
+  const [program_id, tenant_id] = document.getElementById("prog").value.split("|");
+  const r = await post("/api/stage", { module: SEL.name, program_id, tenant_id, timeout: +document.getElementById("tmo").value });
+  if (r) { WATCH = r.run_id; pollRuns(); }
+}
+
+async function post(url, body) {
+  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) { alert(data.detail || res.statusText); return null; }
+  return data;
+}
+
+async function stopRun(id, ev) {
+  ev.stopPropagation();
+  await post(`/api/runs/${id}/stop`, {});
+  pollRuns();
+}
+
+async function pollRuns() {
+  const { items } = await fetch("/api/runs").then(r => r.json());
+  document.getElementById("runs").innerHTML = items.map(r => `
+    <div class="runrow ${WATCH === r.run_id ? "on" : ""}" onclick='watch(${JSON.stringify(r.run_id)})'>
+      <span class="st ${r.status}">${r.status}</span>
+      <span class="l">${esc(r.label)}</span>
+      <span style="font-size:11px;color:#5a6a70">${r.duration}s</span>
+      ${r.status === "running" ? `<button class="btn danger" style="padding:2px 8px;font-size:11px" onclick='stopRun(${JSON.stringify(r.run_id)},event)'>stop</button>` : ""}
+    </div>`).join("") || '<p class="hint">No runs yet.</p>';
+  if (WATCH) showDetail(WATCH);
+}
+
+function watch(id) { WATCH = id; pollRuns(); }
+
+async function showDetail(id) {
+  const res = await fetch(`/api/runs/${id}`);
+  if (!res.ok) return;
+  const r = await res.json();
+  document.getElementById("detail").innerHTML = `
+    <h2 style="margin-top:16px">Result · ${esc(r.label)}</h2>
+    ${r.error ? `<pre style="color:#e86a5b">${esc(r.error)}</pre>` : ""}
+    ${r.result !== null && r.result !== undefined ? `<pre>${esc(JSON.stringify(r.result, null, 2))}</pre>` : ""}
+    <h2 style="margin-top:16px">Logs (${r.logs.length})</h2>
+    <pre>${esc(r.logs.join("\n")) || "(no output)"}</pre>`;
+}
+
+boot();
+</script>
+</body>
+</html>
