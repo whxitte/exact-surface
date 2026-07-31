@@ -4,31 +4,128 @@ The worker calls this for each scheduled job. It loads the program + authorizati
 refuses without a current authorization (§9b/§9e), builds the ``ProgramScope``, and
 routes to the right pipeline. Centralising the routing keeps the worker thin and
 the scope/auth enforcement in one place.
+
+Routing lives in :data:`ROUTES`, a table keyed by module name, rather than an
+if-chain. That is deliberate: every module in :mod:`core.modules` must have an entry,
+and ``tests/unit/test_dispatch.py`` asserts exactly that. When the table was a chain
+of ``if`` statements, adding a module to the registry and its cadence without adding
+it here was silent — the scheduler happily enqueued ``js_mine`` every night and every
+run died with "unknown pipeline". The table makes that a failing test instead.
 """
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from typing import Any
 
+from core import modules as module_registry
 from core.errors import AuthorizationRequired
 from core.ratelimit import PolitenessLimiter
-from core.scope import ScopeEngine
+from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
+from pipelines.broken_links import run_broken_links
+from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
+from pipelines.correlate import run_correlate
 from pipelines.crawl import run_crawl
 from pipelines.cve_watch import run_cve_watch
+from pipelines.domain_intel import run_domain_intel
+from pipelines.dork import run_dork
 from pipelines.github_osint import run_github_leak_scan
 from pipelines.ingest import run_ingest
+from pipelines.js_mine import run_js_mine
 from pipelines.notify import run_notify
+from pipelines.nuclei_watch import run_nuclei_watch
 from pipelines.orchestrate import build_program_scope
 from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
+from pipelines.service_scan import run_service_scan
 from pipelines.takeover import run_takeover
+from pipelines.tls import run_tls_scan
 from pipelines.uncover import run_uncover
+
+
+@dataclass(frozen=True)
+class Ctx:
+    """Everything a single-phase run needs. Built once, handed to the route."""
+
+    mongo: Any
+    engine: ScopeEngine
+    scope: ProgramScope
+    tenant: TenantContext
+    program_id: str
+    apex: str
+    timeout: float
+    hmac_key: bytes | None = None
+    limiter: PolitenessLimiter | None = None
+    #: hostnames a cascade run is narrowed to; None = the whole program
+    targets: set[str] | None = None
+
+    @property
+    def scanning(self) -> dict:
+        """Args for stages that reach out to hosts: scope, engine and a tool budget."""
+        return {
+            "mongo": self.mongo,
+            "engine": self.engine,
+            "scope": self.scope,
+            "tenant": self.tenant,
+            "program_id": self.program_id,
+            "timeout": self.timeout,
+        }
+
+    @property
+    def core(self) -> dict:
+        """Args for stages that only read and write the database."""
+        return {"mongo": self.mongo, "tenant": self.tenant, "program_id": self.program_id}
+
+
+#: module name -> how to run it. Keys must cover ``core.modules.MODULE_NAMES``.
+ROUTES: dict[str, Callable[[Ctx], Awaitable[dict]]] = {
+    "domain_intel": lambda c: run_domain_intel(**c.core, apex=c.apex),
+    "ingest": lambda c: run_ingest(**c.scanning, apex=c.apex),
+    "uncover": lambda c: run_uncover(**c.scanning, apex=c.apex),
+    "probe": lambda c: run_probe(**c.scanning, targets=c.targets),
+    "tls": lambda c: run_tls_scan(**c.scanning),
+    "takeover": lambda c: run_takeover(**c.scanning, limiter=c.limiter),
+    "crawl": lambda c: run_crawl(**c.scanning, apex=c.apex, targets=c.targets),
+    "content_discovery": lambda c: run_content_discovery(**c.scanning),
+    "js_mine": lambda c: run_js_mine(**c.scanning, limiter=c.limiter),
+    "broken_links": lambda c: run_broken_links(
+        mongo=c.mongo,
+        scope=c.scope,
+        tenant=c.tenant,
+        program_id=c.program_id,
+        timeout=c.timeout,
+        limiter=c.limiter,
+    ),
+    "port_scan": lambda c: run_port_scan(**c.scanning, targets=c.targets),
+    "service_scan": lambda c: run_service_scan(**c.scanning),
+    "scan": lambda c: run_scan(**c.scanning, targets=c.targets),
+    "secrets": lambda c: run_secret_scan(
+        mongo=c.mongo,
+        engine=c.engine,
+        scope=c.scope,
+        tenant=c.tenant,
+        program_id=c.program_id,
+        hmac_key=c.hmac_key,
+        targets=c.targets,
+        limiter=c.limiter,
+    ),
+    "cve_watch": lambda c: run_cve_watch(**c.core),
+    "github_osint": lambda c: run_github_leak_scan(
+        **c.core, domain=c.apex, hmac_key=c.hmac_key
+    ),
+    "cloud_buckets": lambda c: run_cloud_buckets(**c.core, apex=c.apex),
+    "nuclei_watch": lambda c: run_nuclei_watch(**c.core),
+    "dork": lambda c: run_dork(**c.core, domain=c.apex),
+    "correlate": lambda c: run_correlate(**c.core),
+    "notify": lambda c: run_notify(**c.core),
+}
 
 
 def _auth_current(auth: dict | None) -> bool:
@@ -74,6 +171,22 @@ async def run_pipeline(
     if not _auth_current(auth):
         raise AuthorizationRequired(f"no current authorization for program {program_id}")
 
+    # A module the user switched off (or whose dependency is off) must not run, whatever
+    # enqueued it. The scheduler already filters its own fan-out, but the cascade does
+    # not — a new host found by crawl would otherwise trigger a `scan` the settings
+    # screen says is disabled. Dispatch is where every automated path converges, so the
+    # gate belongs here.
+    module_state = module_registry.resolve(
+        enabled_modules=program.get("enabled_modules"),
+        disabled_modules=program.get("disabled_modules"),
+    )
+    if pipeline in module_registry.BY_NAME and not module_state.is_enabled(pipeline):
+        from core.logging import logger
+
+        reason = module_state.reason(pipeline) or "not enabled"
+        logger.info("{} is disabled for {} ({}) — skipping", pipeline, program_id, reason)
+        return {"skipped": True, "note": reason}
+
     scope = build_program_scope(program, auth)
     apex = program["apex_domain"]
     # cascade: when a job carries specific hostnames, phases scope their work to them
@@ -88,52 +201,25 @@ async def run_pipeline(
         program.get("timeout_overrides"), (tenant_doc or {}).get("timeout_overrides")
     )
     phase_timeout = timeouts.get(pipeline, timeout)
-    common = dict(
+    ctx = Ctx(
         mongo=mongo,
         engine=engine,
         scope=scope,
         tenant=tenant,
         program_id=program_id,
+        apex=apex,
         timeout=phase_timeout,
+        hmac_key=hmac_key,
+        limiter=limiter,
+        targets=tset,
     )
 
-    async def _execute() -> dict:
-        if pipeline == "ingest":
-            return await run_ingest(**common, apex=apex)
-        if pipeline == "uncover":
-            return await run_uncover(**common, apex=apex)
-        if pipeline == "probe":
-            return await run_probe(**common, targets=tset)
-        if pipeline == "crawl":
-            return await run_crawl(**common, apex=apex, targets=tset)
-        if pipeline == "scan":
-            return await run_scan(**common, targets=tset)
-        if pipeline == "content_discovery":
-            return await run_content_discovery(**common)
-        if pipeline == "port_scan":
-            return await run_port_scan(**common, targets=tset)
-        if pipeline == "takeover":
-            return await run_takeover(**common, limiter=limiter)
-        if pipeline == "secrets":
-            return await run_secret_scan(
-                mongo=mongo,
-                engine=engine,
-                scope=scope,
-                tenant=tenant,
-                program_id=program_id,
-                hmac_key=hmac_key,
-                targets=tset,
-                limiter=limiter,
-            )
-        if pipeline == "cve_watch":
-            return await run_cve_watch(mongo=mongo, tenant=tenant, program_id=program_id)
-        if pipeline == "github_osint":
-            return await run_github_leak_scan(
-                mongo=mongo, tenant=tenant, program_id=program_id, domain=apex, hmac_key=hmac_key
-            )
-        if pipeline == "notify":
-            return await run_notify(mongo=mongo, tenant=tenant, program_id=program_id)
+    route = ROUTES.get(pipeline)
+    if route is None:
         raise ValueError(f"unknown pipeline: {pipeline}")
+
+    async def _execute() -> dict:
+        return await route(ctx)
 
     # Record a ScanRun so every pipeline execution is visible in the activity feed.
     import asyncio
