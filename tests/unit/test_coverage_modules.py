@@ -266,3 +266,107 @@ def test_paths_are_ranked_worst_first():
         _f("cve_watch", "c", "critical", host="hot.acme.com"),
     ])
     assert paths[0].host == "hot.acme.com"
+
+
+# -- parameter discovery ----------------------------------------------------
+
+
+def test_observed_params_cost_nothing_and_come_from_our_own_data():
+    from modules.scanning import params as P
+
+    obs = P.extract_observed([
+        "https://a.com/r?debug=1&id=5", "https://a.com/r?id=6", "https://a.com/plain",
+    ])
+    by_name = {o.name: o for o in obs}
+    assert set(by_name) == {"debug", "id"}
+    assert by_name["id"].values_seen == 2  # two distinct values seen
+    assert by_name["debug"].notable is not None
+
+
+def test_probe_url_preserves_existing_query():
+    from modules.scanning import params as P
+
+    out = P.probe_url("https://a.com/r?id=5", ["debug"])
+    assert "id=5" in out and "debug=exactsurface" in out
+
+
+def test_batch_that_changes_nothing_eliminates_every_param_in_it():
+    """One request rules out a dozen names — this is what keeps the probe bounded."""
+    from modules.scanning import params as P
+
+    base = P.Baseline("https://a.com/r", 200, 1000)
+    assert P.analyse_batch(base, ["a", "b", "c"], 200, "x" * 1010) is False
+    assert P.analyse_batch(base, ["a", "b", "c"], 200, "x" * 1200) is True
+    assert P.analyse_batch(base, ["a"], 500, "x" * 1000) is True
+
+
+def test_small_length_jitter_is_not_a_finding():
+    """Pages carry per-request noise — timestamps, CSRF tokens. A few bytes is not
+    a signal, and treating it as one would make every page a finding."""
+    from modules.scanning import params as P
+
+    base = P.Baseline("https://a.com/r", 200, 1000)
+    assert P.classify("debug", base, 200, "x" * 1020) is None
+
+
+def test_reflection_raises_severity_but_is_not_called_xss():
+    from modules.scanning import params as P
+
+    base = P.Baseline("https://a.com/r", 200, 1000)
+    hit = P.classify("format", base, 200, "hello exactsurface world")
+    assert hit and hit.reflected and hit.severity is Severity.MEDIUM
+    assert "xss" not in hit.evidence.lower() and "inert" in hit.evidence
+
+
+def test_admin_flag_outranks_a_generic_parameter():
+    from modules.scanning import params as P
+
+    base = P.Baseline("https://a.com/r", 200, 1000)
+    admin = P.classify("is_admin", base, 200, "x" * 1200)
+    plain = P.classify("sort", base, 200, "x" * 1200)
+    assert admin.severity is Severity.HIGH and plain.severity is Severity.LOW
+
+
+# -- reverse DNS ------------------------------------------------------------
+
+
+def test_oversized_range_is_refused_not_truncated():
+    """A /8 in a scope entry is a mistake. Quietly sweeping its first 4096 addresses
+    would hide the mistake and still generate the traffic."""
+    from modules.recon import reverse_dns as rd
+
+    assert rd.expand("10.0.0.0/8") == []
+    assert rd.expand("192.168.1.0/24")[:1] == ["192.168.1.1"]
+    assert len(rd.expand("10.1.0.0/20")) == 4094
+
+
+def test_non_networks_and_ipv6_are_refused():
+    from modules.recon import reverse_dns as rd
+
+    assert rd.expand("not-a-cidr") == []
+    assert rd.expand("2001:db8::/32") == []
+
+
+def test_expand_all_dedupes_and_caps_globally():
+    from modules.recon import reverse_dns as rd
+
+    out = rd.expand_all(["192.168.1.0/24", "192.168.1.0/24"], total=50)
+    assert len(out) == 50 and len(set(out)) == 50
+
+
+def test_provider_default_ptr_is_not_a_discovery():
+    """ec2-1-2-3-4.compute.amazonaws.com encodes the IP, not an identity. Reporting
+    these would bury the handful of real names in thousands of rows."""
+    from modules.recon import reverse_dns as rd
+
+    assert rd.classify("1.2.3.4", "ec2-1-2-3-4.compute.amazonaws.com", ("acme.com",)) is None
+    assert rd.classify("1.2.3.4", "", ("acme.com",)) is None
+
+
+def test_in_scope_reverse_hit_is_new_surface():
+    from modules.recon import reverse_dns as rd
+
+    hit = rd.classify("1.2.3.4", "jenkins.acme.com", ("acme.com",))
+    assert hit and hit.in_scope and hit.is_new_surface
+    other = rd.classify("1.2.3.4", "mail.partner.com", ("acme.com",))
+    assert other and not other.in_scope

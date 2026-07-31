@@ -40,6 +40,8 @@ DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "http_misconfig": 10 * MINUTE,
     "supply_chain": 10 * MINUTE,  # refetch a few bundles + one registry HEAD each
     "typosquat": 10 * MINUTE,  # two batched dnsx calls over ~600 names
+    "reverse_dns": 15 * MINUTE,  # up to 8192 PTR lookups in one dnsx call
+    "param_discovery": 20 * MINUTE,  # batched binary search over 60 URLs
     "correlate": 2 * MINUTE,
     "notify": 2 * MINUTE,
 }

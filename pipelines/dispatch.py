@@ -42,8 +42,10 @@ from pipelines.js_mine import run_js_mine
 from pipelines.notify import run_notify
 from pipelines.nuclei_watch import run_nuclei_watch
 from pipelines.orchestrate import build_program_scope
+from pipelines.param_discovery import run_param_discovery
 from pipelines.port_scan import run_port_scan
 from pipelines.probe import run_probe
+from pipelines.reverse_dns import run_reverse_dns
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
 from pipelines.service_scan import run_service_scan
@@ -93,6 +95,13 @@ ROUTES: dict[str, Callable[[Ctx], Awaitable[dict]]] = {
     "domain_intel": lambda c: run_domain_intel(**c.core, apex=c.apex),
     "ingest": lambda c: run_ingest(**c.scanning, apex=c.apex),
     "uncover": lambda c: run_uncover(**c.scanning, apex=c.apex),
+    "reverse_dns": lambda c: run_reverse_dns(
+        mongo=c.mongo,
+        scope=c.scope,
+        tenant=c.tenant,
+        program_id=c.program_id,
+        timeout=c.timeout,
+    ),
     "probe": lambda c: run_probe(**c.scanning, targets=c.targets),
     "tls": lambda c: run_tls_scan(**c.scanning),
     "takeover": lambda c: run_takeover(**c.scanning, limiter=c.limiter),
@@ -101,6 +110,7 @@ ROUTES: dict[str, Callable[[Ctx], Awaitable[dict]]] = {
     "js_mine": lambda c: run_js_mine(**c.scanning, limiter=c.limiter),
     "api_surface": lambda c: run_api_surface(**c.scanning, limiter=c.limiter),
     "http_misconfig": lambda c: run_http_misconfig(**c.scanning, limiter=c.limiter),
+    "param_discovery": lambda c: run_param_discovery(**c.scanning, limiter=c.limiter),
     "supply_chain": lambda c: run_supply_chain(**c.core, timeout=c.timeout),
     "typosquat": lambda c: run_typosquat(**c.core, apex=c.apex, timeout=c.timeout),
     "broken_links": lambda c: run_broken_links(

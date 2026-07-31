@@ -59,6 +59,13 @@ MODULES: tuple[ModuleSpec, ...] = (
         opt_in_reason="needs a Shodan/Censys API key",
     ),
     ModuleSpec(
+        "reverse_dns", "Reverse-DNS sweep",
+        "PTR-sweeps the IP ranges confirmed to be yours, finding hosts that exist in "
+        "IP space but were never published in DNS. Only runs on ASN-verified ranges.",
+        requires=("ingest",), default_enabled=False,
+        opt_in_reason="needs ASN-confirmed dedicated IP ranges; sweeps up to 8192 addresses",
+    ),
+    ModuleSpec(
         "probe", "Live-host probing",
         "Checks which hosts answer over HTTP/S and fingerprints their technology.",
         requires=("ingest",), essential=True,
@@ -101,6 +108,13 @@ MODULES: tuple[ModuleSpec, ...] = (
         "Checks whether hosts hand data to any origin (CORS), can launder a phishing "
         "link (open redirect), and which of them sit behind a WAF.",
         requires=("probe",),
+    ),
+    ModuleSpec(
+        "param_discovery", "Hidden parameters",
+        "Inventories the query parameters your pages already use, and probes for "
+        "undocumented ones that change how the application behaves.",
+        requires=("crawl",), default_enabled=False,
+        opt_in_reason="sends extra requests per URL to compare responses",
     ),
     ModuleSpec(
         "broken_links", "Broken-link hijacking",
