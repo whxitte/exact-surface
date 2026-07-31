@@ -42,8 +42,8 @@ makes `assert_prod_safe()` refuse insecure secrets. Grafana is published on
 > stack, enable auth by migrating (dump → recreate the volume → restore), not by
 > flipping the compose file.
 
-4. **Scanning egress:** run workers from IPs whose abuse contact you control;
-   keep `EXACTSURFACE_MASSCAN_ENABLED=false` (ADR-0004). Every scanner subprocess stays
+4. **Scanning egress:** run workers from IPs whose abuse contact you control. Mass
+   port scanning is not shipped at all (ADR-0004) and every scanner subprocess stays
    rate-capped (ADR-0009 + ADR-0013).
 
 ## Kubernetes (Helm)

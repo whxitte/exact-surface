@@ -56,9 +56,6 @@ class Settings(BaseSettings):
     worker_fleet_size: int = Field(
         default=3, ge=1, description="Worker replicas; divides the local ceiling when degraded"
     )
-    masscan_enabled: bool = Field(
-        default=False, description="Hard-off in v1; needs dedicated netblocks (ADR-0004)"
-    )
 
     # -- scope engine ----------------------------------------------------
     scope_feed_refresh_hours: int = Field(default=24)

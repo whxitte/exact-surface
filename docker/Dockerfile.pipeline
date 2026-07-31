@@ -19,9 +19,7 @@ ARG KATANA_VERSION=v1.6.1
 ARG NUCLEI_VERSION=v3.10.0
 ARG TLSX_VERSION=v1.2.2
 ARG ASNMAP_VERSION=v1.1.1
-ARG CLOUDLIST_VERSION=v1.4.0
 ARG UNCOVER_VERSION=v1.2.1
-ARG NOTIFY_VERSION=v1.0.7
 ARG ALTERX_VERSION=v0.1.0
 ARG FFUF_VERSION=v2.1.0
 ARG GAU_VERSION=v2.2.4
@@ -40,26 +38,35 @@ RUN go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@${SUBFINDE
     go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@${NUCLEI_VERSION} && \
     go install github.com/projectdiscovery/tlsx/cmd/tlsx@${TLSX_VERSION} && \
     go install github.com/projectdiscovery/asnmap/cmd/asnmap@${ASNMAP_VERSION} && \
-    go install github.com/projectdiscovery/cloudlist/cmd/cloudlist@${CLOUDLIST_VERSION} && \
     go install github.com/projectdiscovery/uncover/cmd/uncover@${UNCOVER_VERSION} && \
-    go install github.com/projectdiscovery/notify/cmd/notify@${NOTIFY_VERSION} && \
     go install github.com/projectdiscovery/alterx/cmd/alterx@${ALTERX_VERSION} && \
     go install github.com/ffuf/ffuf/v2@${FFUF_VERSION} && \
     go install github.com/lc/gau/v2/cmd/gau@${GAU_VERSION} && \
     go install github.com/tomnomnom/waybackurls@${WAYBACKURLS_VERSION} && \
     go install filippo.io/age/cmd/age@${AGE_VERSION}
-# NOTE: gitleaks is intentionally NOT installed — secret detection is regex-based
-# (core/secrets_policy.py), it does not shell out to the gitleaks binary. (Its
-# module path also mismatches its repo, breaking `go install @latest`.)
+# Deliberately NOT installed. Every binary in this image must have a caller
+# (tests/unit/test_wiring.py enforces it) — an unused tool is dead weight in the
+# image and a false promise in the docs:
+#   gitleaks   — secret detection is regex-based (core/secrets_policy.py) plus
+#                trufflehog; nothing shells out to gitleaks. Its module path also
+#                mismatches its repo, breaking `go install @latest`.
+#   cloudlist  — enumerating a customer's cloud assets needs THEIR cloud
+#                credentials, a trust escalation we have not taken. The bucket
+#                work we do do (modules/osint/cloud_buckets.py) is pure HTTP
+#                against public endpoints and needs no binary.
+#   notify     — superseded by our own senders (modules/notification/), which are
+#                pure HTTP and let us template, dedupe and rate-limit per channel.
+#   masscan    — see docs/ADRs/0004; naabu covers port discovery and there is no
+#                masscan wrapper to enable.
 
 # ---- stage 2: runtime ------------------------------------------------------
 FROM python:3.11-slim-bookworm AS runtime
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1 PATH="/tools:${PATH}"
 
-# nmap + masscan + libpcap runtime + feroxbuster (prebuilt). Also WeasyPrint's
-# native deps (pango/cairo/gdk-pixbuf/ffi + fonts) so worker-side PDF rendering works.
+# nmap + libpcap runtime + feroxbuster (prebuilt). Also WeasyPrint's native deps
+# (pango/cairo/gdk-pixbuf/ffi + fonts) so worker-side PDF rendering works.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        nmap masscan libpcap0.8 ca-certificates curl unzip gnupg \
+        nmap libpcap0.8 ca-certificates curl unzip gnupg \
         libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libgdk-pixbuf-2.0-0 \
         libffi8 shared-mime-info fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
