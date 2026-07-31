@@ -53,6 +53,14 @@ MODULES: tuple[ModuleSpec, ...] = (
         essential=True,
     ),
     ModuleSpec(
+        "cloud_assets", "Cloud asset inventory",
+        "Asks your own AWS/GCP/Azure/DigitalOcean accounts what they are running, so "
+        "you find the load balancer or VM nobody pointed a DNS name at. Credentials "
+        "stay in your deployment and are never sent anywhere.",
+        default_enabled=False,
+        opt_in_reason="needs read-only credentials for your cloud accounts",
+    ),
+    ModuleSpec(
         "uncover", "Internet-index search",
         "Looks your assets up in Shodan/Censys/Fofa to find hosts DNS never reveals.",
         default_enabled=False,

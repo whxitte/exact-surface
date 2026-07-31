@@ -198,6 +198,7 @@ The pipeline mirrors a real black-box engagement, in order:
 |---|---|
 | Domain intelligence | Email spoofability (SPF/DMARC/DKIM) + registration risk (expiry, transfer lock, DNSSEC). Fully passive. |
 | Subdomain discovery | subfinder + crt.sh + DNS, plus **alterx permutations** (only names DNS confirms are kept). *Required.* |
+| **Cloud asset inventory** | Asks your own AWS/GCP/Azure/DigitalOcean accounts what they run, finding assets no DNS name points at. Read-only credentials stay in your deployment. Opt-in. |
 | Internet-index search | Shodan/Censys/Fofa via uncover. Opt-in. |
 | **Reverse-DNS sweep** | PTR-sweeps IP ranges confirmed yours, finding hosts that exist in IP space but were never published in DNS. Opt-in; only runs on ASN-verified ranges and refuses anything wider than a /20. |
 | Live-host probing | httpx — alive check + technology fingerprint. *Required.* |

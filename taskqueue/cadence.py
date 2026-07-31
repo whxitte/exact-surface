@@ -46,6 +46,7 @@ DEFAULT_CADENCE_SECONDS: dict[str, int] = {
     "typosquat": 24 * HOUR,
     "reverse_dns": 24 * HOUR,
     "param_discovery": 24 * HOUR,
+    "cloud_assets": 12 * HOUR,
 }
 
 #: Pipelines a user is allowed to set a custom cadence for.

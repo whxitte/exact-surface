@@ -18,7 +18,7 @@ limit is enforced in code, and how to sell an upgrade. Read alongside
 | **History kept** | 30 days | 180 days | 1 year | 3 years |
 | **On-demand 403 bypass** | — | ✓ | ✓ | ✓ |
 | **Scheduled reports** | — | ✓ | ✓ | ✓ |
-| **Optional modules** | none | TLS, service fingerprint, hidden parameters | + lookalike domains, cloud buckets, template watch, dorking, internet-index search | all, including any added later |
+| **Optional modules** | none | TLS, service fingerprint, hidden parameters | + lookalike domains, cloud buckets, cloud asset inventory, template watch, dorking, internet-index search | all, including any added later |
 
 The always-on modules — subdomain discovery, probing, crawling, content discovery, JS
 mining, API surface, CORS/redirect/WAF, takeover, nuclei, secrets, CVE watch, GitHub

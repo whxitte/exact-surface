@@ -28,6 +28,7 @@ from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
 from pipelines.api_surface import run_api_surface
 from pipelines.broken_links import run_broken_links
+from pipelines.cloud_assets import run_cloud_assets
 from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
 from pipelines.correlate import run_correlate
@@ -94,6 +95,13 @@ class Ctx:
 ROUTES: dict[str, Callable[[Ctx], Awaitable[dict]]] = {
     "domain_intel": lambda c: run_domain_intel(**c.core, apex=c.apex),
     "ingest": lambda c: run_ingest(**c.scanning, apex=c.apex),
+    "cloud_assets": lambda c: run_cloud_assets(
+        mongo=c.mongo,
+        scope=c.scope,
+        tenant=c.tenant,
+        program_id=c.program_id,
+        timeout=c.timeout,
+    ),
     "uncover": lambda c: run_uncover(**c.scanning, apex=c.apex),
     "reverse_dns": lambda c: run_reverse_dns(
         mongo=c.mongo,

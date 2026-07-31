@@ -42,6 +42,7 @@ DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "typosquat": 10 * MINUTE,  # two batched dnsx calls over ~600 names
     "reverse_dns": 15 * MINUTE,  # up to 8192 PTR lookups in one dnsx call
     "param_discovery": 20 * MINUTE,  # batched binary search over 60 URLs
+    "cloud_assets": 10 * MINUTE,  # provider APIs across a large estate
     "correlate": 2 * MINUTE,
     "notify": 2 * MINUTE,
 }
