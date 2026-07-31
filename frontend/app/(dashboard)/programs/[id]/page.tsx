@@ -21,6 +21,8 @@ import { PortsTable } from "@/components/ports-table";
 import { AttackSurfaceView } from "@/components/attack-surface-view";
 import { JsMineView } from "@/components/js-mine-view";
 import { ModuleControls } from "@/components/module-controls";
+import { ModuleConsole } from "@/components/module-console";
+import { AttackPaths } from "@/components/attack-paths";
 import { DomainIntelCard } from "@/components/domain-intel-card";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
@@ -441,6 +443,7 @@ export default function ProgramDetail() {
 
       {/* Scan modules — every module, with dependency-aware on/off */}
       {program?.verified && <ModuleControls programId={id} />}
+      {program?.verified && <ModuleConsole programId={id} />}
 
       {/* Scan schedule (cadence + last/next scan breakdown) */}
       {program?.verified && <ScheduleCard programId={id} />}
@@ -509,6 +512,7 @@ export default function ProgramDetail() {
       {tab === "surface" && (
         <div className="space-y-4">
           <DomainIntelCard programId={id} />
+          <AttackPaths programId={id} />
           <AttackSurfaceView programId={id} />
         </div>
       )}
