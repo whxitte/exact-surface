@@ -37,6 +37,13 @@ DEFAULT_CADENCE_SECONDS: dict[str, int] = {
     "cloud_buckets": 24 * HOUR,
     "nuclei_watch": 12 * HOUR,
     "dork": 24 * HOUR,
+    # Attacker-coverage wave. api_surface/http_misconfig follow the probe they depend
+    # on; supply_chain follows js_mine; typosquat is pure third-party DNS, so it is
+    # cheap for us but noisy for resolvers — daily is plenty.
+    "api_surface": 24 * HOUR,
+    "http_misconfig": 24 * HOUR,
+    "supply_chain": 24 * HOUR,
+    "typosquat": 24 * HOUR,
 }
 
 #: Pipelines a user is allowed to set a custom cadence for.

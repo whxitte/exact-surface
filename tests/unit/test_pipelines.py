@@ -232,6 +232,8 @@ async def test_full_pipeline_records_per_stage_progress():
         "crawl",
         "content_discovery",
         "js_mine",
+        "api_surface",
+        "http_misconfig",
         "broken_links",
         "port_scan",
         "service_scan",
@@ -242,6 +244,8 @@ async def test_full_pipeline_records_per_stage_progress():
         "cloud_buckets",
         "nuclei_watch",
         "dork",
+        "supply_chain",
+        "typosquat",
         "correlate",
         "notify",
     ]

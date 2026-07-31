@@ -81,7 +81,8 @@ def test_catalogue_exposes_what_the_ui_needs():
     assert len(rows) == len(MODULE_NAMES)
     crawl = rows["crawl"]
     assert crawl["turned_off"] is True and crawl["enabled"] is False
-    assert set(crawl["required_by"]) == {"js_mine", "broken_links"}
+    # supply_chain is transitive: crawl -> js_mine -> supply_chain
+    assert set(crawl["required_by"]) == {"js_mine", "broken_links", "supply_chain"}
     assert rows["ingest"]["essential"] is True
     assert rows["js_mine"]["requires"] == ["crawl"]
     assert rows["dork"]["opt_in"] is True and rows["dork"]["opt_in_reason"]

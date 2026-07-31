@@ -26,6 +26,7 @@ from core.scope import ProgramScope, ScopeEngine
 from core.tenant import TenantContext
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
+from pipelines.api_surface import run_api_surface
 from pipelines.broken_links import run_broken_links
 from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
@@ -35,6 +36,7 @@ from pipelines.cve_watch import run_cve_watch
 from pipelines.domain_intel import run_domain_intel
 from pipelines.dork import run_dork
 from pipelines.github_osint import run_github_leak_scan
+from pipelines.http_misconfig import run_http_misconfig
 from pipelines.ingest import run_ingest
 from pipelines.js_mine import run_js_mine
 from pipelines.notify import run_notify
@@ -45,8 +47,10 @@ from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
 from pipelines.service_scan import run_service_scan
+from pipelines.supply_chain import run_supply_chain
 from pipelines.takeover import run_takeover
 from pipelines.tls import run_tls_scan
+from pipelines.typosquat import run_typosquat
 from pipelines.uncover import run_uncover
 
 
@@ -95,6 +99,10 @@ ROUTES: dict[str, Callable[[Ctx], Awaitable[dict]]] = {
     "crawl": lambda c: run_crawl(**c.scanning, apex=c.apex, targets=c.targets),
     "content_discovery": lambda c: run_content_discovery(**c.scanning),
     "js_mine": lambda c: run_js_mine(**c.scanning, limiter=c.limiter),
+    "api_surface": lambda c: run_api_surface(**c.scanning, limiter=c.limiter),
+    "http_misconfig": lambda c: run_http_misconfig(**c.scanning, limiter=c.limiter),
+    "supply_chain": lambda c: run_supply_chain(**c.core, timeout=c.timeout),
+    "typosquat": lambda c: run_typosquat(**c.core, apex=c.apex, timeout=c.timeout),
     "broken_links": lambda c: run_broken_links(
         mongo=c.mongo,
         scope=c.scope,
