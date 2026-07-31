@@ -158,6 +158,22 @@ export interface ModuleInfo {
   turned_off: boolean;     // explicitly disabled by the user
   skip_reason: string;     // why it will not run
 }
+/** One step of an attack path. `finding_id` links back to the evidence. */
+export interface AttackStep {
+  phase: string;
+  text: string;
+  finding_id: string;
+  check_id: string;
+  severity: string;
+}
+export interface AttackPath {
+  host: string;
+  headline: string;
+  summary: string;
+  steps: AttackStep[];
+  severity: string;
+  risk_score: number;
+}
 export interface JsItem {
   value: string;        // the path/URL exactly as it appeared in the bundle
   kind: string;         // path | url
@@ -517,6 +533,13 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ enabled, disabled }),
     }),
+  runModule: (id: string, module: string) =>
+    request<{ status: string; module: string; label: string; detail: string }>(
+      `/programs/${id}/run-module`,
+      { method: "POST", body: JSON.stringify({ module }) },
+    ),
+  getAttackPaths: (id: string) =>
+    request<{ count: number; paths: AttackPath[] }>(`/programs/${id}/attack-paths`),
   getSchedule: (id: string) => request<Schedule>(`/programs/${id}/schedule`),
   setSchedule: (id: string, overrides: Record<string, number>) =>
     request<Schedule>(`/programs/${id}/schedule`, json({ overrides })),
