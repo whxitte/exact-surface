@@ -72,7 +72,15 @@ async def set_defaults(
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
-    overrides = sanitize_overrides(body.get("overrides") if isinstance(body, dict) else None)
+    # Floor at the plan's minimum HERE, not just when the scheduler reads it — otherwise
+    # the settings screen would echo back a 5-minute cadence that silently runs hourly.
+    from db.programs import tenant_limits
+
+    limits = await tenant_limits(mongo, principal.tenant_id)
+    overrides = sanitize_overrides(
+        body.get("overrides") if isinstance(body, dict) else None,
+        floor=limits.min_scan_interval_seconds,
+    )
     await TenantRepo.from_mongo(mongo).set_cadence_overrides(principal.tenant_id, overrides)
     return {"cadence_overrides": overrides, "pipelines": _catalog()}
 

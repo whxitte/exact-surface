@@ -105,6 +105,8 @@ class Scheduler:
         #: When the next scope-feed refresh is due. None → refresh on the first tick,
         #: so a fresh deployment publishes the merged feed to Mongo immediately.
         self._next_feed_refresh: datetime | None = None
+        #: When the next retention purge is due. None → run on the first tick.
+        self._next_purge: datetime | None = None
 
     async def _tenant_defaults(self) -> dict[str, dict]:
         """tenant_id -> its account-level cadence overrides (empty if none)."""
@@ -311,6 +313,29 @@ class Scheduler:
             logger.warning("scope feed refresh failed ({}); keeping the current feed", exc)
             return False
 
+    async def maybe_purge_expired(self, now: datetime | None = None) -> bool:
+        """Run the retention purge if it is due (daily). Returns True if it ran.
+
+        The scheduler owns it for the same reason it owns the scope feed: it is a
+        singleton that is always up, so exactly one process does the work. Fully
+        guarded — a failed purge must never touch scan scheduling.
+        """
+        now = now or datetime.now(UTC)
+        if self._next_purge is not None and now < self._next_purge:
+            return False
+        self._next_purge = now + timedelta(hours=24)
+        try:
+            from scripts.retention import purge_all
+
+            results = await purge_all(self._mongo, now=now)
+            total = sum(r.total for r in results)
+            if total:
+                logger.info("retention: purged {} expired record(s)", total)
+            return True
+        except Exception as exc:  # noqa: BLE001 - never let a purge break scheduling
+            logger.warning("retention purge failed ({}); will retry tomorrow", exc)
+            return False
+
     async def run_forever(self) -> None:  # pragma: no cover - infinite loop
         tick = self._settings.scheduler_tick_seconds
         logger.info("scheduler loop starting (tick={}s)", tick)
@@ -318,6 +343,7 @@ class Scheduler:
             try:
                 await self.run_once()
                 await self.maybe_refresh_scope_feed()
+                await self.maybe_purge_expired()
             except Exception as exc:  # noqa: BLE001 - a tick failure must not kill the loop
                 logger.error("scheduler tick failed: {}", exc)
                 _observe_tick("failed")

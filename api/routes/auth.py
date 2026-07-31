@@ -228,6 +228,19 @@ async def create_api_key(
     # higher role than the creator holds.
     if body.role == Role.OWNER and principal.role != Role.OWNER:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "cannot mint a key above your own role")
+    # Subscription limit. Integrations are a paid axis, and an unbounded key count is
+    # also a security smell — every live key is another credential to rotate.
+    from core.plans import can_add_api_key
+    from db.programs import tenant_limits
+
+    limits = await tenant_limits(mongo, principal.tenant_id)
+    existing = await ApiKeyRepo.from_mongo(mongo).list(principal.tenant_id, limit=1000)
+    if not can_add_api_key(limits, len(existing)):
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"your licence allows {limits.max_api_keys} API key(s) — "
+            "delete an unused one, or contact your vendor",
+        )
     raw, key_hash, prefix = generate_api_key()
     key_id = "k_" + uuid.uuid4().hex[:12]
     await ApiKeyRepo.from_mongo(mongo).create(
