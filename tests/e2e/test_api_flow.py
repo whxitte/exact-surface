@@ -398,9 +398,25 @@ def test_program_delete_and_monitoring_toggle():
     assert client.get(f"/programs/{pid}", headers=_auth(token)).status_code == 404
 
 
+def _set_plan(fake, tenant_id: str, plan: str) -> None:
+    """Set a tenant's stored plan, as an operator would."""
+    import asyncio
+
+    asyncio.run(
+        fake.collection("tenants").update_one(
+            {"tenant_id": tenant_id}, {"$set": {"plan": plan}}
+        )
+    )
+
+
 def test_schedule_endpoints_program_and_tenant_defaults():
-    client, _, _ = build()
-    token = _signup(client)["access_token"]
+    client, fake, _ = build()
+    signed = _signup(client)
+    token = signed["access_token"]
+    # Cadence floors are a plan limit. A fresh signup lands on Free (24h floor), so a
+    # 12h cadence would correctly be clamped; this test is about override precedence,
+    # not the commercial floor, so put the tenant on a tier that allows it.
+    _set_plan(fake, signed["tenant_id"], "business")
     pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
         "program_id"
     ]
@@ -428,7 +444,7 @@ def test_schedule_endpoints_program_and_tenant_defaults():
         for p in client.get(f"/programs/{pid}/schedule", headers=_auth(token)).json()["phases"]
     }
     assert phases["ingest"]["source"] == "program"
-    assert phases["ingest"]["interval_seconds"] == 300  # floored to MIN_INTERVAL_SECONDS
+    assert phases["ingest"]["interval_seconds"] == 3600  # floored to the Business plan's 1h
 
 
 def test_timeout_config_program_and_tenant_defaults():

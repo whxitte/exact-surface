@@ -9,9 +9,12 @@ from typing import Any
 
 
 class _UpdateResult:
-    def __init__(self, upserted_id: Any = None, modified: int = 0) -> None:
+    def __init__(
+        self, upserted_id: Any = None, modified: int = 0, deleted_count: int = 0
+    ) -> None:
         self.upserted_id = upserted_id
         self.modified_count = modified
+        self.deleted_count = deleted_count
 
 
 class _Cursor:
@@ -29,12 +32,31 @@ class _Cursor:
         return self._items if length is None else self._items[:length]
 
 
+#: Comparison operators the fake understands, so range queries (the retention purge
+#: uses `{"$lt": cutoff}`) behave the way real Mongo does rather than silently matching
+#: nothing — a fake that quietly returns no rows makes a broken query look like a
+#: working one.
+_COMPARATORS = {
+    "$lt": lambda v, o: v is not None and v < o,
+    "$lte": lambda v, o: v is not None and v <= o,
+    "$gt": lambda v, o: v is not None and v > o,
+    "$gte": lambda v, o: v is not None and v >= o,
+    "$ne": lambda v, o: v != o,
+}
+
+
 def _matches(doc: dict, flt: dict) -> bool:
     for key, cond in flt.items():
-        if isinstance(cond, dict) and "$in" in cond:
-            if doc.get(key) not in cond["$in"]:
+        value = doc.get(key)
+        if isinstance(cond, dict):
+            if "$in" in cond and value not in cond["$in"]:
                 return False
-        elif doc.get(key) != cond:
+            for op, compare in _COMPARATORS.items():
+                if op in cond and not compare(value, cond[op]):
+                    return False
+            if "$exists" in cond and (value is not None) != bool(cond["$exists"]):
+                return False
+        elif value != cond:
             return False
     return True
 
@@ -94,7 +116,9 @@ class FakeCollection:
             if _matches(doc, flt):
                 del self.docs[key]
                 n += 1
-        return _UpdateResult(modified=n)
+        # motor's DeleteResult exposes `deleted_count`; mirror it so callers that read
+        # it (the retention purge) get a real number from the fake too.
+        return _UpdateResult(modified=n, deleted_count=n)
 
     async def find_one(self, flt: dict) -> dict | None:
         d = next((d for d in self.docs.values() if _matches(d, flt)), None)
