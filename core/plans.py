@@ -110,7 +110,7 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         retention_days=365,
         optional_modules=frozenset({
             "tls", "service_scan", "param_discovery", "typosquat",
-            "cloud_buckets", "nuclei_watch", "dork", "uncover",
+            "cloud_buckets", "cloud_assets", "nuclei_watch", "dork", "uncover",
         }),
         on_demand_bypass=True,
         scheduled_reports=True,

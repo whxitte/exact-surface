@@ -370,3 +370,109 @@ def test_in_scope_reverse_hit_is_new_surface():
     assert hit and hit.in_scope and hit.is_new_surface
     other = rd.classify("1.2.3.4", "mail.partner.com", ("acme.com",))
     assert other and not other.in_scope
+
+
+# -- cloud asset inventory (cloudlist) ---------------------------------------
+
+
+def test_cloudlist_parses_names_and_public_ips():
+    from modules.recon import cloudlist as cl
+
+    assets = cl.parse([
+        {"provider": "aws", "dns_name": "lb-1.acme.com", "public_ipv4": "93.184.216.34"},
+        {"provider": "gcp", "hostname": "vm-old.acme.com"},
+    ])
+    by_value = {a.value: a for a in assets}
+    assert by_value["lb-1.acme.com"].provider == "aws"
+    assert by_value["93.184.216.34"].is_ip and by_value["93.184.216.34"].ip == "93.184.216.34"
+    assert not by_value["vm-old.acme.com"].is_ip
+
+
+def test_private_addresses_are_dropped():
+    """Real assets, but not EXTERNAL attack surface — and this product only speaks
+    about what an outsider can reach."""
+    from modules.recon import cloudlist as cl
+
+    # NOTE: 203.0.113.x and friends are documentation ranges and Python's ipaddress
+    # reports them as private, so a real public address is needed here.
+    assets = cl.parse([
+        {"provider": "aws", "public_ipv4": "10.0.0.5"},
+        {"provider": "aws", "public_ipv4": "127.0.0.1"},
+        {"provider": "aws", "public_ipv4": "93.184.216.34"},
+    ])
+    assert [a.value for a in assets] == ["93.184.216.34"]
+
+
+def test_parse_is_bounded_and_deduped():
+    from modules.recon import cloudlist as cl
+
+    rows = [{"provider": "aws", "dns_name": f"h{i}.acme.com"} for i in range(10)]
+    assert len(cl.parse(rows + rows)) == 10
+
+
+def test_malformed_rows_never_raise():
+    from modules.recon import cloudlist as cl
+
+    assert cl.parse([None, "nonsense", {}, {"provider": "aws"}]) == []
+
+
+async def test_missing_binary_degrades_to_empty_not_an_error():
+    from core.errors import ToolNotFound
+    from modules.recon import cloudlist as cl
+
+    async def missing(*a, **k):
+        raise ToolNotFound("cloudlist")
+
+    assert await cl.enumerate_assets("/tmp/cfg.yaml", 10, runner=missing) == []
+    assert await cl.enumerate_assets("", 10) == []  # no config → no attempt
+
+
+async def test_cloud_assets_outside_a_verified_domain_are_reported_never_scanned():
+    """The most valuable output of the module — shadow IT — must be surfaced as a
+    finding and NOT turned into scannable assets. The cloud provider confirming
+    ownership is not the customer proving authorisation (§9b)."""
+    from core.scope import ProgramScope
+    from core.tenant import TenantContext
+    from modules.recon.cloudlist import CloudAsset
+    from pipelines.cloud_assets import run_cloud_assets
+    from tests.fakes import FakeMongo
+
+    mongo = FakeMongo()
+
+    async def fake_enum(config, timeout):
+        return [
+            CloudAsset("app.acme.com", "aws"),
+            CloudAsset("forgotten.other-brand.com", "aws"),
+            CloudAsset("93.184.216.34", "aws", is_ip=True),
+        ]
+
+    result = await run_cloud_assets(
+        mongo=mongo,
+        scope=ProgramScope(verified_apexes=("acme.com",)),
+        tenant=TenantContext("t1"),
+        program_id="p1",
+        config_path="/tmp/cfg.yaml",
+        enumerate_fn=fake_enum,
+    )
+    assert result["in_scope"] == 1 and result["outside_scope"] == 2
+    stored = await mongo.collection("assets").find({}).to_list(None)
+    assert [a["hostname"] for a in stored] == ["app.acme.com"]
+    findings = await mongo.collection("findings").find({}).to_list(None)
+    assert len(findings) == 1
+    assert "not covered by a verified domain" in findings[0]["name"]
+
+
+async def test_cloud_assets_without_credentials_says_so_rather_than_finding_nothing():
+    from core.scope import ProgramScope
+    from core.tenant import TenantContext
+    from pipelines.cloud_assets import run_cloud_assets
+    from tests.fakes import FakeMongo
+
+    result = await run_cloud_assets(
+        mongo=FakeMongo(),
+        scope=ProgramScope(verified_apexes=("acme.com",)),
+        tenant=TenantContext("t1"),
+        program_id="p1",
+        config_path="",
+    )
+    assert result["skipped"] and "READ-ONLY" in result["note"]

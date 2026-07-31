@@ -27,6 +27,7 @@ from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo, program_within_plan
 from pipelines.api_surface import run_api_surface
 from pipelines.broken_links import run_broken_links
+from pipelines.cloud_assets import run_cloud_assets
 from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
 from pipelines.correlate import run_correlate
@@ -252,6 +253,7 @@ OPTIONAL_MODULES: tuple[str, ...] = (
 FULL_STAGE_NAMES: tuple[str, ...] = (
     "domain_intel",  # passive: email spoofability + domain registration risk
     "ingest",
+    "cloud_assets",  # optional — the customer's own cloud accounts
     "uncover",  # optional — Shodan/Censys passive discovery
     "reverse_dns",  # optional — PTR sweep of ASN-confirmed ranges
     "probe",
@@ -355,6 +357,18 @@ async def run_full_pipeline(
             "ingest",
             lambda t: run_ingest(
                 **common, timeout=t, apex=apex, **inj("subfinder", "crtsh", "resolve")
+            ),
+        ),
+        (
+            # The strongest ownership signal available: the provider itself confirms
+            # these are the customer's resources.
+            "cloud_assets",
+            optional(
+                "cloud_assets",
+                lambda t: run_cloud_assets(
+                    mongo=mongo, scope=scope, tenant=tenant, program_id=program_id,
+                    timeout=t, **inj("cloud_enumerate"),
+                ),
             ),
         ),
         (

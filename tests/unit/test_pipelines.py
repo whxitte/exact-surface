@@ -225,6 +225,7 @@ async def test_full_pipeline_records_per_stage_progress():
     assert names == [
         "domain_intel",
         "ingest",
+        "cloud_assets",
         "uncover",
         "reverse_dns",
         "probe",

@@ -41,6 +41,14 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
     ),
     ModuleSpec("dnsx", "recon", "dnsx", "1", Action.PASSIVE_RECON),
     ModuleSpec(
+        "cloudlist",
+        "recon",
+        "cloudlist",
+        "2",
+        Action.PASSIVE_RECON,
+        note="customer's OWN cloud credentials, read-only, never leave their deployment",
+    ),
+    ModuleSpec(
         "alterx",
         "recon",
         "alterx",
