@@ -317,3 +317,39 @@ def test_disabled_registry_modules_do_not_ship_their_binary():
             f"{spec.name} is disabled in modules/registry.py but its binary is still "
             "installed in the scanning image."
         )
+
+
+# --------------------------------------------------------------------------
+# the workbench must never ship
+# --------------------------------------------------------------------------
+
+
+def test_devtools_is_not_copied_into_any_image():
+    """The workbench can call a scanning function directly, with no scope engine in
+    front of it. That is fine on a developer's laptop and unacceptable in a customer's
+    deployment, so it must never enter an image. Both Dockerfiles use explicit COPY
+    lists rather than `COPY . .`, which is what keeps it out — this asserts nobody
+    later "simplifies" that into a wildcard."""
+    for name in ("Dockerfile.api", "Dockerfile.pipeline", "Dockerfile.frontend"):
+        path = REPO / "docker" / name
+        if not path.exists():
+            continue
+        text = path.read_text()
+        assert "devtools" not in text, f"{name} copies devtools/ into the image"
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped.startswith("COPY ") or "--from" in stripped:
+                continue
+            src = stripped.split()[1]
+            assert src not in (".", "./"), (
+                f"{name} uses `COPY {src}`, which would sweep devtools/ into the image. "
+                "Copy the specific directories the service needs instead."
+            )
+
+
+def test_devtools_is_not_a_service_in_the_production_compose_file():
+    compose = REPO / "docker-compose.yml"
+    if compose.exists():
+        assert "devtools" not in compose.read_text(), (
+            "docker-compose.yml defines a devtools service; the workbench is local-only"
+        )
