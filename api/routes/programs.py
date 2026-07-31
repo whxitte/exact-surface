@@ -47,7 +47,6 @@ from core.models import (
     ScanStatus,
     VerificationMethod,
 )
-from core.plans import max_domains
 from core.scope import HTTP_LAYER_ACTIONS, PENDING, IpClass
 from core.severity import Severity
 from core.verification import dns_instructions, http_instructions
@@ -67,7 +66,7 @@ from db.programs import (
     delete_program_and_data,
     program_within_plan,
     tenant_can_add_domain,
-    tenant_plan,
+    tenant_limits,
 )
 from db.schedule import ScheduleRepo
 from db.secrets import SecretRepo
@@ -98,10 +97,11 @@ async def create_program(
     _lic: None = Depends(require_write_license),
 ) -> dict:
     if not await tenant_can_add_domain(mongo, principal.tenant_id):
-        cap = max_domains(await tenant_plan(mongo, principal.tenant_id))
+        limits = await tenant_limits(mongo, principal.tenant_id)
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            f"your plan allows {cap} domain(s) — upgrade to add another",
+            f"your licence allows {limits.max_domains} domain(s) — "
+            "contact your vendor to add more",
         )
     program = Program(
         tenant_id=principal.tenant_id,
@@ -545,11 +545,11 @@ async def trigger_scan(
     # outside the allowance (e.g. after a downgrade) is refused explicitly rather
     # than silently skipped, so the user sees why.
     if not await program_within_plan(mongo, principal.tenant_id, program["program_id"]):
-        cap = max_domains(await tenant_plan(mongo, principal.tenant_id))
+        limits = await tenant_limits(mongo, principal.tenant_id)
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            f"your plan covers {cap} domain(s); this one is outside that allowance — "
-            "upgrade or remove another domain to scan it",
+            f"your licence covers {limits.max_domains} domain(s); this one is outside "
+            "that allowance — remove another domain, or ask your vendor for more",
         )
     auth = await AuthorizationRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
     if not (auth and auth.get("apex_verified") and not auth.get("revoked")):

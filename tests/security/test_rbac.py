@@ -59,8 +59,30 @@ def _member_in(client, owner: str, tid: str, email: str, perms: list[str] | None
     return _login(client, email)
 
 
+def _set_plan(client, tenant_id: str, plan: str) -> None:
+    """Set the tenant's stored plan directly, the way an operator would.
+
+    Reaches the injected FakeMongo through the app's dependency override rather than
+    the real client, since these tests never connect to a database.
+    """
+    import asyncio
+
+    from api.deps import get_mongo_dep
+
+    fake = client.app.dependency_overrides[get_mongo_dep]()
+    asyncio.run(
+        fake.collection("tenants").update_one(
+            {"tenant_id": tenant_id}, {"$set": {"plan": plan}}
+        )
+    )
+
+
 def _owner(client, email: str = "owner@rbac.com", name: str = "RBAC") -> tuple[str, str]:
     o = signup(client, email=email, name=name)
+    # RBAC is inherently multi-user, so the tenant needs a tier with seats. A fresh
+    # signup lands on FREE (one seat, the owner), and the seat limit is enforced —
+    # which is correct, and would otherwise make every test here a 402.
+    _set_plan(client, o["tenant_id"], "business")
     return o["access_token"], o["tenant_id"]
 
 

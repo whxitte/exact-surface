@@ -24,7 +24,7 @@ from core import modules as module_registry
 from core.config import Settings, get_settings
 from core.logging import logger
 from core.metrics import REGISTRY
-from core.plans import allowed_program_ids
+from core.plans import allowed_program_ids, effective_limits
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
@@ -114,18 +114,27 @@ class Scheduler:
         return out
 
     async def _plan_allowed(self, programs: list[dict]) -> set[str]:
-        """Program ids inside each tenant's plan allowance (§13 — enforced at enqueue,
-        so a downgrade takes effect on the next tick without deleting anything)."""
+        """Program ids inside each tenant's allowance (§13 — enforced at enqueue, so a
+        downgrade takes effect on the next tick without deleting anything).
+
+        The allowance comes from the signed license tightened by the stored plan, never
+        the stored plan alone: this database belongs to the customer, so a `plan` field
+        reading "enterprise" is a claim, not a fact.
+        """
+        from core import entitlements as licensing
+
         by_tenant: dict[str, list[dict]] = {}
         for prog in programs:
             by_tenant.setdefault(prog["tenant_id"], []).append(prog)
-        plans = {
+        stored = {
             t["tenant_id"]: t.get("plan", "free")
             for t in await self._mongo.collection("tenants").find({}).to_list(None)
         }
+        ent = licensing.current().entitlements
         allowed: set[str] = set()
         for tid, progs in by_tenant.items():
-            allowed |= allowed_program_ids(plans.get(tid, "free"), progs)
+            limits = effective_limits(entitlements=ent, stored_plan=stored.get(tid, "free"))
+            allowed |= allowed_program_ids(limits, progs)
         return allowed
 
     async def _ready_programs(self) -> list[dict]:
@@ -157,10 +166,18 @@ class Scheduler:
         * **Steady state** — thereafter each phase recurs on its own effective
           cadence (built-in ← tenant defaults ← program overrides).
         """
+        from core import entitlements as licensing
+
         now = now or datetime.now(UTC)
         schedule = ScheduleRepo.from_mongo(self._mongo)
         audit = ScanRunRepo.from_mongo(self._mongo)
         tenant_defaults = await self._tenant_defaults()
+        # Licence + stored plan, resolved once per tick rather than per program.
+        licensing_state = licensing.current()
+        stored_plans = {
+            t["tenant_id"]: t.get("plan", "free")
+            for t in await self._mongo.collection("tenants").find({}).to_list(None)
+        }
         per_tenant: dict[str, int] = {}
         jobs: list[Job] = []
 
@@ -206,8 +223,21 @@ class Scheduler:
                 continue  # never fan out per-phase for an un-bootstrapped program
 
             # -- steady state: per-phase cadence --------------------------------
+            limits = effective_limits(
+                entitlements=licensing_state.entitlements,
+                stored_plan=stored_plans.get(tid),
+            )
             cadence = self._cadence_override or effective_cadence(
-                prog.get("cadence_overrides"), tenant_defaults.get(tid)
+                prog.get("cadence_overrides"),
+                tenant_defaults.get(tid),
+                # Commercial floor only on a licensed deployment. Unlicensed (dev,
+                # tests) has no subscription to restrict, and silently throttling a
+                # developer's instance to a tier they never bought would be wrong.
+                floor=(
+                    limits.min_scan_interval_seconds
+                    if licensing_state.entitlements is not None
+                    else None
+                ),
             )
             # A module the user turned off (or whose dependency is off) must not be
             # scheduled either — otherwise the per-phase cadence would quietly keep

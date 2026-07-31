@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any
 
 from core.models import Program
-from core.plans import allowed_program_ids, can_add_domain
+from core.plans import PlanLimits, allowed_program_ids, can_add_domain, effective_limits
 from db.base import _to_bson
 
 
@@ -109,21 +109,42 @@ async def delete_program_and_data(mongo: Any, tenant_id: str, program_id: str) -
 # -- plan quota (§13) --------------------------------------------------------
 # These cross tenants↔programs, so they live here rather than in pure ``core``.
 async def tenant_plan(mongo: Any, tenant_id: str) -> Any:
+    """The tenant's STORED plan. Not the authority on its own — see
+    :func:`tenant_limits`. A self-hosted customer owns this database, so this value is
+    a claim they make about themselves, not a fact."""
     from db.tenants import TenantRepo
 
     tenant = await TenantRepo.from_mongo(mongo).get(tenant_id)
     return (tenant or {}).get("plan", "free")
 
 
+async def tenant_limits(mongo: Any, tenant_id: str) -> PlanLimits:
+    """**The authoritative limits for a tenant**: the signed license, tightened by the
+    stored plan if that is stricter.
+
+    Everything that enforces a quota must go through here rather than reading the
+    stored plan directly, because the stored plan lives in a database the customer
+    controls. The license does not.
+    """
+    from core import entitlements as licensing
+
+    state = licensing.current()
+    return effective_limits(
+        entitlements=state.entitlements,
+        stored_plan=await tenant_plan(mongo, tenant_id),
+    )
+
+
 async def tenant_can_add_domain(mongo: Any, tenant_id: str) -> bool:
-    """True if the tenant's plan still has room for another program."""
+    """True if the tenant still has room for another program."""
     programs = await ProgramRepo.from_mongo(mongo).list(tenant_id)
-    return can_add_domain(await tenant_plan(mongo, tenant_id), len(programs))
+    return can_add_domain(await tenant_limits(mongo, tenant_id), len(programs))
 
 
 async def program_within_plan(mongo: Any, tenant_id: str, program_id: str) -> bool:
-    """True if *program_id* is inside the tenant's plan allowance. The authoritative
-    scan gate (§13 "checked at enqueue") — so a downgrade takes effect immediately
-    without deleting anything."""
+    """True if *program_id* is inside the allowance. The authoritative scan gate
+    (§13 "checked at enqueue") — so a downgrade takes effect immediately without
+    deleting anything."""
     programs = await ProgramRepo.from_mongo(mongo).list(tenant_id)
-    return program_id in allowed_program_ids(await tenant_plan(mongo, tenant_id), programs)
+    limits = await tenant_limits(mongo, tenant_id)
+    return program_id in allowed_program_ids(limits, programs)

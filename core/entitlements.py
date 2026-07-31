@@ -25,13 +25,24 @@ _state: LicenseState | None = None
 _last_refresh_monotonic: float = 0.0
 
 
+def enforcement_active() -> bool:
+    """Whether licence enforcement is on.
+
+    A release image enforces unconditionally — see ``core.build_info``. The settings
+    flag only has effect in a source checkout, so a customer cannot disable their own
+    subscription with ``-e EXACTSURFACE_LICENSE_ENFORCED=false``.
+    """
+    from core.build_info import licence_enforced
+
+    return licence_enforced(get_settings().license_enforced)
+
+
 def current() -> LicenseState:
     """The cached license state. Before the first refresh it fails closed: read-only when
     enforcement is on, full function when off (dev/tests)."""
     if _state is not None:
         return _state
-    enforced = get_settings().license_enforced
-    return evaluate(None, now=datetime.now(UTC), enforced=enforced)
+    return evaluate(None, now=datetime.now(UTC), enforced=enforcement_active())
 
 
 def set_state(state: LicenseState | None) -> None:
@@ -60,7 +71,7 @@ async def refresh(mongo: Any, *, now: datetime | None = None) -> LicenseState:
     settings = get_settings()
     now = now or datetime.now(UTC)
 
-    if not settings.license_enforced:
+    if not enforcement_active():
         _state = evaluate(None, now=now, enforced=False)
         _last_refresh_monotonic = time.monotonic()
         return _state
@@ -153,7 +164,7 @@ def summary() -> dict:
         "status": st.status.value,
         "read_only": st.read_only,
         "reason": st.reason,
-        "enforced": get_settings().license_enforced,
+        "enforced": enforcement_active(),
         "customer_name": ent.customer_name if ent else None,
         "plan": ent.plan.value if ent else None,
         "max_domains": ent.max_domains if ent else None,
