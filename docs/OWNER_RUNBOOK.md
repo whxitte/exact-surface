@@ -163,6 +163,45 @@ unlimited private packages and needs no registry secret (Actions authenticates i
 Give a customer access by inviting them to the package, or make the packages public —
 they still cannot run the product without a licence.
 
+### 2.1 Smoke-test the build before you tag (5 minutes, do it every time)
+
+CI builds the images, but CI does not tell you whether the **licence stamp** actually
+took effect inside the image. That is the one thing worth proving by hand, because if it
+silently regressed every customer would get an unlicensed build:
+
+```bash
+docker build -f docker/Dockerfile.api \
+    --build-arg BUILD_ID=1.0.0 \
+    --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
+    --build-arg LICENSED_TO="Smoke Test" \
+    -t es-smoke:api .
+
+# 1. the build identity is baked in
+docker run --rm es-smoke:api python -c "from core.build_info import summary; print(summary())"
+#    → {'version': '1.0.0', ..., 'release': True, 'licensed_to': 'Smoke Test'}
+
+# 2. THE IMPORTANT ONE — an env var must NOT be able to switch licensing off
+docker run --rm -e EXACTSURFACE_LICENSE_ENFORCED=false es-smoke:api python -c "
+from core.build_info import licence_enforced
+from core.config import get_settings
+assert licence_enforced(get_settings().license_enforced) is True, 'BYPASSED'
+print('enforcement holds')"
+
+docker rmi es-smoke:api
+```
+
+If step 2 prints anything other than `enforcement holds`, **do not tag the release** —
+the subscription model is off for everyone who pulls it.
+
+For the pipeline image, also confirm the toolchain and that the workbench stayed out:
+
+```bash
+docker build -f docker/Dockerfile.pipeline --build-arg BUILD_ID=1.0.0 -t es-smoke:pipe .
+docker run --rm es-smoke:pipe sh -c 'command -v cloudlist arjun nuclei subfinder >/dev/null && echo tools-ok'
+docker run --rm es-smoke:pipe sh -c 'test -d /app/devtools && echo LEAKED || echo devtools-absent-ok'
+docker rmi es-smoke:pipe
+```
+
 **If the tag doesn't match `pyproject.toml`, the release fails on purpose** — that
 mismatch is how customers end up on a build you can't identify.
 
