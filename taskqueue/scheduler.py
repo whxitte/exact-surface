@@ -245,6 +245,7 @@ class Scheduler:
             module_state = module_registry.resolve(
                 enabled_modules=prog.get("enabled_modules"),
                 disabled_modules=prog.get("disabled_modules"),
+                licensed_modules=limits.optional_modules,
             )
             for pipeline, interval in cadence.items():
                 if not module_state.is_enabled(pipeline):

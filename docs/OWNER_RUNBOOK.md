@@ -182,6 +182,15 @@ mismatch is how customers end up on a build you can't identify.
 
 ### 3.2 Mint and register the licence
 
+> **Pricing, every tier's limits, and how each one is enforced:
+> [`PRICING_AND_LIMITS.md`](PRICING_AND_LIMITS.md).** Read it before you quote anyone.
+> The short version: **domains are the price metric**, the licence states the number,
+> and nothing on the customer's machine can raise it.
+
+`--domains` and `--users` override the tier, so "Business but they need 40 domains" is a
+licence you mint, not a code change or a new tier. `--features` adds individual optional
+modules on top of the tier's set.
+
 ```bash
 python -m scripts.license issue \
     --private-key ~/exactsurface-keys/private.pem \
@@ -288,6 +297,15 @@ rebuild it (you can, from your ledger + the tokens you issued).
 ---
 
 ## 5. Runbooks
+
+### 5.0 Customer wants more domains (the most common upgrade)
+
+Re-issue with the higher `--domains`, same `--customer-id`, and push the store to the
+control plane. If they have `EXACTSURFACE_LICENSE_REFRESH_URL` set they pick it up on
+the next refresh with no restart and no maintenance window — prefer this. Programs that
+were over the old quota resume scanning on the next tick with their history intact.
+
+Full walkthrough in [`PRICING_AND_LIMITS.md`](PRICING_AND_LIMITS.md) §4.
 
 ### 5.1 Customer paid — extend their subscription
 

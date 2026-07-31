@@ -486,7 +486,11 @@ async def set_modules(
 
 
 @router.get("/{program_id}/modules", tags=["programs"])
-async def get_modules(program: dict = Depends(require_program)) -> dict:
+async def get_modules(
+    program: dict = Depends(require_program),
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
     """Every module with its current state, dependencies, and — for anything that will
     not run — the reason. This is what the settings screen renders, including the
     warning that turning one module off also stops the modules that depend on it."""
@@ -495,6 +499,7 @@ async def get_modules(program: dict = Depends(require_program)) -> dict:
     return {
         "program_id": program["program_id"],
         "modules": catalogue(
+            licensed_modules=(await tenant_limits(mongo, principal.tenant_id)).optional_modules,
             enabled_modules=program.get("enabled_modules"),
             disabled_modules=program.get("disabled_modules"),
         ),
@@ -527,7 +532,11 @@ async def update_modules(
         "program_id": pid,
         "enabled_modules": enabled,
         "disabled_modules": disabled,
-        "modules": catalogue(enabled_modules=enabled, disabled_modules=disabled),
+        "modules": catalogue(
+            enabled_modules=enabled,
+            disabled_modules=disabled,
+            licensed_modules=(await tenant_limits(mongo, principal.tenant_id)).optional_modules,
+        ),
     }
 
 
@@ -690,6 +699,11 @@ async def trigger_bypass_403(
 
     if not program.get("verified"):
         raise HTTPException(status.HTTP_409_CONFLICT, "verify the domain first")
+    if not (await tenant_limits(mongo, principal.tenant_id)).on_demand_bypass:
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            "on-demand 403/401 bypass testing is not included in your subscription",
+        )
     auth = await AuthorizationRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
     if not (auth and auth.get("apex_verified") and not auth.get("revoked")):
         raise HTTPException(

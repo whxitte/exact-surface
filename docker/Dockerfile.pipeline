@@ -152,6 +152,15 @@ COPY daemon/ daemon/
 COPY api/ api/
 COPY scripts/ scripts/
 
+# Stamp the build identity. RELEASE_BUILD=True makes licence enforcement
+# unconditional — it can no longer be switched off with an environment variable,
+# because a release image is enforced by virtue of what it is (core/build_info.py).
+ARG BUILD_ID=dev
+ARG GIT_COMMIT=unknown
+ARG LICENSED_TO=""
+RUN python scripts/stamp_build.py --release \
+        --version "${BUILD_ID}" --commit "${GIT_COMMIT}" --licensed-to "${LICENSED_TO}"
+
 # Non-root: scanning does not need root (naabu falls back to connect-scan).
 RUN useradd -m -u 10001 exactsurface && chown -R exactsurface:exactsurface /app
 USER exactsurface
