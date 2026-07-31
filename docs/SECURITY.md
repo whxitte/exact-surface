@@ -299,7 +299,75 @@ metric (target <5%).
 
 ---
 
-## 10. Reporting a vulnerability
+## 10. Our own attack surface
+
+We sell attack-surface management. Our own exposure is therefore not an ordinary
+engineering concern — a breach of ours would be quoted back at us permanently. Two
+things follow from that.
+
+### 10.1 The product ships nothing it does not need
+
+* **No debug or test endpoints in the API.** `test_product_api_has_no_devtools_surface`
+  fails the build if a route ever contains `devtool`, `workbench` or `run-module`. A
+  "temporary" testing endpoint is exactly how this class of exposure begins.
+* **No unused binaries in the image.** Every tool installed must have a caller
+  (`test_every_installed_binary_has_a_caller`). `cloudlist`, `notify` and `masscan` were
+  removed on these grounds — an unused tool is both dead weight and a false claim.
+* **Public signup closes after the first account** in prod (`public_signup_open`), so an
+  exposed self-hosted deployment cannot have accounts created on it by a stranger.
+* **Server-side validation everywhere.** Frontend validation is a convenience; every
+  constraint is re-enforced in the API, because a customer with Burp is the baseline
+  assumption, not the exception.
+
+### 10.2 The Workbench is quarantined, not trusted
+
+`devtools/` is an internal test bench that can call scanning functions **directly**,
+bypassing the scope engine. That capability is legitimate for development and
+unacceptable anywhere near a customer. It is contained by construction, not by policy:
+
+| Control | Defeats |
+|---|---|
+| Adds **no endpoint** to the product API; imports modules in-process | An outsider finding or guessing a "dev" route — there is nothing to find |
+| Per-run token (`token_urlsafe(32)`), constant-time compare, never persisted | Local processes and other users on the machine |
+| `Host` allow-list (loopback only) | **DNS rebinding** — an attacker resolving their domain to `127.0.0.1` |
+| `Sec-Fetch-Site` / `Origin` refusal of cross-site requests | **The real threat**: a website open in another tab driving the bench from the developer's own browser |
+| Every rejection is `404`, never `401`/`403` | Confirming to a prober that something is there |
+| `_assert_dev_only()` — `SystemExit` on `EXACTSURFACE_ENV=prod`, not flag-overridable | A configuration mistake exposing it |
+| Explicit `COPY` lists + `.dockerignore` + tests | It reaching any shipped image |
+| `introspect.resolve()` allow-list | The HTTP API being talked into importing `os:system` |
+
+A loopback bind **alone would not be enough**, and that is the point worth remembering:
+browsers will happily send cross-origin requests to `127.0.0.1`. Full detail and
+rationale in [`docs/DEVTOOLS.md`](DEVTOOLS.md); the controls are asserted in
+`tests/unit/test_devtools_security.py`.
+
+---
+
+## 11. No paid dependencies
+
+Nothing in ExactSurface requires a commercial data source to function. Every module in
+the default pipeline uses free, open-source tooling and public data.
+
+A few **optional** modules can *use* a key if you have one, and are off by default with
+that stated in the UI:
+
+| Module | Optional key | Without it |
+|---|---|---|
+| Internet-index search (`uncover`) | Shodan / Censys / Fofa | module stays off |
+| Search-engine exposure (`dork`) | Google CSE / Brave / SerpAPI | module stays off |
+| Public code leaks (`github_osint`) | GitHub token (free tier is fine) | skipped — rate limits make it useless unauthenticated |
+
+Breach-credential exposure is the one capability that would need a paid feed
+(HaveIBeenPwned). **It is not built**, and it is not counted as coverage anywhere. If it
+is added it will be opt-in with the customer's own key.
+
+Parameter discovery uses **arjun** (MIT, free) as its primary engine, with a built-in
+probe as the always-on fallback — the same pattern as trufflehog and the regex secret
+detector, so a missing tool degrades the module rather than silently finding nothing.
+
+---
+
+## 12. Reporting a vulnerability
 
 Email security@exactsurface.com with details and a reproduction. We trade in findings;
 we take ours seriously.

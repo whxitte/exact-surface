@@ -83,15 +83,21 @@
 </main>
 
 <script>
+// Injected by the server at page load; sent as a header on every call so it never
+// sits in a URL that could leak through history or a Referer.
+const TOKEN = "__WORKBENCH_TOKEN__";
+const H = { "x-workbench-token": TOKEN };
+const get = (u) => fetch(u, { headers: H });
+
 let TAB = "fn", FNS = [], STAGES = [], PROGRAMS = [], SEL = null, WATCH = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 
 async function boot() {
   const [f, s, p] = await Promise.all([
-    fetch("/api/callables").then(r => r.json()),
-    fetch("/api/stages").then(r => r.json()),
-    fetch("/api/programs").then(r => r.json()),
+    get("/api/callables").then(r => r.json()),
+    get("/api/stages").then(r => r.json()),
+    get("/api/programs").then(r => r.json()),
   ]);
   FNS = f.items; STAGES = s.items; PROGRAMS = p.items || [];
   renderList(); pollRuns(); setInterval(pollRuns, 1500);
@@ -176,7 +182,7 @@ async function runStage() {
 }
 
 async function post(url, body) {
-  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const res = await fetch(url, { method: "POST", headers: { "content-type": "application/json", ...H }, body: JSON.stringify(body) });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) { alert(data.detail || res.statusText); return null; }
   return data;
@@ -189,7 +195,7 @@ async function stopRun(id, ev) {
 }
 
 async function pollRuns() {
-  const { items } = await fetch("/api/runs").then(r => r.json());
+  const { items } = await get("/api/runs").then(r => r.json());
   document.getElementById("runs").innerHTML = items.map(r => `
     <div class="runrow ${WATCH === r.run_id ? "on" : ""}" onclick='watch(${JSON.stringify(r.run_id)})'>
       <span class="st ${r.status}">${r.status}</span>
@@ -203,7 +209,7 @@ async function pollRuns() {
 function watch(id) { WATCH = id; pollRuns(); }
 
 async function showDetail(id) {
-  const res = await fetch(`/api/runs/${id}`);
+  const res = await get(`/api/runs/${id}`);
   if (!res.ok) return;
   const r = await res.json();
   document.getElementById("detail").innerHTML = `

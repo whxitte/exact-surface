@@ -97,6 +97,14 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
     ModuleSpec("ffuf", "content_discovery", "ffuf", "2", Action.CONTENT_DISCOVERY),
     ModuleSpec("wordlist_selector", "content_discovery", None, "2", Action.CONTENT_DISCOVERY),
     ModuleSpec(
+        "arjun",
+        "content_discovery",
+        "arjun",
+        "2",
+        Action.CONTENT_DISCOVERY,
+        note="hidden parameter discovery; built-in probe is the fallback",
+    ),
+    ModuleSpec(
         "js_miner",
         "scanning",
         None,

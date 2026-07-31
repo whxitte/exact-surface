@@ -28,6 +28,7 @@ from db.assets import AssetRepo
 from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
 from modules.scanning import params as P
+from modules.scanning.arjun import find_params as arjun_find
 
 CONCURRENCY = 4
 
@@ -42,8 +43,10 @@ async def run_param_discovery(
     timeout: float = 20.0,
     limiter: PolitenessLimiter | None = None,
     fetch=None,
+    arjun=None,
 ) -> dict:
     fetch = fetch or _default_fetch
+    arjun = arjun or arjun_find
     if limiter is not None:
         fetch = _throttled(fetch, limiter)
 
@@ -110,10 +113,25 @@ async def run_param_discovery(
 
     hidden: list[P.HiddenParam] = []
     probes = 0
+    by_arjun: dict[str, list[str]] = {}
 
     if not targets:
         logger.info("param_discovery: no probeable endpoints yet")
     else:
+        # arjun is the primary engine — a maintained wordlist and a smarter stability
+        # check than we would write. It degrades to {} when not installed, and the
+        # built-in probe below then carries the stage rather than it silently finding
+        # nothing. Both run: they disagree often enough to be worth the overlap.
+        try:
+            by_arjun = await arjun(targets, timeout)
+            found = sum(len(v) for v in by_arjun.values())
+            logger.info(
+                "param_discovery: arjun found {} parameter(s) across {} URL(s)",
+                found, len(by_arjun),
+            )
+        except Exception as exc:  # noqa: BLE001 - never let one engine sink the stage
+            logger.warning("param_discovery: arjun engine failed ({}); using built-in probe", exc)
+
         logger.info("param_discovery: probing {} URL(s) for hidden parameters", len(targets))
         sem = asyncio.Semaphore(CONCURRENCY)
 
@@ -157,6 +175,29 @@ async def run_param_discovery(
 
         await asyncio.gather(*(probe(u) for u in targets), return_exceptions=True)
 
+    # Fold arjun's hits in, skipping anything the built-in probe already reported so a
+    # parameter both engines agree on is one finding, not two.
+    already = {(h.url, h.name) for h in hidden}
+    for url, names in by_arjun.items():
+        for name in names:
+            if (url, name) in already:
+                continue
+            already.add((url, name))
+            severity, what = P.classify_name(name)
+            hidden.append(
+                P.HiddenParam(
+                    name=name,
+                    url=url,
+                    severity=severity,
+                    evidence=(
+                        f"arjun identified '{name}' as {what} accepted by this URL: adding it "
+                        "changed the response in a way a stable baseline rules out as noise. "
+                        "It is not linked or documented anywhere we crawled. Only the "
+                        "parameter's existence was tested; no hostile value was submitted."
+                    ),
+                )
+            )
+
     for hit in hidden:
         findings.append(
             Finding(
@@ -185,6 +226,7 @@ async def run_param_discovery(
         "probed_urls": len(targets),
         "requests": probes,
         "hidden": len(hidden),
+        "by_arjun": sum(len(v) for v in by_arjun.values()),
         "findings": total,
         "new": new,
     }

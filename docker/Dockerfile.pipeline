@@ -134,6 +134,13 @@ COPY --from=gotools /tools/ /tools/
 
 WORKDIR /app
 COPY requirements.txt .
+# arjun — hidden-parameter discovery (MIT, free). Primary engine for the
+# param_discovery module; modules/scanning/params.py stays as the always-on fallback
+# so a failed install degrades the module rather than silently finding nothing.
+ARG ARJUN_VERSION=2.2.7
+RUN pip install --no-cache-dir "arjun==${ARJUN_VERSION}" \
+    || echo "WARN: arjun unavailable; parameter discovery will use the built-in probe only"
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY core/ core/
