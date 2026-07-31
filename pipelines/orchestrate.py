@@ -25,6 +25,7 @@ from core.tenant import TenantContext
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo, program_within_plan
+from pipelines.api_surface import run_api_surface
 from pipelines.broken_links import run_broken_links
 from pipelines.cloud_buckets import run_cloud_buckets
 from pipelines.content_discovery import run_content_discovery
@@ -34,6 +35,7 @@ from pipelines.cve_watch import run_cve_watch
 from pipelines.domain_intel import run_domain_intel
 from pipelines.dork import run_dork
 from pipelines.github_osint import run_github_leak_scan
+from pipelines.http_misconfig import run_http_misconfig
 from pipelines.ingest import run_ingest
 from pipelines.js_mine import run_js_mine
 from pipelines.notify import run_notify
@@ -43,8 +45,10 @@ from pipelines.probe import run_probe
 from pipelines.scan import run_scan
 from pipelines.secrets import run_secret_scan
 from pipelines.service_scan import run_service_scan
+from pipelines.supply_chain import run_supply_chain
 from pipelines.takeover import run_takeover
 from pipelines.tls import run_tls_scan
+from pipelines.typosquat import run_typosquat
 from pipelines.uncover import run_uncover
 
 
@@ -253,6 +257,8 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "crawl",
     "content_discovery",
     "js_mine",  # mine the app's own JavaScript for routes/hosts
+    "api_surface",  # robots/sitemap/OpenAPI/GraphQL/.well-known
+    "http_misconfig",  # CORS + open redirect + WAF context
     "broken_links",  # hijackable outbound links
     "port_scan",
     "service_scan",  # optional
@@ -263,6 +269,8 @@ FULL_STAGE_NAMES: tuple[str, ...] = (
     "cloud_buckets",  # optional — S3/GCS/Azure permutation
     "nuclei_watch",  # optional — new template → targeted re-scan
     "dork",  # optional
+    "supply_chain",  # dependency confusion from mined JS
+    "typosquat",  # optional — registered lookalike domains
     "correlate",
     "notify",
 )
@@ -372,6 +380,18 @@ async def run_full_pipeline(
             lambda t: run_js_mine(**common, timeout=t, limiter=limiter, **inj("js_fetch")),
         ),
         (
+            # Everything the host publishes about itself: robots, sitemap, API schema,
+            # GraphQL introspection, .well-known. Feeds new endpoints back downstream.
+            "api_surface",
+            lambda t: run_api_surface(**common, timeout=t, limiter=limiter, **inj("api_fetch")),
+        ),
+        (
+            "http_misconfig",
+            lambda t: run_http_misconfig(
+                **common, timeout=t, limiter=limiter, **inj("misconfig_fetch")
+            ),
+        ),
+        (
             # Needs the outbound links that crawl + js_mine collected.
             "broken_links",
             lambda t: run_broken_links(
@@ -438,6 +458,20 @@ async def run_full_pipeline(
                     **core,
                     domain=apex,
                     **({"search": injected["dork_search"]} if "dork_search" in injected else {}),
+                ),
+            ),
+        ),
+        (
+            # Reads the bundles js_mine recorded; no new discovery, pure analysis + npm.
+            "supply_chain",
+            lambda t: run_supply_chain(**core, timeout=t, **inj("pkg_fetch", "registry_status")),
+        ),
+        (
+            "typosquat",
+            optional(
+                "typosquat",
+                lambda t: run_typosquat(
+                    **core, apex=apex, timeout=t, **inj("resolve_many", "resolve_mx_many")
                 ),
             ),
         ),

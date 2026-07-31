@@ -91,6 +91,18 @@ MODULES: tuple[ModuleSpec, ...] = (
         requires=("crawl",),
     ),
     ModuleSpec(
+        "api_surface", "API & path disclosure",
+        "Reads robots.txt, sitemaps, API schemas (Swagger/OpenAPI), GraphQL "
+        "introspection and .well-known — the surface each host advertises about itself.",
+        requires=("probe",),
+    ),
+    ModuleSpec(
+        "http_misconfig", "CORS, redirects & WAF",
+        "Checks whether hosts hand data to any origin (CORS), can launder a phishing "
+        "link (open redirect), and which of them sit behind a WAF.",
+        requires=("probe",),
+    ),
+    ModuleSpec(
         "broken_links", "Broken-link hijacking",
         "Outbound links whose destination is an unregistered domain or an unclaimed "
         "social handle that an attacker could take over.",
@@ -143,6 +155,19 @@ MODULES: tuple[ModuleSpec, ...] = (
         "Finds content of yours that search engines have indexed but shouldn't have.",
         default_enabled=False,
         opt_in_reason="needs a search API key (SerpAPI/Brave/Google CSE)",
+    ),
+    ModuleSpec(
+        "supply_chain", "Dependency confusion",
+        "Internal package names referenced in your public JavaScript that nobody has "
+        "claimed on npm — an attacker who publishes one lands code inside your build.",
+        requires=("js_mine",),
+    ),
+    ModuleSpec(
+        "typosquat", "Lookalike domains",
+        "Registered domains that impersonate yours to phish your staff and customers. "
+        "Third-party DNS only — never contacts the lookalike host.",
+        default_enabled=False,
+        opt_in_reason="resolves several hundred candidate domains per run",
     ),
     ModuleSpec(
         "correlate", "Risk correlation",

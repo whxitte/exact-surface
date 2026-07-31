@@ -36,6 +36,10 @@ DEFAULT_TIMEOUTS_SECONDS: dict[str, int] = {
     "cloud_buckets": 5 * MINUTE,  # ~45 bucket probes, bounded fan-out
     "nuclei_watch": 2 * MINUTE,  # list templates + set diff; no target contact
     "dork": 5 * MINUTE,
+    "api_surface": 15 * MINUTE,  # ~25 requests per origin, bounded fan-out
+    "http_misconfig": 10 * MINUTE,
+    "supply_chain": 10 * MINUTE,  # refetch a few bundles + one registry HEAD each
+    "typosquat": 10 * MINUTE,  # two batched dnsx calls over ~600 names
     "correlate": 2 * MINUTE,
     "notify": 2 * MINUTE,
 }

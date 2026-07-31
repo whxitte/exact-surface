@@ -82,6 +82,33 @@ async def resolve_one(host: str, timeout: float, *, runner: Runner = run_tool_js
     return resolved.get(host.lower().rstrip("."), [])
 
 
+async def resolve_mx_hosts(
+    hosts: list[str], timeout: float, *, runner: Runner = run_tool_jsonl
+) -> dict[str, list[str]]:
+    """MX records for many hosts at once → ``{host: [exchange, ...]}``.
+
+    Batched deliberately: the typosquat stage checks hundreds of candidate domains, and
+    one dnsx invocation over a host list is both far faster and far gentler on
+    resolvers than a lookup per name.
+    """
+    hosts = [h for h in hosts if h]
+    if not hosts:
+        return {}
+    rows = await runner(
+        "dnsx",
+        ["-silent", "-json", "-mx", "-resp"],
+        timeout=timeout,
+        stdin="\n".join(hosts),
+    )
+    out: dict[str, set[str]] = {}
+    for r in rows:
+        host = (r.get("host") or "").lower().rstrip(".")
+        if not host:
+            continue
+        out.setdefault(host, set()).update(str(m) for m in (r.get("mx") or []))
+    return {h: sorted(v) for h, v in out.items()}
+
+
 async def resolve_txt_records(
     hostname: str, timeout: float = 20.0, *, runner: Runner = run_tool_jsonl
 ) -> list[str]:
