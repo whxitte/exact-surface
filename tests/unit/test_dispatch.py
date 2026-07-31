@@ -145,6 +145,73 @@ async def test_unknown_pipeline_raises():
         await _run(mongo, "does-not-exist")
 
 
+def test_every_module_is_dispatchable():
+    """No module may exist in the registry without a way to run it on its own.
+
+    This is the regression guard for a real outage: js_mine, broken_links,
+    domain_intel, tls, service_scan, cloud_buckets, nuclei_watch and dork were all
+    added to the module registry and given a cadence, but never added to the
+    dispatcher. The scheduler enqueued them on schedule and every single run died with
+    "unknown pipeline" — the failure only surfaced in the activity feed of a live
+    deployment. A module that cannot be dispatched is a module that cannot be
+    scheduled, so the two lists must never drift again.
+    """
+    from core import modules as module_registry
+    from pipelines.dispatch import ROUTES
+
+    missing = [m for m in module_registry.MODULE_NAMES if m not in ROUTES]
+    assert not missing, f"modules with no dispatch route: {missing}"
+
+    unknown = [name for name in ROUTES if name not in module_registry.BY_NAME]
+    assert not unknown, f"dispatch routes for modules that do not exist: {unknown}"
+
+
+def test_every_scheduled_pipeline_is_dispatchable():
+    """The scheduler may only enqueue work the dispatcher can actually route."""
+    from pipelines.dispatch import ROUTES
+    from taskqueue.cadence import DEFAULT_CADENCE_SECONDS
+
+    missing = [p for p in DEFAULT_CADENCE_SECONDS if p not in ROUTES]
+    assert not missing, f"scheduled pipelines with no dispatch route: {missing}"
+
+
+def test_cascade_targets_are_dispatchable():
+    """Every phase the event cascade can trigger must be routable too."""
+    from pipelines.dispatch import ROUTES
+    from taskqueue.cascade import CASCADE
+
+    reachable = set(CASCADE) | {n for nxt in CASCADE.values() for n in nxt}
+    missing = sorted(p for p in reachable if p not in ROUTES)
+    assert not missing, f"cascade phases with no dispatch route: {missing}"
+
+
+async def test_disabled_module_is_skipped_not_run():
+    """A module switched off in settings never runs, whatever enqueued it.
+
+    The scheduler filters its own fan-out, but the cascade does not — so the gate has
+    to live at dispatch, where every automated path converges.
+    """
+    mongo = FakeMongo()
+    await ProgramRepo.from_mongo(mongo).save(
+        Program(
+            tenant_id="t1",
+            program_id="p1",
+            apex_domain="customer.com",
+            verified=True,
+            disabled_modules=["crawl"],
+        )
+    )
+    await AuthorizationRepo.from_mongo(mongo).save(
+        Authorization(tenant_id="t1", program_id="p1", authorized_by="u1", apex_verified=True)
+    )
+    res = await _run(mongo, "crawl")
+    assert res["skipped"] is True and "turned off" in res["note"]
+
+    # ...and so does anything downstream of it, with the dependency named.
+    res = await _run(mongo, "js_mine")
+    assert res["skipped"] is True and "Crawling" in res["note"]
+
+
 async def test_missing_program_refused():
     with pytest.raises(AuthorizationRequired):
         await _run(FakeMongo(), "probe")
