@@ -4,12 +4,42 @@ Not part of the product. See devtools/README.md for what it is and why it is a s
 app rather than a page inside ExactSurface: this can call a scanning function directly,
 which means it can be pointed at a host nobody has proven ownership of. The product's
 core promise is that it cannot. So the two must not share a login.
+
+Threat model
+------------
+The workbench adds **no endpoint to ExactSurface**. It imports the Python modules and
+talks to Mongo in-process; there is nothing on the product's API for an outsider to
+find or guess. The attack surface is this server alone, and it is not the internet —
+it is the developer's own machine:
+
+1. **A website the developer visits.** A browser will happily send a cross-origin
+   request to ``http://127.0.0.1:8765``. Any page open in another tab could otherwise
+   POST to ``/api/call`` and run a scanner from the developer's machine. This is the
+   real threat and it is why a loopback bind alone is *not* sufficient.
+2. **DNS rebinding.** An attacker points ``evil.com`` at 127.0.0.1, so the browser
+   treats their origin as same-origin with us. Defeated by checking ``Host``.
+3. **Another process or user on the same machine.** Defeated by the per-run token.
+
+Three controls, all enforced in :func:`_guard` before any route runs:
+
+* a **per-run token** (``secrets.token_urlsafe(32)``, new every start, never written to
+  disk) required as a query parameter or header — so the URL is unguessable, and
+  knowing the port is not enough;
+* a **Host allow-list** — only ``127.0.0.1``/``localhost`` on our port, so a rebound
+  DNS name is rejected;
+* an **Origin / Sec-Fetch-Site check** — any cross-site browser request is refused
+  outright, even if it somehow carried a valid token.
+
+For a product whose entire proposition is finding other people's exposed surface,
+shipping a tool that exposes our own would be the worst possible advertisement. Hence
+belt, braces, and a documented reason for each.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import secrets
 import time
 import traceback
 import uuid
@@ -17,8 +47,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from devtools import introspect
 
@@ -27,6 +57,22 @@ STATIC = Path(__file__).parent / "static"
 #: Bind address. Loopback only, deliberately not configurable — see README.
 HOST = "127.0.0.1"
 PORT = 8765
+
+#: Regenerated on every start and never persisted. Restarting invalidates old links,
+#: which is the correct default for a tool that should not be left running.
+TOKEN: str = secrets.token_urlsafe(32)
+
+#: Header the UI sends. A query parameter is accepted too, for the initial page load
+#: and for curl.
+TOKEN_HEADER = "x-workbench-token"  # noqa: S105 - a header NAME, not a secret
+TOKEN_PARAM = "t"  # noqa: S105 - a query-parameter NAME, not a secret
+
+_ALLOWED_HOSTS = frozenset({
+    f"127.0.0.1:{PORT}", f"localhost:{PORT}", f"[::1]:{PORT}",
+})
+_ALLOWED_ORIGINS = frozenset({
+    f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", f"http://[::1]:{PORT}",
+})
 
 
 def _assert_dev_only() -> None:
@@ -41,6 +87,37 @@ def _assert_dev_only() -> None:
             "This is an internal test bench that can call scanning functions directly, "
             "with no scope enforcement. It has no place in production."
         )
+
+
+def _guard(request: Request) -> None:
+    """Reject anything that is not this machine's own browser tab. Raises 404, not 403.
+
+    404 is deliberate: a wrong or absent token should make the whole server look like
+    it is not there, rather than confirming to a prober that something exists here and
+    only the credential is missing.
+    """
+    # 1. Host allow-list — defeats DNS rebinding, where a browser is tricked into
+    #    treating an attacker's domain as same-origin with loopback.
+    host = (request.headers.get("host") or "").lower()
+    if host not in _ALLOWED_HOSTS:
+        raise HTTPException(404)
+
+    # 2. Cross-site browser requests are refused outright. Sec-Fetch-Site is sent by
+    #    every current browser and cannot be forged by page JavaScript; Origin covers
+    #    the rest. Neither is present on curl, which is fine — the token still gates it.
+    if (request.headers.get("sec-fetch-site") or "same-origin") not in (
+        "same-origin", "none",
+    ):
+        raise HTTPException(404)
+    origin = request.headers.get("origin")
+    if origin and origin.lower() not in _ALLOWED_ORIGINS:
+        raise HTTPException(404)
+
+    # 3. The token itself. Compared in constant time so the check cannot be walked
+    #    character by character with timing.
+    supplied = request.headers.get(TOKEN_HEADER) or request.query_params.get(TOKEN_PARAM) or ""
+    if not secrets.compare_digest(supplied, TOKEN):
+        raise HTTPException(404)
 
 
 # -- run registry ------------------------------------------------------------
@@ -183,19 +260,28 @@ app = FastAPI(title="ExactSurface Workbench", docs_url="/docs")
 
 
 @app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(STATIC / "index.html")
+async def index(request: Request) -> HTMLResponse:
+    """The UI. Requires ?t=<token>, so the URL printed at startup is the only way in.
+
+    The token is injected into the page rather than left in the address bar for the
+    JS to re-read, so it travels as a header on every subsequent call.
+    """
+    _guard(request)
+    html = (STATIC / "index.html").read_text()
+    return HTMLResponse(html.replace("__WORKBENCH_TOKEN__", TOKEN))
 
 
 @app.get("/api/callables")
-async def list_callables() -> dict:
+async def list_callables(request: Request) -> dict:
+    _guard(request)
     items = [asdict(c) | {"group": c.group} for c in introspect.discover()]
     return {"count": len(items), "items": items}
 
 
 @app.get("/api/stages")
-async def list_stages() -> dict:
+async def list_stages(request: Request) -> dict:
     """Pipeline stages, from the same registry the product uses."""
+    _guard(request)
     from core import modules as registry
 
     return {
@@ -213,8 +299,9 @@ async def list_stages() -> dict:
 
 
 @app.get("/api/programs")
-async def list_programs() -> dict:
+async def list_programs(request: Request) -> dict:
     """Programs available to run a stage against, read straight from Mongo."""
+    _guard(request)
     try:
         from db.mongo import get_mongo
         from db.programs import ProgramRepo
@@ -236,8 +323,9 @@ async def list_programs() -> dict:
 
 
 @app.post("/api/call")
-async def call_function(body: dict) -> dict:
+async def call_function(request: Request, body: dict) -> dict:
     """Invoke one module function with the supplied arguments."""
+    _guard(request)
     qualname = str(body.get("qualname") or "")
     fn = introspect.resolve(qualname)
     if fn is None:
@@ -279,8 +367,9 @@ async def call_function(body: dict) -> dict:
 
 
 @app.post("/api/stage")
-async def run_stage(body: dict) -> dict:
+async def run_stage(request: Request, body: dict) -> dict:
     """Run a full pipeline stage against a real program, via the product's dispatcher."""
+    _guard(request)
     name = str(body.get("module") or "")
     program_id = str(body.get("program_id") or "")
     tenant_id = str(body.get("tenant_id") or "")
@@ -324,13 +413,15 @@ async def run_stage(body: dict) -> dict:
 
 
 @app.get("/api/runs")
-async def list_runs() -> dict:
+async def list_runs(request: Request) -> dict:
+    _guard(request)
     rows = sorted(RUNS.values(), key=lambda r: r.started_at, reverse=True)
     return {"items": [{**r.view(), "logs": r.logs[-3:]} for r in rows]}
 
 
 @app.get("/api/runs/{run_id}")
-async def get_run(run_id: str) -> JSONResponse:
+async def get_run(request: Request, run_id: str) -> JSONResponse:
+    _guard(request)
     run = RUNS.get(run_id)
     if not run:
         raise HTTPException(404, "no such run")
@@ -338,9 +429,10 @@ async def get_run(run_id: str) -> JSONResponse:
 
 
 @app.post("/api/runs/{run_id}/stop")
-async def stop_run(run_id: str) -> dict:
+async def stop_run(request: Request, run_id: str) -> dict:
     """Cancel a run. The task is cancelled cooperatively, and modules.exec kills any
     subprocess it had started — the same path the product's Stop button uses."""
+    _guard(request)
     run = RUNS.get(run_id)
     if not run:
         raise HTTPException(404, "no such run")
@@ -354,5 +446,12 @@ def main() -> None:  # pragma: no cover - entry point
     import uvicorn
 
     _assert_dev_only()
-    print(f"\n  ExactSurface Workbench — internal only\n  http://{HOST}:{PORT}\n")
+    url = f"http://{HOST}:{PORT}/?{TOKEN_PARAM}={TOKEN}"
+    print(
+        "\n  ExactSurface Workbench — internal only, not part of the product"
+        f"\n\n  {url}\n"
+        "\n  The token is new on every start and is never written to disk."
+        "\n  Without it every path returns 404, including this one.\n",
+        flush=True,  # so the URL appears even when stdout is redirected to a log
+    )
     uvicorn.run(app, host=HOST, port=PORT, log_level="warning")

@@ -17,6 +17,7 @@ re-scan), multi-tenant from line one, and **never exploits — only detects**.
 | [`docs/API.md`](docs/API.md) | endpoint reference + the rules a schema can't show (why cross-tenant is 404, why `ip_scope` is strings) |
 | [`docs/ADRs/`](docs/ADRs/) | why things are the way they are — read before changing a control |
 | [`docs/TESTING.md`](docs/TESTING.md) | run it end-to-end against a target you own (quick) |
+| [`docs/DEVTOOLS.md`](docs/DEVTOOLS.md) | **the Workbench** — the internal module test bench: why it is a separate app, how it is contained, how to use it |
 | [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | **full test coverage** — the 7 layers, what to test when, security/safety verification |
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | roles, images, sizing, observability (scraping only the api shows you nothing about scanning) |
 | [`EXACTSURFACE_BUILD_SPEC.md`](EXACTSURFACE_BUILD_SPEC.md) | the full original design spec (authoritative) |

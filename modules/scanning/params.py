@@ -107,6 +107,16 @@ class Baseline:
     body_sample: str = field(default="", repr=False)
 
 
+def classify_name(name: str) -> tuple[Severity, str]:
+    """What a parameter *name* means, independent of how it was discovered.
+
+    Shared by the built-in prober and the arjun path so both engines describe the same
+    parameter the same way — a finding's severity should not depend on which tool
+    happened to find it.
+    """
+    return _NOTABLE.get(name.lower(), (Severity.LOW, "an undocumented parameter"))
+
+
 def extract_observed(urls: list[str]) -> list[ObservedParam]:
     """Every parameter already present in the URLs we hold. Costs no requests.
 
@@ -176,7 +186,7 @@ def classify(
     if not (reflected or changed_status or abs(delta) >= LENGTH_DELTA):
         return None
 
-    severity, what = _NOTABLE.get(name.lower(), (Severity.LOW, "an undocumented parameter"))
+    severity, what = classify_name(name)
     if reflected:
         # Reflection is not XSS — we submitted an inert alphabetic string and looked for
         # it in the response. It means the value reaches the output, which is where a
