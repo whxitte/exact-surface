@@ -20,8 +20,18 @@ export default function FindingsPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [program, setProgram] = useState<string>("all");
+  const [module, setModule] = useState<string>("all");
   const [open, setOpen] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Which modules actually produced findings, with counts. Derived from the data
+  // rather than the module registry so the list only ever offers filters that will
+  // return something — a chip that yields an empty page is worse than no chip.
+  const modules = useMemo(() => {
+    const counts = new Map<string, number>();
+    rows.forEach((r) => counts.set(r.module, (counts.get(r.module) ?? 0) + 1));
+    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  }, [rows]);
 
   const programs = useMemo(() => {
     const seen = new Map<string, string>();
@@ -51,9 +61,10 @@ export default function FindingsPage() {
       rows.filter(
         (r) =>
           (filter === "all" || r.severity === filter) &&
-          (program === "all" || r.program_id === program),
+          (program === "all" || r.program_id === program) &&
+          (module === "all" || r.module === module),
       ),
-    [rows, filter, program],
+    [rows, filter, program, module],
   );
 
   return (
@@ -78,11 +89,26 @@ export default function FindingsPage() {
             {s}
           </button>
         ))}
+        {modules.length > 1 && (
+          <select
+            value={module}
+            onChange={(e) => setModule(e.target.value)}
+            className="ml-auto h-8 rounded-md border border-border bg-background px-2 text-xs"
+            aria-label="Filter by module"
+          >
+            <option value="all">All modules ({rows.length})</option>
+            {modules.map(([name, count]) => (
+              <option key={name} value={name}>
+                {name} ({count})
+              </option>
+            ))}
+          </select>
+        )}
         {programs.length > 1 && (
           <select
             value={program}
             onChange={(e) => setProgram(e.target.value)}
-            className="ml-auto h-8 rounded-md border border-border bg-background px-2 text-xs"
+            className="h-8 rounded-md border border-border bg-background px-2 text-xs"
           >
             <option value="all">All programs</option>
             {programs.map(([id, apex]) => (
