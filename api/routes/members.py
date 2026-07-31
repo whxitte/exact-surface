@@ -198,6 +198,20 @@ async def create_member(
     users = UserRepo.from_mongo(mongo)
     if await users.get_by_email(body.email):
         raise HTTPException(status.HTTP_409_CONFLICT, "email already registered")
+    # Seat limit — from the signed licence, tightened by the stored plan. Checked here
+    # because this is the only path that creates a member (signup creates the owner and
+    # is separately closed after the first account in prod).
+    from core.plans import can_add_user
+    from db.programs import tenant_limits
+
+    limits = await tenant_limits(mongo, principal.tenant_id)
+    existing = await users.list(principal.tenant_id)
+    if not can_add_user(limits, len(existing)):
+        raise HTTPException(
+            status.HTTP_402_PAYMENT_REQUIRED,
+            f"your licence allows {limits.max_users} user(s) — "
+            "contact your vendor to add seats",
+        )
     group_ids = await _validate_group_ids(mongo, principal.tenant_id, body.group_ids)
     # Always MEMBER — the owner role is never conferred through this API.
     user = User(

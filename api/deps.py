@@ -196,11 +196,10 @@ async def require_write_license() -> None:
     past grace / missing / tampered), refuse with 402 — the authoritative, server-side
     enforcement that a patched frontend cannot get around. A no-op when enforcement is
     off (dev/tests)."""
-    settings = get_settings()
-    if not settings.license_enforced:
-        return
-    from core.entitlements import current
+    from core.entitlements import current, enforcement_active
 
+    if not enforcement_active():
+        return
     state = current()
     if state.read_only:
         raise HTTPException(
