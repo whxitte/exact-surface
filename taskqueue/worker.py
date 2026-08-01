@@ -234,7 +234,7 @@ def _redis_settings():
 class WorkerSettings:
     """arq reads these as CLASS attributes — they must be plain values, not properties."""
 
-    functions = [run_program_task, run_pipeline_task, run_bypass_task]
+    functions = [run_program_task, run_pipeline_task, run_bypass_task]  # noqa: RUF012
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = get_settings().worker_concurrency

@@ -24,10 +24,6 @@ class InvalidToken(ExactSurfaceError):
     pass
 
 
-class InvalidCredentials(ExactSurfaceError):
-    pass
-
-
 # -- passwords ---------------------------------------------------------------
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode()[:_MAX_BCRYPT_BYTES], bcrypt.gensalt(rounds=12)).decode()

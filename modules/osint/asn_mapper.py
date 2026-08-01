@@ -22,20 +22,3 @@ async def map_domain(domain: str, timeout: float, *, runner: Runner = run_tool_j
         for cidr in r.get("as_range") or []:
             cidrs.add(cidr)
     return sorted(cidrs)
-
-
-async def map_org(org: str, timeout: float, *, runner: Runner = run_tool_jsonl) -> list[str]:
-    """Return the CIDR ranges announced by an organisation name.
-
-    Available but **not yet wired** into the pipeline: only :func:`map_domain` feeds
-    the §9b IP-scope confirmation today. This is the intended fallback for a
-    CDN-fronted apex whose real origin ASN a domain lookup can't reach (the
-    limitation noted in ADR-0008) — wire it there deliberately, not incidentally,
-    since it gates DEDICATED (full-scan) promotion.
-    """
-    rows = await runner("asnmap", ["-org", org, "-json", "-silent"], timeout=timeout)
-    cidrs: set[str] = set()
-    for r in rows:
-        for cidr in r.get("as_range") or []:
-            cidrs.add(cidr)
-    return sorted(cidrs)
