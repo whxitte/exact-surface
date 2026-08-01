@@ -84,3 +84,15 @@ self-declared-is-ignored regression guard. A green test was certifying the hole.
   legal org name; the apex's ASN is the signal we actually have.
 - **Trust the customer's attestation + ToS.** This is what we had. A signature
   doesn't stop the packets, and the abuse report lands on us.
+
+## Note (2026-08-01): organisation-name lookup
+
+`asnmap` can also resolve an **organisation name** to its announced ranges, which is the
+natural fallback for a CDN-fronted apex whose real origin ASN a domain lookup cannot
+reach — the limitation this ADR records.
+
+A `map_org()` wrapper existed for a while, unwired. It has been removed: unreachable
+code that documents an intention is still unreachable code, and this ADR is the right
+place for the intention. If the fallback is built, add the wrapper back **with its
+caller in the same commit**, and treat it as gating DEDICATED (full-scan) promotion —
+so it needs the same server-side confirmation as the domain path, not a shortcut.

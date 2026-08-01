@@ -185,3 +185,82 @@ def test_websocket_stream_only_sees_own_tenant(app_ctx):  # noqa: F811
         msg = ws.receive_json()
         assert msg["type"] == "snapshot"
         assert all(f["name"] != "A's secret finding" for f in msg["new_findings"])
+
+
+# -- every unscoped query must be justified ----------------------------------
+
+#: Repository methods that deliberately query WITHOUT a tenant_id, each with the
+#: reason it is safe. Anything not on this list is a cross-tenant read waiting to
+#: happen, so a new one fails this test until somebody writes down why it is allowed.
+_UNSCOPED_BY_DESIGN: dict[str, str] = {
+    # Pre-authentication: there is no tenant yet. Email is globally unique by design,
+    # which is what makes login and the duplicate-signup check possible at all.
+    "users.py:get_by_email": "login/signup, before any tenant is known",
+    # The id comes from a verified JWT, so the caller has already proven who they are.
+    "users.py:get_by_id": "resolves the principal from an authenticated token",
+    "users.py:create": "creates the row that will carry the tenant_id",
+    "users.py:set_verification": "keyed by user_id from a verified token",
+    "users.py:verify_by_token": "the emailed one-time token IS the credential",
+    # The key hash is the credential; the tenant is read off the row it returns.
+    "apikeys.py:get_by_hash": "the key hash is the credential being presented",
+    "apikeys.py:create": "creates the row that will carry the tenant_id",
+    # Instance-wide state, not tenant data.
+    "license_state.py:get": "instance-wide licence state",
+    "license_state.py:bump_clock": "instance-wide clock high-water mark",
+    "license_state.py:save_token": "instance-wide licence token",
+    "license_state.py:set_applied_update_version": "instance-wide update version",
+    "scope_feed.py:get": "shared CDN/cloud ranges, identical for every tenant",
+    "scope_feed.py:set": "shared CDN/cloud ranges, identical for every tenant",
+    # The scheduler iterates every tenant by definition; it scopes per program after.
+    "programs.py:list_all": "the scheduler's cross-tenant sweep, scoped downstream",
+}
+
+
+def test_no_unjustified_cross_tenant_query():
+    """Every DB query is tenant-scoped unless it is on the allow-list above.
+
+    Tenant isolation is the one bug in a multi-tenant product that is unrecoverable —
+    you cannot un-show a customer somebody else's attack surface. So the default is
+    "scoped", and each exception has to be written down and defended rather than
+    noticed in review.
+    """
+    import ast
+    import pathlib
+
+    offenders: list[str] = []
+    for path in sorted(pathlib.Path("db").glob("*.py")):
+        src = path.read_text()
+        for node in ast.walk(ast.parse(src)):
+            if not isinstance(node, (ast.AsyncFunctionDef, ast.FunctionDef)):
+                continue
+            segment = ast.get_source_segment(src, node) or ""
+            queries = ("find(", "find_one(", "delete_many(", "update_one(", "update_many(")
+            if not any(q in segment for q in queries):
+                continue
+            if "tenant_id" in segment:
+                continue
+            key = f"{path.name}:{node.name}"
+            if key not in _UNSCOPED_BY_DESIGN:
+                offenders.append(key)
+
+    assert not offenders, (
+        "these query without a tenant_id and are not on the justified list:\n  "
+        + "\n  ".join(offenders)
+        + "\n\nAdd a tenant_id filter, or add an entry to _UNSCOPED_BY_DESIGN "
+        "explaining why it is safe."
+    )
+
+
+def test_the_justified_list_has_not_gone_stale():
+    """An entry for a method that no longer exists hides the fact that nobody has
+    re-checked the list."""
+    import pathlib
+
+    existing = {
+        f"{p.name}:{line.split('def ')[1].split('(')[0].strip()}"
+        for p in pathlib.Path("db").glob("*.py")
+        for line in p.read_text().splitlines()
+        if line.strip().startswith(("def ", "async def "))
+    }
+    stale = sorted(set(_UNSCOPED_BY_DESIGN) - existing)
+    assert not stale, f"justified-list entries for methods that no longer exist: {stale}"

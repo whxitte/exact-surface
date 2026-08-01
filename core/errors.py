@@ -30,20 +30,6 @@ class OutOfScope(ExactSurfaceError):
         super().__init__(f"out of scope: {host} ({reason})")
 
 
-class ActionNotPermitted(ExactSurfaceError):
-    """The host is in scope but the requested action is not allowed for it.
-
-    Typically raised when a module asks to port-scan or run aggressive
-    templates against a CDN/cloud-shared IP that only permits HTTP probing.
-    """
-
-    def __init__(self, host: str, action: str, reason: str) -> None:
-        self.host = host
-        self.action = action
-        self.reason = reason
-        super().__init__(f"action {action!r} not permitted on {host}: {reason}")
-
-
 class RateLimited(ExactSurfaceError):
     """The politeness limiter refused a call because the target's budget is spent."""
 

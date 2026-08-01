@@ -50,10 +50,6 @@ BUILT_AT: str = ""
 LICENSED_TO: str = ""
 
 
-def is_release() -> bool:
-    return bool(RELEASE_BUILD)
-
-
 def licence_enforced(settings_flag: bool) -> bool:
     """Whether licence enforcement is active.
 

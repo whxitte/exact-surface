@@ -123,6 +123,15 @@ def format_log_line(record: Any) -> str:
 
 _capture_installed = False
 
+#: Strong references to in-flight log-push tasks.
+#:
+#: ``loop.create_task`` returns a task the event loop only holds a WEAK reference to.
+#: With nothing else holding it, a push can be garbage-collected before it completes
+#: and the log line is silently lost — exactly the "half the log is missing" symptom
+#: that is hard to attribute later, because nothing errors. Holding the task until it
+#: finishes is the documented fix.
+_inflight_pushes: set[asyncio.Task] = set()
+
 
 def install_scan_log_capture(min_level: str = "INFO") -> None:
     """Add a loguru sink that streams any log line bound to a scan_id into that
@@ -147,7 +156,9 @@ def install_scan_log_capture(min_level: str = "INFO") -> None:
             loop = asyncio.get_running_loop()
         except RuntimeError:
             return  # no running loop → can't schedule the async push
-        loop.create_task(bus.push_log(scan_id, format_log_line(record)))
+        task = loop.create_task(bus.push_log(scan_id, format_log_line(record)))
+        _inflight_pushes.add(task)
+        task.add_done_callback(_inflight_pushes.discard)
 
     logger.add(_sink, level=min_level, format="{message}")
     _capture_installed = True
