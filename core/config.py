@@ -62,10 +62,6 @@ class Settings(BaseSettings):
     # what makes this acceptable to ask for at all. READ-ONLY keys are sufficient.
     cloudlist_config: str | None = Field(default=None)
 
-    # Public read-only demo instance. Blocks every state-changing request in middleware
-    # (api/demo.py). Never set this on a customer deployment — it would make the product
-    # unusable, which is exactly what it is for.
-    demo_mode: bool = Field(default=False)
 
     # -- scope engine ----------------------------------------------------
     scope_feed_refresh_hours: int = Field(default=24)

@@ -24,10 +24,6 @@ PUBLIC_PATHS = {
     # Public by design: the caller proves identity with the emailed one-time token,
     # not a session — the user has no credentials to verify with yet.
     "/auth/verify-email",
-    # Unauthenticated UI configuration: whether this instance is the read-only demo,
-    # plus the build version. Deliberately readable before login because the login page
-    # itself renders the demo banner. Contains nothing tenant-scoped and no secrets.
-    "/public-config",
     "/docs",
     "/redoc",
     "/openapi.json",

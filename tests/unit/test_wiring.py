@@ -335,7 +335,8 @@ def test_devtools_is_not_copied_into_any_image():
         if not path.exists():
             continue
         text = path.read_text()
-        assert "devtools" not in text, f"{name} copies devtools/ into the image"
+        for internal in ("devtools", "demo/"):
+            assert internal not in text, f"{name} copies {internal} into the product image"
         for line in text.splitlines():
             stripped = line.strip()
             if not stripped.startswith("COPY ") or "--from" in stripped:
@@ -345,6 +346,18 @@ def test_devtools_is_not_copied_into_any_image():
                 f"{name} uses `COPY {src}`, which would sweep devtools/ into the image. "
                 "Copy the specific directories the service needs instead."
             )
+
+
+def test_the_demo_site_never_enters_a_product_image():
+    """The demo replaces lib/transport.ts with a fixture-backed version. If that file
+    reached a customer image, the product would silently stop talking to its own API."""
+    demo_dockerfile = REPO / "demo" / "Dockerfile"
+    assert demo_dockerfile.exists(), "demo/Dockerfile is missing"
+    for name in ("Dockerfile.api", "Dockerfile.pipeline", "Dockerfile.frontend"):
+        path = REPO / "docker" / name
+        if path.exists():
+            assert "demo/" not in path.read_text(), f"{name} references demo/"
+    assert "demo" in (REPO / ".dockerignore").read_text().split()
 
 
 def test_devtools_is_not_a_service_in_the_production_compose_file():

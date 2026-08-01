@@ -128,14 +128,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Demo mode: refuse every state-changing request. Added FIRST so it runs before
-    # rate limiting, routing and any dependency — a public demo must not be writable by
-    # a route that forgets a guard, or by one that does not exist yet.
-    if settings.demo_mode:
-        from api.demo import DemoReadOnlyMiddleware
-
-        app.add_middleware(DemoReadOnlyMiddleware)
-
     # Per-tenant rate limiting (slowapi).
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
@@ -202,23 +194,6 @@ def create_app() -> FastAPI:
     app.include_router(schedule_routes.router, dependencies=_gate(SETTINGS_MANAGE))
     app.include_router(report_routes.router, dependencies=_gate(VIEW))
     app.include_router(ws_stream.router)
-
-    @app.get("/public-config")
-    async def public_config() -> dict:
-        """Unauthenticated UI configuration.
-
-        Tells the frontend whether this instance is the read-only demo so it can show a
-        banner and disable its controls. That is presentation only — the actual
-        enforcement is the middleware, and the UI is not trusted to do any of it.
-        """
-        from api.demo import DEMO_MESSAGE
-        from core.build_info import summary
-
-        return {
-            "demo_mode": settings.demo_mode,
-            "demo_message": DEMO_MESSAGE if settings.demo_mode else "",
-            "build": summary(),
-        }
 
     @app.get("/healthz")
     async def healthz() -> dict:
