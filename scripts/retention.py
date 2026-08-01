@@ -49,11 +49,23 @@ PURGEABLE: dict[str, str] = {
 }
 
 #: Never touched, whatever the tier. See the module docstring.
-PROTECTED: frozenset[str] = frozenset({
-    "assets", "programs", "authorizations", "tenants", "users", "groups",
-    "api_keys", "integrations", "notifications", "license_state", "schedule",
-    "domain_intel", "scope_feed",
-})
+PROTECTED: frozenset[str] = frozenset(
+    {
+        "assets",
+        "programs",
+        "authorizations",
+        "tenants",
+        "users",
+        "groups",
+        "api_keys",
+        "integrations",
+        "notifications",
+        "license_state",
+        "schedule",
+        "domain_intel",
+        "scope_feed",
+    }
+)
 
 #: Floor on any retention window. Even the cheapest tier keeps a month, so a
 #: misconfigured or corrupt plan value can never wipe a customer's data.
@@ -110,7 +122,10 @@ async def purge_tenant(
     if result.total:
         logger.info(
             "retention: {} — {} record(s) older than {} ({} day window){}",
-            tenant_id, result.total, cutoff.date(), result.retention_days,
+            tenant_id,
+            result.total,
+            cutoff.date(),
+            result.retention_days,
             " [dry run]" if dry_run else "",
         )
     return result

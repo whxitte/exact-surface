@@ -91,9 +91,7 @@ async def run_crawl(
         assets = [a for a in assets if a["hostname"] in targets]
     ep_repo = EndpointRepo.from_mongo(mongo)
     endpoints = await ep_repo.list(tenant.tenant_id, program_id, limit=100_000)
-    alive_hosts = {
-        urlsplit(ep["url"]).hostname for ep in endpoints if ep.get("source") == "probe"
-    }
+    alive_hosts = {urlsplit(ep["url"]).hostname for ep in endpoints if ep.get("source") == "probe"}
     crawl_hosts = [
         asset["hostname"]
         for asset in assets

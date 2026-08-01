@@ -89,8 +89,7 @@ async def signup(
     if not get_settings().public_signup_open and await tenants.count() > 0:
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
-            "this instance is already set up — ask its owner to add you under "
-            "Settings → members",
+            "this instance is already set up — ask its owner to add you under Settings → members",
         )
 
     tenant_id = "t_" + uuid.uuid4().hex[:12]

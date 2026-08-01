@@ -23,8 +23,11 @@ async def test_save_publishes_when_bus_set():
         mongo = FakeMongo()
         await ScanRunRepo.from_mongo(mongo).save(
             ScanRun(
-                tenant_id="t1", scan_id="s1", program_id="p1",
-                pipeline="full", status=ScanStatus.RUNNING,
+                tenant_id="t1",
+                scan_id="s1",
+                program_id="p1",
+                pipeline="full",
+                status=ScanStatus.RUNNING,
             )
         )
     finally:

@@ -98,28 +98,96 @@ _VALID_TLDS: frozenset[str] = frozenset(
 #: Filenames that are third-party libraries. Mining them yields the library's own
 #: routes, not the target's — pure noise, and a lot of it.
 _LIBRARY_MARKERS: tuple[str, ...] = (
-    "jquery", "bootstrap", "react-dom", "react.production", "angular", "vue.runtime",
-    "lodash", "moment", "polyfill", "runtime~", "chunk-vendors", "modernizr",
-    "popper", "tailwind", "fontawesome", "swiper", "gtm.js", "analytics.js",
-    "recaptcha", "hotjar", "intercom", "stripe.js", "googletagmanager",
-    "moment", "axios", "core-js", "zone.js", "rxjs", "d3.", "chart.", "three.",
-    "highcharts", "pdf.worker", "mapbox", "leaflet", "sentry", "datadog", "segment",
+    "jquery",
+    "bootstrap",
+    "react-dom",
+    "react.production",
+    "angular",
+    "vue.runtime",
+    "lodash",
+    "moment",
+    "polyfill",
+    "runtime~",
+    "chunk-vendors",
+    "modernizr",
+    "popper",
+    "tailwind",
+    "fontawesome",
+    "swiper",
+    "gtm.js",
+    "analytics.js",
+    "recaptcha",
+    "hotjar",
+    "intercom",
+    "stripe.js",
+    "googletagmanager",
+    "moment",
+    "axios",
+    "core-js",
+    "zone.js",
+    "rxjs",
+    "d3.",
+    "chart.",
+    "three.",
+    "highcharts",
+    "pdf.worker",
+    "mapbox",
+    "leaflet",
+    "sentry",
+    "datadog",
+    "segment",
 )
 
 #: Extensions that are assets, not endpoints. **Script files belong here**: a path to
 #: another bundle is not attack surface, and treating one as an endpoint is how
 #: ``/js/admin.6fd71600.js`` ends up flagged "admin" hundreds of times.
 _ASSET_EXT: frozenset[str] = frozenset(
-    {"png", "jpg", "jpeg", "gif", "svg", "webp", "ico", "css", "woff", "woff2", "ttf",
-     "eot", "otf", "mp4", "webm", "mp3", "pdf", "map", "txt", "md", "avif",
-     "js", "mjs", "cjs", "jsx", "ts", "tsx", "vue", "scss", "less", "wasm"}
+    {
+        "png",
+        "jpg",
+        "jpeg",
+        "gif",
+        "svg",
+        "webp",
+        "ico",
+        "css",
+        "woff",
+        "woff2",
+        "ttf",
+        "eot",
+        "otf",
+        "mp4",
+        "webm",
+        "mp3",
+        "pdf",
+        "map",
+        "txt",
+        "md",
+        "avif",
+        "js",
+        "mjs",
+        "cjs",
+        "jsx",
+        "ts",
+        "tsx",
+        "vue",
+        "scss",
+        "less",
+        "wasm",
+    }
 )
 
 #: Hosts that only ever appear as XML/schema namespaces or standards references —
 #: never attack surface, and common enough in bundles to matter.
 _NAMESPACE_HOSTS: tuple[str, ...] = (
-    "w3.org", "schema.org", "purl.org", "xmlns.com", "ns.adobe.com",
-    "sourceforge.net/xml", "docbook.org", "openxmlformats.org",
+    "w3.org",
+    "schema.org",
+    "purl.org",
+    "xmlns.com",
+    "ns.adobe.com",
+    "sourceforge.net/xml",
+    "docbook.org",
+    "openxmlformats.org",
 )
 
 #: Strings that look like paths but never are.
@@ -154,8 +222,17 @@ _INTEREST: tuple[tuple[re.Pattern[str], str], ...] = (
 #: Directory segments that mean "not the app's own code". Locale/i18n bundles are the
 #: worst offenders: a single library ships ~100 of them, each yielding identical noise.
 _LIBRARY_PATH_SEGMENTS: tuple[str, ...] = (
-    "/locale/", "/locales/", "/i18n/", "/lang/", "/langs/", "/translations/",
-    "/vendor/", "/vendors/", "/node_modules/", "/dist/lib/", "/polyfills/",
+    "/locale/",
+    "/locales/",
+    "/i18n/",
+    "/lang/",
+    "/langs/",
+    "/translations/",
+    "/vendor/",
+    "/vendors/",
+    "/node_modules/",
+    "/dist/lib/",
+    "/polyfills/",
 )
 
 

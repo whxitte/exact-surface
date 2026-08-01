@@ -9,9 +9,7 @@ from typing import Any
 
 
 class _UpdateResult:
-    def __init__(
-        self, upserted_id: Any = None, modified: int = 0, deleted_count: int = 0
-    ) -> None:
+    def __init__(self, upserted_id: Any = None, modified: int = 0, deleted_count: int = 0) -> None:
         self.upserted_id = upserted_id
         self.modified_count = modified
         self.deleted_count = deleted_count

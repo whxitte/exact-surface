@@ -55,9 +55,14 @@ def _kind_of(annotation: Any) -> str:
     if annotation is inspect.Parameter.empty:
         return "any"
     for needle, kind in (
-        ("bool", "bool"), ("int", "int"), ("float", "float"),
-        ("list", "list"), ("tuple", "list"), ("set", "list"),
-        ("dict", "dict"), ("str", "str"),
+        ("bool", "bool"),
+        ("int", "int"),
+        ("float", "float"),
+        ("list", "list"),
+        ("tuple", "list"),
+        ("set", "list"),
+        ("dict", "dict"),
+        ("str", "str"),
     ):
         if needle in text:
             return kind
@@ -80,9 +85,7 @@ def _describe(fn: Any, module_name: str, name: str) -> Callable_ | None:
                 kind=_kind_of(p.annotation),
                 required=p.default is inspect.Parameter.empty,
                 default=None if p.default is inspect.Parameter.empty else _safe(p.default),
-                annotation=(
-                    "" if p.annotation is inspect.Parameter.empty else str(p.annotation)
-                ),
+                annotation=("" if p.annotation is inspect.Parameter.empty else str(p.annotation)),
             )
         )
 
@@ -95,8 +98,7 @@ def _describe(fn: Any, module_name: str, name: str) -> Callable_ | None:
         is_async=inspect.iscoroutinefunction(fn),
         params=params,
         returns=(
-            "" if sig.return_annotation is inspect.Signature.empty
-            else str(sig.return_annotation)
+            "" if sig.return_annotation is inspect.Signature.empty else str(sig.return_annotation)
         ),
     )
 

@@ -53,7 +53,7 @@ def _cmd_keygen(args: argparse.Namespace) -> int:
         (out / "private.pem").write_text(private_pem)
         (out / "public.pem").write_text(public_pem)
         (out / "private.pem").chmod(0o600)
-        print(f"wrote {out/'private.pem'} (KEEP SECRET) and {out/'public.pem'}")
+        print(f"wrote {out / 'private.pem'} (KEEP SECRET) and {out / 'public.pem'}")
     else:
         print("# --- PRIVATE KEY (keep secret) ---")
         print(private_pem)

@@ -94,9 +94,7 @@ async def get_principal(
         role = Role(doc.get("role", "member"))
         # An API key acts with its creator's current permissions (owner-created key ⇒
         # full access), resolved live so revoking the creator's access revokes the key.
-        perms = await _resolve_permissions(
-            mongo, doc["tenant_id"], doc.get("created_by"), role
-        )
+        perms = await _resolve_permissions(mongo, doc["tenant_id"], doc.get("created_by"), role)
         return Principal(
             tenant_id=doc["tenant_id"],
             user_id=doc.get("created_by"),

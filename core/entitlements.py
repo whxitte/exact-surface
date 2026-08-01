@@ -178,9 +178,7 @@ async def ensure_fresh(mongo: Any, *, max_age_seconds: float | None = None) -> L
     long-lived worker still notices an expiry/renewal without a background task)."""
     settings = get_settings()
     max_age = (
-        max_age_seconds
-        if max_age_seconds is not None
-        else settings.license_check_interval_seconds
+        max_age_seconds if max_age_seconds is not None else settings.license_check_interval_seconds
     )
     if _state is None or (time.monotonic() - _last_refresh_monotonic) > max_age:
         return await refresh(mongo)

@@ -366,8 +366,12 @@ async def run_full_pipeline(
             optional(
                 "cloud_assets",
                 lambda t: run_cloud_assets(
-                    mongo=mongo, scope=scope, tenant=tenant, program_id=program_id,
-                    timeout=t, **inj("cloud_enumerate"),
+                    mongo=mongo,
+                    scope=scope,
+                    tenant=tenant,
+                    program_id=program_id,
+                    timeout=t,
+                    **inj("cloud_enumerate"),
                 ),
             ),
         ),
@@ -387,8 +391,12 @@ async def run_full_pipeline(
             optional(
                 "reverse_dns",
                 lambda t: run_reverse_dns(
-                    mongo=mongo, scope=scope, tenant=tenant, program_id=program_id,
-                    timeout=t, **inj("ptr_lookup"),
+                    mongo=mongo,
+                    scope=scope,
+                    tenant=tenant,
+                    program_id=program_id,
+                    timeout=t,
+                    **inj("ptr_lookup"),
                 ),
             ),
         ),
@@ -434,8 +442,13 @@ async def run_full_pipeline(
             # Needs the outbound links that crawl + js_mine collected.
             "broken_links",
             lambda t: run_broken_links(
-                mongo=mongo, scope=scope, tenant=tenant, program_id=program_id,
-                timeout=t, limiter=limiter, **inj("blh_resolve", "blh_status"),
+                mongo=mongo,
+                scope=scope,
+                tenant=tenant,
+                program_id=program_id,
+                timeout=t,
+                limiter=limiter,
+                **inj("blh_resolve", "blh_status"),
             ),
         ),
         ("port_scan", lambda t: run_port_scan(**common, timeout=t, **inj("naabu"))),

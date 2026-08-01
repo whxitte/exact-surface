@@ -72,7 +72,10 @@ async def run_typosquat(
         technique = technique_of.get(domain, "a lookalike mutation")
         logger.info(
             "typosquat: {} is REGISTERED ({}) via {}{}",
-            domain, ", ".join(ips[:3]), technique, " [has MX]" if has_mx else "",
+            domain,
+            ", ".join(ips[:3]),
+            technique,
+            " [has MX]" if has_mx else "",
         )
         hits.append(ts.Lookalike(domain, technique, tuple(ips[:8]), has_mx))
 
@@ -107,7 +110,10 @@ async def run_typosquat(
     with_mail = sum(1 for h in hits if h.has_mx)
     logger.info(
         "typosquat: {}/{} candidate(s) registered, {} with mail ({} new finding(s))",
-        len(hits), len(names), with_mail, new,
+        len(hits),
+        len(names),
+        with_mail,
+        new,
     )
     return {
         "candidates": len(names),

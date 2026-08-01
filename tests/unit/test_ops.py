@@ -41,7 +41,11 @@ def test_backup_command_streams_to_stdout():
     straight into age, so the plaintext never lands on disk."""
     cmd = build_mongodump_cmd("mongodb://x:27017", "exactsurface")
     assert cmd == [
-        "mongodump", "--uri=mongodb://x:27017", "--archive", "--db=exactsurface", "--gzip",
+        "mongodump",
+        "--uri=mongodb://x:27017",
+        "--archive",
+        "--db=exactsurface",
+        "--gzip",
     ]
     assert not any(a.startswith("--out") for a in cmd), "writing to a directory leaks plaintext"
     assert "--gzip" not in build_mongodump_cmd("uri", "db", gzip=False)

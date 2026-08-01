@@ -71,6 +71,7 @@ class PlanLimits:
 
 HOUR = 3600
 
+
 #: Every optional module name, so a tier can be given "all of them" without this file
 #: needing an edit each time one is added. Imported lazily to avoid a cycle.
 def _all_optional() -> frozenset[str]:
@@ -108,10 +109,19 @@ PLAN_LIMITS: dict[Plan, PlanLimits] = {
         max_api_keys=10,
         min_scan_interval_seconds=1 * HOUR,
         retention_days=365,
-        optional_modules=frozenset({
-            "tls", "service_scan", "param_discovery", "typosquat",
-            "cloud_buckets", "cloud_assets", "nuclei_watch", "dork", "uncover",
-        }),
+        optional_modules=frozenset(
+            {
+                "tls",
+                "service_scan",
+                "param_discovery",
+                "typosquat",
+                "cloud_buckets",
+                "cloud_assets",
+                "nuclei_watch",
+                "dork",
+                "uncover",
+            }
+        ),
         on_demand_bypass=True,
         scheduled_reports=True,
     ),

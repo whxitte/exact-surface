@@ -536,12 +536,20 @@ async def test_ingest_keeps_only_permutations_that_resolve():
         return {}
 
     await run_ingest(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT, program_id="p1",
-        apex="customer.com", timeout=5,
-        subfinder=subfinder, crtsh=crtsh, resolve=resolve, dns_recon=dns_recon,
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        apex="customer.com",
+        timeout=5,
+        subfinder=subfinder,
+        crtsh=crtsh,
+        resolve=resolve,
+        dns_recon=dns_recon,
         permute=permute,
     )
     assets = await AssetRepo(mongo.collection("assets")).list("t1", "p1", limit=50)
     hosts = {a["hostname"] for a in assets}
-    assert "api-dev.customer.com" in hosts      # confirmed by DNS
+    assert "api-dev.customer.com" in hosts  # confirmed by DNS
     assert "api-ghost.customer.com" not in hosts  # guessed but does not resolve

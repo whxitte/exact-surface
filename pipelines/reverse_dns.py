@@ -55,7 +55,8 @@ async def run_reverse_dns(
         logger.warning(
             "reverse_dns: {} range(s) present but none are sweepable "
             "(ranges wider than /20 are refused): {}",
-            len(cidrs), ", ".join(cidrs[:5]),
+            len(cidrs),
+            ", ".join(cidrs[:5]),
         )
         return {
             "skipped": True,
@@ -100,7 +101,10 @@ async def run_reverse_dns(
     logger.info(
         "reverse_dns: {} address(es) swept → {} in-scope host(s) ({} new), "
         "{} out-of-scope name(s) ignored",
-        len(ips), len(in_scope), new, foreign,
+        len(ips),
+        len(in_scope),
+        new,
+        foreign,
     )
     return {
         "swept": len(ips),

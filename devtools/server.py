@@ -67,12 +67,20 @@ TOKEN: str = secrets.token_urlsafe(32)
 TOKEN_HEADER = "x-workbench-token"  # noqa: S105 - a header NAME, not a secret
 TOKEN_PARAM = "t"  # noqa: S105 - a query-parameter NAME, not a secret
 
-_ALLOWED_HOSTS = frozenset({
-    f"127.0.0.1:{PORT}", f"localhost:{PORT}", f"[::1]:{PORT}",
-})
-_ALLOWED_ORIGINS = frozenset({
-    f"http://127.0.0.1:{PORT}", f"http://localhost:{PORT}", f"http://[::1]:{PORT}",
-})
+_ALLOWED_HOSTS = frozenset(
+    {
+        f"127.0.0.1:{PORT}",
+        f"localhost:{PORT}",
+        f"[::1]:{PORT}",
+    }
+)
+_ALLOWED_ORIGINS = frozenset(
+    {
+        f"http://127.0.0.1:{PORT}",
+        f"http://localhost:{PORT}",
+        f"http://[::1]:{PORT}",
+    }
+)
 
 
 def _assert_dev_only() -> None:
@@ -106,7 +114,8 @@ def _guard(request: Request) -> None:
     #    every current browser and cannot be forged by page JavaScript; Origin covers
     #    the rest. Neither is present on curl, which is fine — the token still gates it.
     if (request.headers.get("sec-fetch-site") or "same-origin") not in (
-        "same-origin", "none",
+        "same-origin",
+        "none",
     ):
         raise HTTPException(404)
     origin = request.headers.get("origin")

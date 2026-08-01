@@ -52,9 +52,10 @@ def test_wrong_token_is_404(client):
 
 
 def test_valid_token_works_as_header_or_query(client):
-    assert client.get(
-        "/api/callables", headers=_h(**{"x-workbench-token": server.TOKEN})
-    ).status_code == 200
+    assert (
+        client.get("/api/callables", headers=_h(**{"x-workbench-token": server.TOKEN})).status_code
+        == 200
+    )
     assert client.get(f"/api/callables?t={server.TOKEN}", headers=_h()).status_code == 200
 
 

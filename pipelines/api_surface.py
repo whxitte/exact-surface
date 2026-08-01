@@ -157,7 +157,7 @@ async def run_api_surface(
                     severity=schema.severity,
                     reproduction=(
                         f"curl -s -X POST {schema.url} -H 'content-type: application/json' "
-                        f"-d '{{\"query\":\"{api.INTROSPECTION_QUERY}\"}}'"
+                        f'-d \'{{"query":"{api.INTROSPECTION_QUERY}"}}\''
                         if schema.kind == "graphql"
                         else f"curl -s {schema.url}"
                     ),
@@ -170,7 +170,11 @@ async def run_api_surface(
     logger.info(
         "api_surface: {} robots + {} sitemap path(s), {} schema(s), {} graphql "
         "→ {} new endpoint(s)",
-        counts["robots"], counts["sitemap"], counts["schemas"], counts["graphql"], ep_new,
+        counts["robots"],
+        counts["sitemap"],
+        counts["schemas"],
+        counts["graphql"],
+        ep_new,
     )
     return {
         "origins": len(origins),

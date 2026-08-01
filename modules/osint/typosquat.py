@@ -21,32 +21,104 @@ from core.severity import Severity
 
 #: Physically adjacent keys on a QWERTY keyboard — the source of real typos.
 _ADJACENT: dict[str, str] = {
-    "a": "qwsz", "b": "vghn", "c": "xdfv", "d": "serfcx", "e": "wsdr", "f": "drtgvc",
-    "g": "ftyhbv", "h": "gyujnb", "i": "ujko", "j": "huikmn", "k": "jiolm", "l": "kop",
-    "m": "njk", "n": "bhjm", "o": "iklp", "p": "ol", "q": "wa", "r": "edft",
-    "s": "awedxz", "t": "rfgy", "u": "yhji", "v": "cfgb", "w": "qase", "x": "zsdc",
-    "y": "tghu", "z": "asx",
-    "0": "o9", "1": "l2", "2": "13", "3": "24", "5": "s46", "9": "0o",
+    "a": "qwsz",
+    "b": "vghn",
+    "c": "xdfv",
+    "d": "serfcx",
+    "e": "wsdr",
+    "f": "drtgvc",
+    "g": "ftyhbv",
+    "h": "gyujnb",
+    "i": "ujko",
+    "j": "huikmn",
+    "k": "jiolm",
+    "l": "kop",
+    "m": "njk",
+    "n": "bhjm",
+    "o": "iklp",
+    "p": "ol",
+    "q": "wa",
+    "r": "edft",
+    "s": "awedxz",
+    "t": "rfgy",
+    "u": "yhji",
+    "v": "cfgb",
+    "w": "qase",
+    "x": "zsdc",
+    "y": "tghu",
+    "z": "asx",
+    "0": "o9",
+    "1": "l2",
+    "2": "13",
+    "3": "24",
+    "5": "s46",
+    "9": "0o",
 }
 
 #: Characters that look alike in a browser address bar.
 _HOMOGLYPHS: dict[str, tuple[str, ...]] = {
-    "o": ("0",), "0": ("o",), "l": ("1", "i"), "1": ("l", "i"), "i": ("1", "l"),
-    "e": ("3",), "a": ("4",), "s": ("5",), "g": ("9", "q"), "b": ("6",),
-    "rn": ("m",), "m": ("rn",), "vv": ("w",), "w": ("vv",), "cl": ("d",),
+    "o": ("0",),
+    "0": ("o",),
+    "l": ("1", "i"),
+    "1": ("l", "i"),
+    "i": ("1", "l"),
+    "e": ("3",),
+    "a": ("4",),
+    "s": ("5",),
+    "g": ("9", "q"),
+    "b": ("6",),
+    "rn": ("m",),
+    "m": ("rn",),
+    "vv": ("w",),
+    "w": ("vv",),
+    "cl": ("d",),
 }
 
 #: TLDs phishers reach for: cheap, or one keystroke from the real one.
 _LOOKALIKE_TLDS: tuple[str, ...] = (
-    "com", "net", "org", "co", "cm", "om", "io", "info", "biz", "online", "site",
-    "xyz", "top", "shop", "app", "cloud", "live", "click", "link", "help", "support",
-    "security", "login", "email",
+    "com",
+    "net",
+    "org",
+    "co",
+    "cm",
+    "om",
+    "io",
+    "info",
+    "biz",
+    "online",
+    "site",
+    "xyz",
+    "top",
+    "shop",
+    "app",
+    "cloud",
+    "live",
+    "click",
+    "link",
+    "help",
+    "support",
+    "security",
+    "login",
+    "email",
 )
 
 #: Words prepended/appended to build a credible-looking brand domain.
 _BRAND_WORDS: tuple[str, ...] = (
-    "secure", "login", "account", "verify", "support", "mail", "portal", "auth",
-    "billing", "update", "my", "app", "web", "help", "signin",
+    "secure",
+    "login",
+    "account",
+    "verify",
+    "support",
+    "mail",
+    "portal",
+    "auth",
+    "billing",
+    "update",
+    "my",
+    "app",
+    "web",
+    "help",
+    "signin",
 )
 
 #: Hard cap. Permutation space is combinatorial; this bounds DNS work per run.
@@ -112,7 +184,7 @@ def generate(domain: str, *, limit: int = MAX_CANDIDATES) -> list[tuple[str, str
 
     # 1. Omission — a dropped character.
     for i in range(len(name)):
-        add(f"{name[:i]}{name[i + 1:]}.{tld}", "omitting a character")
+        add(f"{name[:i]}{name[i + 1 :]}.{tld}", "omitting a character")
 
     # 2. Repetition — a doubled character.
     for i, ch in enumerate(name):
@@ -120,19 +192,19 @@ def generate(domain: str, *, limit: int = MAX_CANDIDATES) -> list[tuple[str, str
 
     # 3. Transposition — two adjacent characters swapped.
     for i in range(len(name) - 1):
-        add(f"{name[:i]}{name[i + 1]}{name[i]}{name[i + 2:]}.{tld}", "swapping two letters")
+        add(f"{name[:i]}{name[i + 1]}{name[i]}{name[i + 2 :]}.{tld}", "swapping two letters")
 
     # 4. Adjacent-key typo.
     for i, ch in enumerate(name):
         for near in _ADJACENT.get(ch, ""):
-            add(f"{name[:i]}{near}{name[i + 1:]}.{tld}", "a neighbouring-key typo")
+            add(f"{name[:i]}{near}{name[i + 1 :]}.{tld}", "a neighbouring-key typo")
 
     # 5. Homoglyph — looks identical at a glance.
     for src, repls in _HOMOGLYPHS.items():
         start = 0
         while (idx := name.find(src, start)) != -1:
             for repl in repls:
-                add(f"{name[:idx]}{repl}{name[idx + len(src):]}.{tld}", "a homoglyph substitution")
+                add(f"{name[:idx]}{repl}{name[idx + len(src) :]}.{tld}", "a homoglyph substitution")
             start = idx + 1
 
     # 6. Hyphenation.

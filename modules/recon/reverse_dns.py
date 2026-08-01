@@ -91,19 +91,34 @@ def classify(ip: str, hostname: str, own_apexes: tuple[str, ...]) -> ReverseHit 
         return None
     if _is_provider_default(hostname):
         return None
-    in_scope = any(
-        hostname == apex or hostname.endswith("." + apex) for apex in own_apexes if apex
-    )
+    in_scope = any(hostname == apex or hostname.endswith("." + apex) for apex in own_apexes if apex)
     return ReverseHit(ip=ip, hostname=hostname, in_scope=in_scope)
 
 
 #: Reverse names cloud providers assign by default; they encode the IP, not an identity.
 _PROVIDER_SUFFIXES = (
-    "compute.amazonaws.com", "amazonaws.com", "cloudfront.net", "googleusercontent.com",
-    "bc.googleusercontent.com", "1e100.net", "azure.com", "cloudapp.azure.com",
-    "cloudapp.net", "digitalocean.com", "linodeusercontent.com", "vultrusercontent.com",
-    "hetzner.de", "your-server.de", "ovh.net", "contaboserver.net", "oraclecloud.com",
-    "telia.net", "comcast.net", "rr.com", "verizon.net", "level3.net",
+    "compute.amazonaws.com",
+    "amazonaws.com",
+    "cloudfront.net",
+    "googleusercontent.com",
+    "bc.googleusercontent.com",
+    "1e100.net",
+    "azure.com",
+    "cloudapp.azure.com",
+    "cloudapp.net",
+    "digitalocean.com",
+    "linodeusercontent.com",
+    "vultrusercontent.com",
+    "hetzner.de",
+    "your-server.de",
+    "ovh.net",
+    "contaboserver.net",
+    "oraclecloud.com",
+    "telia.net",
+    "comcast.net",
+    "rr.com",
+    "verizon.net",
+    "level3.net",
 )
 
 

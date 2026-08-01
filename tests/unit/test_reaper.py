@@ -92,16 +92,33 @@ async def test_find_active_full_detects_running_and_queued():
     mongo = FakeMongo()
     repo = ScanRunRepo.from_mongo(mongo)
     await repo.save(
-        ScanRun(tenant_id="t1", scan_id="r", program_id="running", pipeline="full",
-                status=ScanStatus.RUNNING, started_at=NOW)
+        ScanRun(
+            tenant_id="t1",
+            scan_id="r",
+            program_id="running",
+            pipeline="full",
+            status=ScanStatus.RUNNING,
+            started_at=NOW,
+        )
     )
     await repo.save(
-        ScanRun(tenant_id="t1", scan_id="q", program_id="queued", pipeline="full",
-                status=ScanStatus.QUEUED)
+        ScanRun(
+            tenant_id="t1",
+            scan_id="q",
+            program_id="queued",
+            pipeline="full",
+            status=ScanStatus.QUEUED,
+        )
     )
     await repo.save(
-        ScanRun(tenant_id="t1", scan_id="d", program_id="done", pipeline="full",
-                status=ScanStatus.SUCCESS, started_at=NOW)
+        ScanRun(
+            tenant_id="t1",
+            scan_id="d",
+            program_id="done",
+            pipeline="full",
+            status=ScanStatus.SUCCESS,
+            started_at=NOW,
+        )
     )
     assert await repo.find_active_full("t1", "running", now=NOW, stale_seconds=3600) is not None
     assert await repo.find_active_full("t1", "queued", now=NOW, stale_seconds=3600) is not None
@@ -113,8 +130,14 @@ async def test_find_active_full_excludes_stale_running():
     mongo = FakeMongo()
     repo = ScanRunRepo.from_mongo(mongo)
     await repo.save(
-        ScanRun(tenant_id="t1", scan_id="old", program_id="p1", pipeline="full",
-                status=ScanStatus.RUNNING, started_at=NOW - timedelta(hours=2))
+        ScanRun(
+            tenant_id="t1",
+            scan_id="old",
+            program_id="p1",
+            pipeline="full",
+            status=ScanStatus.RUNNING,
+            started_at=NOW - timedelta(hours=2),
+        )
     )
     # 2h old with a 1h staleness window → not blocking (reaper will close it)
     assert await repo.find_active_full("t1", "p1", now=NOW, stale_seconds=3600) is None

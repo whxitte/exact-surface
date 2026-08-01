@@ -61,10 +61,14 @@ async def find_params(
         in_path.write_text("\n".join(urls))
 
         args = [
-            "-i", str(in_path),
-            "-oJ", str(out_path),
-            "-t", str(threads),
-            "-d", str(delay),
+            "-i",
+            str(in_path),
+            "-oJ",
+            str(out_path),
+            "-t",
+            str(threads),
+            "-d",
+            str(delay),
             "--stable",  # compare against a stable baseline rather than one sample
             "-q",
         ]

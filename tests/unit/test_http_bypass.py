@@ -111,9 +111,7 @@ async def test_run_bypass_finds_header_bypass():
 
 @pytest.mark.asyncio
 async def test_run_bypass_finds_path_bypass():
-    result = await run_bypass(
-        "https://x.com/admin", probe=_fake_probe(path_that_works="/admin/")
-    )
+    result = await run_bypass("https://x.com/admin", probe=_fake_probe(path_that_works="/admin/"))
     assert any(b["technique"] == "path" for b in result["bypasses"])
 
 

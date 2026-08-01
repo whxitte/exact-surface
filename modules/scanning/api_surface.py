@@ -26,15 +26,31 @@ from core.severity import Severity
 
 #: Conventional locations for an API schema. Ordered by how often they're real.
 SCHEMA_PATHS: tuple[str, ...] = (
-    "/swagger.json", "/swagger/v1/swagger.json", "/openapi.json", "/openapi.yaml",
-    "/api/swagger.json", "/api/openapi.json", "/api-docs", "/api/api-docs",
-    "/v1/openapi.json", "/v2/api-docs", "/v3/api-docs", "/swagger-ui.html",
-    "/docs/openapi.json", "/redoc", "/swagger/index.html",
+    "/swagger.json",
+    "/swagger/v1/swagger.json",
+    "/openapi.json",
+    "/openapi.yaml",
+    "/api/swagger.json",
+    "/api/openapi.json",
+    "/api-docs",
+    "/api/api-docs",
+    "/v1/openapi.json",
+    "/v2/api-docs",
+    "/v3/api-docs",
+    "/swagger-ui.html",
+    "/docs/openapi.json",
+    "/redoc",
+    "/swagger/index.html",
 )
 
 #: Conventional GraphQL endpoints.
 GRAPHQL_PATHS: tuple[str, ...] = (
-    "/graphql", "/api/graphql", "/v1/graphql", "/query", "/graphiql", "/gql",
+    "/graphql",
+    "/api/graphql",
+    "/v1/graphql",
+    "/query",
+    "/graphiql",
+    "/gql",
 )
 
 #: `.well-known` resources worth knowing about. security.txt is a *good* sign; the
@@ -50,10 +66,7 @@ WELL_KNOWN_PATHS: tuple[str, ...] = (
 
 #: The minimal introspection query. Depth 1 — enough to prove introspection is open
 #: and to name the types, without pulling a megabyte of schema.
-INTROSPECTION_QUERY = (
-    "{__schema{queryType{name} mutationType{name} "
-    "types{name kind description}}}"
-)
+INTROSPECTION_QUERY = "{__schema{queryType{name} mutationType{name} types{name kind description}}}"
 
 _SITEMAP_LOC = re.compile(r"<loc>\s*([^<\s]+)\s*</loc>", re.I)
 _ROBOTS_RULE = re.compile(r"^\s*(disallow|allow|sitemap)\s*:\s*(\S.*?)\s*$", re.I | re.M)
@@ -61,9 +74,29 @@ _ROBOTS_RULE = re.compile(r"^\s*(disallow|allow|sitemap)\s*:\s*(\S.*?)\s*$", re.
 #: Paths whose appearance in robots.txt is itself interesting — an admin telling
 #: search engines to stay away from the thing an attacker most wants.
 _JUICY = (
-    "admin", "internal", "private", "backup", "config", "secret", "staging", "dev",
-    "test", "api", "console", "manage", "portal", "dashboard", "phpmyadmin", "wp-admin",
-    ".git", ".env", "debug", "logs", "db", "sql", "upload",
+    "admin",
+    "internal",
+    "private",
+    "backup",
+    "config",
+    "secret",
+    "staging",
+    "dev",
+    "test",
+    "api",
+    "console",
+    "manage",
+    "portal",
+    "dashboard",
+    "phpmyadmin",
+    "wp-admin",
+    ".git",
+    ".env",
+    "debug",
+    "logs",
+    "db",
+    "sql",
+    "upload",
 )
 
 
@@ -142,9 +175,7 @@ def is_sitemap_index(body: str) -> bool:
     return "<sitemapindex" in (body or "").lower()
 
 
-def analyse_schema(
-    url: str, status: int, body: str, content_type: str = ""
-) -> ApiSchema | None:
+def analyse_schema(url: str, status: int, body: str, content_type: str = "") -> ApiSchema | None:
     """Recognise an OpenAPI/Swagger document and pull its route list out.
 
     A 200 that happens to be the site's HTML error page is the common false positive,

@@ -19,6 +19,7 @@ def _schedulable_default_on() -> set[str]:
     enabled = resolve_modules().enabled
     return {p for p in DEFAULT_CADENCE_SECONDS if p in enabled}
 
+
 NOW = datetime(2026, 7, 4, 12, 0, 0, tzinfo=UTC)
 
 

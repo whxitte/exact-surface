@@ -22,7 +22,12 @@ from core.severity import Severity
 #: Ordered attacker phases. A path reads in this order regardless of the order the
 #: scanner happened to find things in, because that is how the attack would run.
 _PHASE_ORDER = (
-    "exposure", "foothold", "credentials", "access", "escalation", "impact",
+    "exposure",
+    "foothold",
+    "credentials",
+    "access",
+    "escalation",
+    "impact",
 )
 
 #: module/check -> (phase, template). The template receives the finding's own detail.
@@ -52,8 +57,11 @@ _STEP_RULES: tuple[tuple[str, str, str, str], ...] = (
 )
 
 _SEVERITY_RANK = {
-    Severity.CRITICAL: 4, Severity.HIGH: 3, Severity.MEDIUM: 2,
-    Severity.LOW: 1, Severity.INFO: 0,
+    Severity.CRITICAL: 4,
+    Severity.HIGH: 3,
+    Severity.MEDIUM: 2,
+    Severity.LOW: 1,
+    Severity.INFO: 0,
 }
 
 
@@ -151,9 +159,11 @@ def build_paths(findings: list[dict], *, min_severity: Severity = Severity.LOW) 
         by_phase: dict[str, Step] = {}
         for step in steps:
             existing = by_phase.get(step.phase)
-            if existing is None or _SEVERITY_RANK[Severity(step.severity)] > _SEVERITY_RANK[
-                Severity(existing.severity)
-            ]:
+            if (
+                existing is None
+                or _SEVERITY_RANK[Severity(step.severity)]
+                > _SEVERITY_RANK[Severity(existing.severity)]
+            ):
                 by_phase[step.phase] = step
         ordered = [by_phase[p] for p in _PHASE_ORDER if p in by_phase]
         if len(ordered) < 2:

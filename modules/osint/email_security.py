@@ -34,8 +34,20 @@ SPF_MAX_LOOKUPS = 10
 #: DKIM selectors worth probing when we don't know the real one. Cheap, and a hit
 #: proves signing is configured for that provider.
 COMMON_DKIM_SELECTORS: tuple[str, ...] = (
-    "default", "google", "selector1", "selector2", "k1", "dkim", "mail", "s1", "s2",
-    "zoho", "mandrill", "sendgrid", "everlytickey1", "protonmail",
+    "default",
+    "google",
+    "selector1",
+    "selector2",
+    "k1",
+    "dkim",
+    "mail",
+    "s1",
+    "s2",
+    "zoho",
+    "mandrill",
+    "sendgrid",
+    "everlytickey1",
+    "protonmail",
 )
 
 

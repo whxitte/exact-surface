@@ -143,9 +143,7 @@ ROUTES: dict[str, Callable[[Ctx], Awaitable[dict]]] = {
         limiter=c.limiter,
     ),
     "cve_watch": lambda c: run_cve_watch(**c.core),
-    "github_osint": lambda c: run_github_leak_scan(
-        **c.core, domain=c.apex, hmac_key=c.hmac_key
-    ),
+    "github_osint": lambda c: run_github_leak_scan(**c.core, domain=c.apex, hmac_key=c.hmac_key),
     "cloud_buckets": lambda c: run_cloud_buckets(**c.core, apex=c.apex),
     "nuclei_watch": lambda c: run_nuclei_watch(**c.core),
     "dork": lambda c: run_dork(**c.core, domain=c.apex),
