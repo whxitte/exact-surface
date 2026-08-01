@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import Any
+from urllib.parse import urlsplit
 
 from core.hashing import finding_fingerprint
 from core.logging import logger
@@ -19,9 +20,10 @@ from core.scope import ProgramScope, ScopeEngine
 from core.severity import Severity
 from core.tenant import TenantContext
 from db.assets import AssetRepo
+from db.endpoints import EndpointRepo
 from db.findings import FindingRepo
 from modules.recon.dnsx import resolve_one as dnsx_resolve_one
-from modules.takeover import check_host, default_fetch
+from modules.takeover import check_host, default_fetch, find_dangling_a_records
 
 CONCURRENCY = 10
 
@@ -103,6 +105,42 @@ async def run_takeover(
                     f"target service and serve content from this subdomain."
                 ),
                 severity=Severity.HIGH,
+            )
+        )
+
+    # Dangling A-records: same class, different record type. Purely analytical — it
+    # reads the DNS and probe results already collected, so it costs no extra requests.
+    endpoints = await EndpointRepo.from_mongo(mongo).list(tid, program_id, limit=100_000)
+    alive = {
+        (urlsplit(e.get("url") or "").hostname or "").lower()
+        for e in endpoints
+        if e.get("status_code")
+    }
+    dangling = find_dangling_a_records(
+        assets, classify=lambda ip: engine.classify_ip(ip).value, alive_hosts=alive
+    )
+    for record in dangling:
+        logger.info(
+            "takeover: {} → {} is pooled {} with nothing answering",
+            record.host, record.ip, record.ip_class,
+        )
+        findings.append(
+            Finding(
+                tenant_id=tid,
+                program_id=program_id,
+                fingerprint=finding_fingerprint(program_id, "dangling-a-record", record.host),
+                check_id="dangling-a-record",
+                module="takeover",
+                location=record.host,
+                locator=record.ip,
+                name=f"Dangling A record to unclaimed cloud address: {record.host}",
+                description=record.evidence,
+                # MEDIUM, not HIGH: unlike a CNAME you cannot reliably claim a specific
+                # pooled address on demand, so the exposure is real but opportunistic.
+                severity=Severity.MEDIUM,
+                reproduction=f"dig +short {record.host}   # then check whether anything answers",
+                raw={"ip": record.ip, "ip_class": record.ip_class,
+                     "remediation": record.remediation},
             )
         )
 

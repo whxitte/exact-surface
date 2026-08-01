@@ -366,3 +366,64 @@ def test_devtools_is_not_a_service_in_the_production_compose_file():
         assert "devtools" not in compose.read_text(), (
             "docker-compose.yml defines a devtools service; the workbench is local-only"
         )
+
+
+# --------------------------------------------------------------------------
+# every module's output reaches the user
+# --------------------------------------------------------------------------
+
+#: repository class -> the collection it writes, and the frontend method that reads it.
+#: A module that persists something the UI cannot fetch has done work nobody will see,
+#: which is the same failure as not running at all.
+#: (collection, frontend method, API route segment). The route is stated rather than
+#: derived from the collection name — `cve_matches` is served at `/cves`, and guessing
+#: would make this test assert a convention the code never promised.
+_SURFACED: dict[str, tuple[str, str, str]] = {
+    "FindingRepo": ("findings", "listFindings", "findings"),
+    "AssetRepo": ("assets", "listAssets", "assets"),
+    "EndpointRepo": ("endpoints", "listEndpoints", "endpoints"),
+    "PortRepo": ("ports", "listPorts", "ports"),
+    "SecretRepo": ("secrets", "listSecrets", "secrets"),
+    "LeakRepo": ("leaks", "listLeaks", "leaks"),
+    "CveMatchRepo": ("cve_matches", "listCves", "cves"),
+    "JsFileRepo": ("js_files", "listJsFiles", "js-files"),
+    "DeltaRepo": ("deltas", "listDeltas", "deltas"),
+    "DomainIntelRepo": ("domain_intel", "getDomainIntel", "domain-intel"),
+}
+
+
+def test_every_module_result_is_reachable_from_the_frontend():
+    """Whatever a module finds must be visible to the user.
+
+    The rule this enforces: if a pipeline writes through a repository, the frontend
+    must have an API method that reads that repository's data. Otherwise the module
+    runs, finds something real, stores it — and the customer never sees it. That has
+    happened before (domain_intel computed a full email-security posture and threw it
+    away, keeping only integer stats), which is why it is a test and not a habit.
+    """
+    api_ts = (REPO / "frontend" / "lib" / "api.ts").read_text()
+    gaps: list[str] = []
+
+    for spec in registry.MODULES:
+        path = REPO / "pipelines" / f"{spec.name}.py"
+        if not path.exists():
+            continue
+        body = path.read_text()
+        for repo_cls, (collection, ui_method, _route) in _SURFACED.items():
+            if f"{repo_cls}.from_mongo" not in body:
+                continue
+            if f"{ui_method}:" not in api_ts and f"{ui_method} " not in api_ts:
+                gaps.append(f"{spec.name} writes {collection}, but the UI has no {ui_method}")
+
+    assert not gaps, "module output the user cannot see:\n  " + "\n  ".join(gaps)
+
+
+def test_every_surfaced_collection_has_a_backend_route():
+    """The other half: the frontend method must have something to call."""
+    programs = (REPO / "api" / "routes" / "programs.py").read_text()
+    missing = [
+        collection
+        for collection, _ui, route in _SURFACED.values()
+        if f'/{{program_id}}/{route}"' not in programs
+    ]
+    assert not missing, f"collections with no API route: {missing}"
