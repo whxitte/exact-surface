@@ -1,52 +1,8 @@
 "use client";
 
-import { clearSession, getToken } from "./auth";
+import { ApiError, request } from "./transport";
 
-const BASE = "/api";
-
-export class ApiError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
-  }
-}
-
-async function request<T>(path: string, opts: RequestInit = {}): Promise<T> {
-  const token = getToken();
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(opts.headers as Record<string, string>),
-  };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
-
-  const res = await fetch(BASE + path, { ...opts, headers });
-
-  if (res.status === 401) {
-    clearSession();
-    if (typeof window !== "undefined" && !path.startsWith("/auth/")) {
-      window.location.href = "/login";
-    }
-    throw new ApiError(401, "unauthorized");
-  }
-  if (res.status === 204) return undefined as T;
-
-  const text = await res.text();
-  let body: unknown = null;
-  if (text) {
-    try {
-      body = JSON.parse(text);
-    } catch {
-      // Non-JSON response (e.g. a proxy/gateway error page) — surface it readably.
-      if (!res.ok) throw new ApiError(res.status, text.slice(0, 200) || res.statusText);
-    }
-  }
-  if (!res.ok) {
-    const detail = (body as { detail?: string } | null)?.detail;
-    throw new ApiError(res.status, detail || res.statusText);
-  }
-  return body as T;
-}
+export { ApiError };
 
 // -- types -------------------------------------------------------------------
 export interface TokenResponse { access_token: string; tenant_id: string }
@@ -535,10 +491,6 @@ export const api = {
     }),
   getAttackPaths: (id: string) =>
     request<{ count: number; paths: AttackPath[] }>(`/programs/${id}/attack-paths`),
-  publicConfig: () =>
-    request<{ demo_mode: boolean; demo_message: string; build: Record<string, unknown> }>(
-      "/public-config",
-    ),
   getSchedule: (id: string) => request<Schedule>(`/programs/${id}/schedule`),
   setSchedule: (id: string, overrides: Record<string, number>) =>
     request<Schedule>(`/programs/${id}/schedule`, json({ overrides })),
@@ -606,23 +558,4 @@ export const api = {
   deleteMember: (id: string) => request<void>(`/members/${id}`, { method: "DELETE" }),
 };
 
-/** Fetch a report with auth and trigger a browser download. */
-export async function downloadReport(programId: string, format: string): Promise<void> {
-  const token = getToken();
-  const res = await fetch(`${BASE}/programs/${programId}/reports?format=${format}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!res.ok) throw new ApiError(res.status, "report generation failed");
-  const blob = await res.blob();
-  const disposition = res.headers.get("content-disposition") || "";
-  const match = disposition.match(/filename="(.+?)"/);
-  const filename = match ? match[1] : `exactsurface-report.${format}`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
+export { downloadReport } from "./transport";

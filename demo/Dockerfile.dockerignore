@@ -1,0 +1,33 @@
+# Build context for demo/Dockerfile ONLY.
+#
+# BuildKit uses `<dockerfile>.dockerignore` in preference to the root `.dockerignore`.
+# The root file excludes `demo` so the demo can never be swept into a product image;
+# this file is the mirror image — the demo build needs `demo/lib` and nothing else
+# outside `frontend/`.
+.git
+.venv
+**/__pycache__
+**/*.pyc
+**/node_modules
+frontend/.next
+frontend/out
+.pytest_cache
+.ruff_cache
+.mypy_cache
+backups
+*.log
+
+# Not needed by the demo image and never wanted in a public artifact.
+api
+core
+db
+modules
+pipelines
+taskqueue
+daemon
+scripts
+tests
+devtools
+control_plane
+docs
+docker
