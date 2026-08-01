@@ -427,3 +427,49 @@ def test_every_surfaced_collection_has_a_backend_route():
         if f'/{{program_id}}/{route}"' not in programs
     ]
     assert not missing, f"collections with no API route: {missing}"
+
+
+def test_the_bundled_scope_feed_is_committed():
+    """The scope engine's CDN/cloud ranges must be IN GIT, not just on disk.
+
+    `.gitignore` carried an unanchored `data/`, which also matched `core/data/` and
+    silently kept this file untracked. Every local build passed because Docker copies
+    the working tree — but CI and the release pipeline check out from git, so the
+    published images would have shipped without it and raised FileNotFoundError from
+    `default_engine()` at import. The product would not have started.
+
+    A file the safety controls depend on has to be verifiably present, not incidentally
+    present.
+    """
+    import subprocess
+
+    result = subprocess.run(  # noqa: S603
+        ["git", "ls-files", "--error-unmatch", "core/data/cloud_ranges.json"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, (
+        "core/data/cloud_ranges.json is not tracked by git. Local builds will pass and "
+        "released images will fail to start."
+    )
+
+    ignored = subprocess.run(  # noqa: S603
+        ["git", "check-ignore", "core/data/cloud_ranges.json"],
+        cwd=REPO,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert ignored.returncode != 0, "core/data/cloud_ranges.json is matched by .gitignore"
+
+
+def test_the_scope_feed_actually_loads_and_is_not_empty():
+    """A present-but-empty feed is worse than a missing one: the engine would classify
+    every CDN address as ordinary public space and permit port scans against it."""
+    from core.scope import ScopeEngine
+
+    engine = ScopeEngine.from_data_file()
+    total = sum(len(v) for v in engine._ranges.values())
+    assert total > 20, f"the bundled scope feed has only {total} ranges — it looks empty"

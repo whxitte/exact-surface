@@ -29,8 +29,12 @@ frontend/out/
 .idea/
 .vscode/
 
-# Runtime data / scan output
-data/
+# Runtime data / scan output. Anchored to the repo root: an unanchored `data/` also
+# matched `core/data/`, which silently kept the scope engine's bundled CDN/cloud
+# ranges out of git. Local builds worked because Docker copies the working tree; a
+# release built from a clean checkout would have shipped without it and crashed on
+# startup. See tests/unit/test_wiring.py::test_the_bundled_scope_feed_is_committed.
+/data/
 *.log
 scope_feeds_cache/
 for-claude-referece/

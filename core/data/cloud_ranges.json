@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "description": "Starter CDN / cloud shared-IP ranges used by core/scope.py to de-rate scanning against infrastructure Vantari's customers do not own. This embedded set is intentionally small and stable; scripts/update_scope_feeds.py refreshes the full published ranges (AWS ip-ranges.json, GCP, Azure, Cloudflare) at runtime.",
+    "classes": {
+      "cdn": "Shared CDN edge; only HTTP-layer probing is ever permitted.",
+      "cloud_shared": "Generic shared cloud compute range; HTTP-layer probing only unless the specific IP is confirmed dedicated to the customer."
+    }
+  },
+  "providers": [
+    {
+      "name": "cloudflare",
+      "class": "cdn",
+      "cidrs": [
+        "173.245.48.0/20",
+        "103.21.244.0/22",
+        "103.22.200.0/22",
+        "103.31.4.0/22",
+        "141.101.64.0/18",
+        "108.162.192.0/18",
+        "190.93.240.0/20",
+        "188.114.96.0/20",
+        "197.234.240.0/22",
+        "198.41.128.0/17",
+        "162.158.0.0/15",
+        "104.16.0.0/13",
+        "104.24.0.0/14",
+        "172.64.0.0/13",
+        "131.0.72.0/22",
+        "2400:cb00::/32",
+        "2606:4700::/32",
+        "2803:f800::/32",
+        "2405:b500::/32",
+        "2405:8100::/32",
+        "2a06:98c0::/29",
+        "2c0f:f248::/32"
+      ]
+    },
+    {
+      "name": "fastly",
+      "class": "cdn",
+      "cidrs": [
+        "23.235.32.0/20",
+        "43.249.72.0/22",
+        "103.244.50.0/24",
+        "103.245.222.0/23",
+        "103.245.224.0/24",
+        "104.156.80.0/20",
+        "140.248.64.0/18",
+        "140.248.128.0/17",
+        "146.75.0.0/17",
+        "151.101.0.0/16",
+        "157.52.64.0/18",
+        "167.82.0.0/17",
+        "185.31.16.0/22",
+        "199.232.0.0/16"
+      ]
+    },
+    {
+      "name": "aws_cloudfront",
+      "class": "cdn",
+      "cidrs": [
+        "120.52.22.96/27",
+        "205.251.192.0/19",
+        "13.32.0.0/15",
+        "13.224.0.0/14",
+        "52.222.128.0/17",
+        "143.204.0.0/16",
+        "144.220.0.0/16",
+        "54.230.0.0/16",
+        "54.239.128.0/18",
+        "99.84.0.0/16",
+        "130.176.0.0/16",
+        "18.160.0.0/15",
+        "18.164.0.0/15"
+      ]
+    },
+    {
+      "name": "akamai",
+      "class": "cdn",
+      "cidrs": [
+        "23.32.0.0/11",
+        "23.192.0.0/11",
+        "104.64.0.0/10",
+        "184.24.0.0/13",
+        "2.16.0.0/13",
+        "95.100.0.0/15",
+        "96.16.0.0/15",
+        "118.214.0.0/16"
+      ]
+    },
+    {
+      "name": "google_cloud_lb",
+      "class": "cloud_shared",
+      "cidrs": [
+        "34.96.0.0/20",
+        "34.127.192.0/18",
+        "35.190.0.0/17",
+        "35.191.0.0/16"
+      ]
+    },
+    {
+      "name": "azure_front_door",
+      "class": "cdn",
+      "cidrs": [
+        "13.73.248.0/22",
+        "20.36.120.0/22",
+        "147.243.0.0/16",
+        "168.63.129.16/32"
+      ]
+    }
+  ]
+}
