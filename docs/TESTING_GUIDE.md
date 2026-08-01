@@ -244,10 +244,11 @@ multi-tenant launch.)
 
 - **CVE/KEV match latency (§15 <60min) is not measurable** — `CveRecord` has no
   `published` timestamp yet. Don't expect a latency number here.
-- **Nothing has run against real Docker/Helm/Redis/Mongo in CI** — Layer 5 is where
-  the remaining real bugs most likely are.
-- **`map_org` (org-name ASN lookup) is built but unwired** — a CDN-fronted apex won't
-  auto-confirm its real origin ASN; use the `scan_shared_infra` opt-in there.
+- **Redis/Mongo have not run for real in CI** — Layer 5 is where the remaining real
+  bugs most likely are. The api, pipeline and demo images DO build (verified), and the
+  release build-stamp is checked end-to-end (`OWNER_RUNBOOK.md` §2.1).
+- **Org-name ASN lookup is not built** — a CDN-fronted apex will not auto-confirm its
+  real origin ASN; use the `scan_shared_infra` opt-in there (ADR-0008).
 - **No load suite yet** (Layer 7).
 
 ---
@@ -256,7 +257,7 @@ multi-tenant launch.)
 
 Walk every page and tick each item. This is what "the dashboard is complete" means
 concretely — surface each control, confirm it does what it says, and note anything
-missing. (Reflects the app as of the 2026-07-18 review.)
+missing. (Reflects the app as of 2026-08-01 — 28 modules, licence-gated plans.)
 
 **Auth**
 - [ ] Sign up creates a tenant + owner; login works; wrong password rejected.
@@ -268,20 +269,30 @@ missing. (Reflects the app as of the 2026-07-18 review.)
 - [ ] "Findings by severity" + the **false-positive rate** (`—` until you triage one).
 
 **Programs → detail**
-- [ ] Add domain (blocked with a 402 past the plan limit — see Settings › Plan).
-- [ ] Verify + Authorize buttons; "Run scan"; **Scan my cloud infra** toggle (§9b).
-- [ ] **Optional modules** toggles: uncover, tls, service_scan, dork, **cloud_buckets**,
-      **nuclei_watch** (the last two were added 2026-07-18).
-- [ ] Tabs: surface, priorities, findings, cves, assets, endpoints, ports, secrets, leaks.
+- [ ] Add domain (blocked with a 402 past the licence limit — see Settings › Plan).
+- [ ] Verify + Authorize buttons; "Run scan"; **Stop** on a running scan (confirm dialog
+      explains what stops); **Scan my cloud infra** toggle (§9b).
+- [ ] **Scan modules** panel: every module listed, essential ones locked, opt-in ones
+      labelled, and turning one off shows *"Turning this off also stops: …"* before you
+      save. A module outside your tier shows as not included rather than as a switch.
+- [ ] Tabs: surface, priorities, findings, cves, assets, endpoints, ports, secrets,
+      leaks, **JS mine**.
+- [ ] **Surface** tab shows the **Domain intelligence** card (SPF/DMARC verdict with the
+      raw records, registrar/expiry/transfer-lock/DNSSEC) and **Attack paths**.
 - [ ] **Assets** show interest badges (critical/high) with reasons on hover.
 - [ ] **Endpoints** show risk tags (auth/admin/idor/…) and the correct **source**
       (feroxbuster *or* ffuf — whichever found it).
 - [ ] A **dork** finding shows the exact **Dork query** + **Indexed snippet** +
       a "Search Google for: …" reproduction (not a misleading `curl`).
+- [ ] **403-bypass** bar is present on the Endpoints tab even with nothing to test
+      (disabled + explanatory), and a bypassed endpoint carries the blue label with the
+      payload/detail modal.
 - [ ] Schedule card: cadence, last/next run.
 
 **Findings / Changes / DNS / Activity**
 - [ ] Findings list + detail (description, matched-at, references, raw request/response).
+- [ ] **Module filter** dropdown lists every module that produced a finding, with counts,
+      and filtering to one shows only its results.
 - [ ] Changes = the state-delta feed (status/tech/title/new-port).
 - [ ] DNS page: records, CNAMEs, takeover-risk flags.
 - [ ] Activity: live scan-run log (2s poll).
@@ -300,7 +311,62 @@ missing. (Reflects the app as of the 2026-07-18 review.)
       (scheduler liveness, per-target rate, stage outcomes). Nothing to configure —
       datasource + dashboard are auto-provisioned.
 
+### Per-module output check (run after a full scan)
+
+Every module must put something on screen. Filter Findings by module, or open the tab
+named. If a module ran successfully and its row here is empty, that is a bug — the
+`test_every_module_result_is_reachable_from_the_frontend` contract covers the wiring,
+but only a real scan proves the data arrives.
+
+| Module | Where to look |
+|---|---|
+| `domain_intel` | Surface tab → Domain intelligence card + Findings |
+| `ingest` / `reverse_dns` / `cloud_assets` | Assets tab (check the `source` column) |
+| `probe` | Assets (alive + tech) and Changes |
+| `tls`, `takeover`, `cloud_buckets`, `dork`, `typosquat`, `supply_chain` | Findings, filtered by module |
+| `crawl`, `content_discovery`, `nuclei_watch` | Endpoints (check the `source` filter) |
+| `js_mine` | **JS mine** tab + Endpoints with source `js` |
+| `api_surface` | Endpoints with source `robots`/`sitemap`/`api_surface`, + Findings |
+| `http_misconfig` | Findings (CORS / open redirect); WAF appears in the run stats |
+| `param_discovery` | Findings, filtered by `param_discovery` |
+| `broken_links` | Findings |
+| `port_scan` / `service_scan` | Ports tab |
+| `scan` | Findings (nuclei) |
+| `secrets` | Secrets tab (masked) |
+| `cve_watch` | CVEs tab |
+| `github_osint` | Leaks tab |
+| `correlate` | Surface tab → Attack paths + Priorities |
+| `notify` | your configured channel actually receives a message |
+
+### The demo site
+
+The demo is the same frontend with static fixtures, so it is also the fastest way to
+review UI changes without running a scan.
+
+```bash
+docker build -f demo/Dockerfile -t exactsurface-demo .
+docker run --rm -p 3000:3000 exactsurface-demo   # then sign in with anything
+```
+
+- [ ] Every tab above is populated (an empty tab in the demo means a missing fixture —
+      check the browser console for `[demo] no fixture for …`).
+- [ ] Activity shows a run in flight with live logs and the full stage stepper.
+- [ ] Clicking a mutating control does nothing and does not error.
+
+### The workbench (developers only)
+
+```bash
+python -m devtools     # open the printed URL; the token is required
+```
+
+- [ ] Every module appears under **Pipeline stages** and every public function under
+      **Functions** (introspected, so a new one appears with no registration).
+- [ ] Running a pure function returns its result including dataclass properties.
+- [ ] A wrong/absent token returns 404 on every path.
+
 **Known UI gaps to log (not yet built):**
-- No billing/plan-upgrade flow (the plan is a display; there's no Stripe).
-- No in-UI way to *change* a tenant's plan (set it in the `tenants` collection).
+- No billing/plan-upgrade flow (the plan is a display; there's no Stripe). Upgrades are
+  done by minting a new licence — see `docs/PRICING_AND_LIMITS.md` §4.
+- No in-UI way to change a tenant's plan, and there deliberately never will be: the
+  signed licence is the sole authority, so a UI control could only ever *lower* it.
 - No self-serve DNS-verification status poller beyond the check button.
