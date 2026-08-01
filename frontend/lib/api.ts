@@ -535,6 +535,10 @@ export const api = {
     }),
   getAttackPaths: (id: string) =>
     request<{ count: number; paths: AttackPath[] }>(`/programs/${id}/attack-paths`),
+  publicConfig: () =>
+    request<{ demo_mode: boolean; demo_message: string; build: Record<string, unknown> }>(
+      "/public-config",
+    ),
   getSchedule: (id: string) => request<Schedule>(`/programs/${id}/schedule`),
   setSchedule: (id: string, overrides: Record<string, number>) =>
     request<Schedule>(`/programs/${id}/schedule`, json({ overrides })),

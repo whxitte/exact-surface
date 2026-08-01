@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu } from "lucide-react";
 import { AppSidebar } from "@/components/app-sidebar";
 import { BrandLogo } from "@/components/brand-logo";
+import { DemoBanner } from "@/components/demo-banner";
 import { LicenseBanner } from "@/components/license-banner";
 import { isAuthed } from "@/lib/auth";
 
@@ -49,6 +50,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
         <main className="min-w-0 flex-1 overflow-y-auto">
+          <DemoBanner />
           <LicenseBanner />
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</div>
         </main>
