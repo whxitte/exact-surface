@@ -173,3 +173,94 @@ async def check_host(
             }
         break  # got a real body on https; a live/other page is not a takeover
     return None
+
+
+# -- dangling A-records to unclaimed cloud IPs -------------------------------
+# Same vulnerability class as a dangling CNAME, different record type. A name that
+# points into a cloud provider's address space at an instance that no longer exists is
+# claimable by whoever next receives that address from the provider's pool.
+#
+# This is deliberately reported at a LOWER confidence than a CNAME takeover, and the
+# reason matters: with a CNAME you can usually claim the exact target on demand, while
+# an elastic IP is drawn from a pool and getting a specific one back is opportunistic.
+# The exposure is real — it has been used — but calling it Critical would be inflating
+# it, and this product's severities are supposed to mean something.
+
+#: IP classes that indicate provider-pooled address space.
+_POOLED_CLASSES = ("cloud_shared", "cdn")
+
+
+@dataclass(frozen=True)
+class DanglingRecord:
+    """A hostname whose A record points into cloud space with nothing behind it."""
+
+    host: str
+    ip: str
+    ip_class: str
+    reason: str
+
+    @property
+    def evidence(self) -> str:
+        return (
+            f"{self.host} resolves to {self.ip}, which sits in provider-pooled address "
+            f"space ({self.ip_class}), but {self.reason}. When a cloud instance is "
+            "destroyed its address returns to the provider's pool; anyone who later "
+            "receives that address serves content from your hostname until the DNS "
+            "record is removed."
+        )
+
+    @property
+    def remediation(self) -> str:
+        return (
+            f"Delete the A record for {self.host} if the resource behind it is gone, or "
+            "point it at a resource you still control. For anything long-lived, prefer "
+            "an allocated static address or an alias/CNAME to a named provider resource "
+            "rather than a raw IP, so a destroyed instance cannot orphan the name."
+        )
+
+
+def find_dangling_a_records(
+    assets: list[dict],
+    *,
+    classify,
+    alive_hosts: set[str],
+) -> list[DanglingRecord]:
+    """Hostnames pointing at pooled cloud IPs with nothing answering.
+
+    ``classify(ip)`` returns the ``IpClass`` value for an address (the scope engine
+    already computes this). ``alive_hosts`` is the set of hostnames the probe stage
+    confirmed responding — anything in it is serving traffic and is not dangling,
+    whatever its address class.
+
+    Pure: takes the data and returns verdicts, so the rules are testable without DNS.
+    """
+    out: list[DanglingRecord] = []
+    seen: set[str] = set()
+    for asset in assets:
+        host = (asset.get("hostname") or "").lower()
+        if not host or host in seen or host in alive_hosts:
+            continue
+        if not asset.get("monitored", True):
+            continue
+        records = asset.get("dns_records") or {}
+        # A CNAME present means the CNAME path already covers it; do not double-report.
+        if records.get("cname"):
+            continue
+        for ip in asset.get("resolved_ips") or []:
+            try:
+                ip_class = str(classify(ip))
+            except Exception:  # noqa: BLE001, S112 - an unclassifiable address is
+                continue  # simply not evidence of anything; the next one still runs
+            if ip_class not in _POOLED_CLASSES:
+                continue
+            seen.add(host)
+            out.append(
+                DanglingRecord(
+                    host=host,
+                    ip=ip,
+                    ip_class=ip_class,
+                    reason="nothing answered on it during this scan",
+                )
+            )
+            break
+    return out

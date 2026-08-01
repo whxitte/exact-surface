@@ -476,3 +476,63 @@ async def test_cloud_assets_without_credentials_says_so_rather_than_finding_noth
         config_path="",
     )
     assert result["skipped"] and "READ-ONLY" in result["note"]
+
+
+# -- dangling A-records (takeover, different record type) ---------------------
+
+
+def _cloud(ip: str) -> str:
+    return "cloud_shared" if ip.startswith("13.32.") else "dedicated"
+
+
+def test_pooled_cloud_ip_with_nothing_answering_is_dangling():
+    from modules.takeover import find_dangling_a_records
+
+    hits = find_dangling_a_records(
+        [{"hostname": "gone.acme.com", "resolved_ips": ["13.32.1.1"], "dns_records": {}}],
+        classify=_cloud, alive_hosts=set(),
+    )
+    assert [h.host for h in hits] == ["gone.acme.com"]
+    assert "returns to the provider's pool" in hits[0].evidence
+    assert "Delete the A record" in hits[0].remediation
+
+
+def test_a_host_that_is_alive_is_never_dangling():
+    """It is serving traffic. Whatever its address class, something is behind it."""
+    from modules.takeover import find_dangling_a_records
+
+    assert find_dangling_a_records(
+        [{"hostname": "live.acme.com", "resolved_ips": ["13.32.1.1"], "dns_records": {}}],
+        classify=_cloud, alive_hosts={"live.acme.com"},
+    ) == []
+
+
+def test_an_ip_the_customer_owns_is_not_dangling():
+    """Dedicated address space is not a provider pool — nobody else can receive it."""
+    from modules.takeover import find_dangling_a_records
+
+    assert find_dangling_a_records(
+        [{"hostname": "own.acme.com", "resolved_ips": ["198.51.100.9"], "dns_records": {}}],
+        classify=_cloud, alive_hosts=set(),
+    ) == []
+
+
+def test_a_host_with_a_cname_is_left_to_the_cname_check():
+    """Reporting both would double-count the same exposure under two names."""
+    from modules.takeover import find_dangling_a_records
+
+    assert find_dangling_a_records(
+        [{"hostname": "cn.acme.com", "resolved_ips": ["13.32.1.1"],
+          "dns_records": {"cname": ["x.s3.amazonaws.com"]}}],
+        classify=_cloud, alive_hosts=set(),
+    ) == []
+
+
+def test_unmonitored_assets_are_skipped():
+    from modules.takeover import find_dangling_a_records
+
+    assert find_dangling_a_records(
+        [{"hostname": "muted.acme.com", "resolved_ips": ["13.32.1.1"],
+          "dns_records": {}, "monitored": False}],
+        classify=_cloud, alive_hosts=set(),
+    ) == []
