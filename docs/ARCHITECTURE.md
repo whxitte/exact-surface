@@ -216,18 +216,12 @@ just enough of motor; every tool wrapper takes an injectable runner.
 
 ## Known gaps (keep honest)
 
-- **CVE/KEV match latency is not measured** (§15 target <60 min). `CveRecord` has
-  no `published` field, so the NVD parser must carry it first. Alert latency
-  (detection→delivered) *is* measured: `exactsurface_alert_latency_seconds`.
-- **`nuclei_watch` has no default template lister.** The pipeline is wired and
-  tested, but nuclei's `-tl` output contract has not been verified against the
-  pinned binary, so the lister must be injected. Without one the stage reports
-  `skipped` honestly rather than silently finding nothing. Verify against a real
-  nuclei build, then add the default.
-- **`cloud_buckets` implements only the permutation half of §6 module 18.** The
-  `cloudlist` half (enumerating a customer's cloud assets via provider APIs) is
-  not built — it needs the customer's cloud credentials, a trust escalation we
-  have not taken.
+- **The authorisation chain does not bind the deployment owner.** Verification state
+  lives in a database the customer runs, so somebody with shell access can write a
+  verified program by hand. This is inherent to self-hosted software and is documented
+  in full at [`SECURITY.md` §2b](SECURITY.md) — including the instruction not to
+  market it as something it is not.
+
 - **Search-engine response shapes are from vendor docs, not a live key.** Brave
   and SerpAPI wrappers are unit-tested against fixtures; verify against a real key
   before relying on them.
@@ -242,7 +236,7 @@ just enough of motor; every tool wrapper takes an injectable runner.
   scope-feed auto-update (ADR-0014) and a hardened prod compose are all wired. What
   remains is the 7-day unattended run itself — the exit gate, which can only be run,
   not coded — plus the "unverified" items below (nothing here has run against real
-  Docker/Mongo/Redis/Helm in this environment).
+  Docker/Mongo/Redis in this environment).
 - **Scope-feed updates reach workers only on restart.** The feed is distributed via
   Mongo now (ADR-0014) and the scheduler refreshes it daily, but a running worker
   builds its engine once at startup — so a refresh lands on the next rolling restart,

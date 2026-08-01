@@ -46,9 +46,10 @@ infrastructure, and the production exit gate has not been run.**
 
 **What stands between here and release** — see `context.md` for the running log:
 
-- **Nothing has run against real infrastructure in this repo's CI env** — Docker
-  images unbuilt, Helm chart unrendered, Redis rate-limit Lua and the Mongo scope
-  feed exercised only against fakes, **no backup ever restored**.
+- **Little has run against real infrastructure.** The `api` and `pipeline` images
+  now build locally and the release build-stamp is verified end-to-end
+  (`OWNER_RUNBOOK.md` §2.1), but the Redis rate-limit Lua and the Mongo scope feed
+  are still exercised only against fakes, and **no backup has ever been restored**.
 - **The §7 exit gate** — 7 days unattended with real tenants — has not been run.
 - **No load test** yet (§8: 100 tenants / 10k assets / 1M findings, p99 < 500ms).
 - **CVE/KEV match latency (§15)** is not measurable — `CveRecord` lacks a

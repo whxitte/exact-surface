@@ -40,6 +40,48 @@ purpose — each one alone is insufficient.
 authorization record — not just the API. That matters because a job can reach a
 worker from a stale Redis queue, a retry, or a direct call.
 
+### 2b. Who these gates actually protect against (read this before you quote them)
+
+The chain above is enforced against **every user of the product**. It is *not*
+enforced against **the operator of the deployment**, and on self-hosted software it
+cannot be.
+
+Verification state lives in MongoDB. The customer runs that database. Somebody with
+shell access can write a verified program and an authorization record by hand:
+
+```js
+db.programs.insertOne({tenant_id:"t1", program_id:"p9",
+                       apex_domain:"someone-elses.com", verified:true, enabled:true})
+db.authorizations.insertOne({tenant_id:"t1", program_id:"p9", apex_verified:true})
+```
+
+…and the scanner will treat that domain as authorised. **There is no cryptographic
+step that could prevent this without the vendor becoming a gatekeeper of what every
+customer is allowed to scan** — which would mean phoning home with the customer's
+domain list, and would break air-gapped deployment outright. We have chosen not to do
+that, and the trade is stated here rather than hidden.
+
+So be precise about what each control buys:
+
+| Threat | Protected? |
+|---|---|
+| A user of the product scans a domain they do not control | **Yes** — verification is required and cannot be skipped in the UI or API |
+| A member with an API key targets a third party | **Yes** — same gates, no path around them |
+| A bug or bad input causes an out-of-scope request | **Yes** — the scope engine is a separate, central check (§3) |
+| A pipeline stage forgets a check | **Yes** — enforcement is centralised, not per-module |
+| **The deployment owner deliberately forges an authorization record** | **No** — they own the database |
+
+The last row is the same trust boundary as licence enforcement (§10), and the same
+answer applies: what stops it is not code but the **licence agreement**, which makes
+unauthorised scanning a contractual breach as well as, in most jurisdictions, an
+offence. The authorization record's real value in that scenario is *evidentiary* — it
+records who authorised what, when, and under which ToS version, which is exactly what
+matters if a scan is ever disputed.
+
+**Do not market this as "it cannot be pointed at someone else."** It cannot be pointed
+at someone else *by its users*. Its operator is inside the trust boundary, and saying
+otherwise would be a claim we cannot support.
+
 ### 2a. Why domain control ≠ scanning authorisation (§9b)
 
 **This is the subtlest and most important rule in the product.**

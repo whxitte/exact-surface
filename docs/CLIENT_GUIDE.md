@@ -199,6 +199,108 @@ only, never exploits, and shows you the exact request that got through.
 
 ---
 
+## 5.9 Optional: let ExactSurface read your cloud accounts
+
+This is the single highest-yield thing you can turn on. DNS enumeration finds what
+somebody *published*; your cloud provider knows what actually **exists** — the load
+balancer nobody pointed a name at, the VM left over from a migration, the storage
+bucket from a project that ended.
+
+### What it needs (and does not need)
+
+* **Not** SSO, and **not** your console login.
+* **Not** your personal access keys.
+* A **dedicated read-only user or service account per provider**, whose credentials
+  you put in a small YAML file and mount into the container.
+
+The credentials are read by *your* deployment, on *your* infrastructure. There is no
+vendor-side component that could see them — that is precisely why this feature is
+offered on self-hosted and would not be offered on a hosted product.
+
+### Step 1 — create a read-only identity
+
+| Provider | What to create |
+|---|---|
+| **AWS** | An IAM user with the AWS-managed `ReadOnlyAccess` policy (or `SecurityAudit`, which is tighter). Generate an access key for it. |
+| **GCP** | A service account with the `roles/viewer` role. Download its JSON key. |
+| **Azure** | A service principal with the `Reader` role on the subscription. |
+| **DigitalOcean** | A **read-only** personal access token (DO has a read-only toggle when creating one). |
+| **Cloudflare** | An API token scoped to `Zone → DNS → Read`. |
+
+**Give it read-only permissions.** The module only ever lists resources; it never
+creates, modifies or deletes anything, so write access buys you nothing and costs you
+blast radius if the file leaks.
+
+### Step 2 — write the provider config
+
+Create `cloudlist.yaml` (this is [cloudlist's](https://github.com/projectdiscovery/cloudlist)
+own format — you can list as many providers as you like):
+
+```yaml
+- provider: aws
+  id: production
+  aws_access_key: AKIA...
+  aws_secret_key: ...
+
+- provider: gcp
+  id: production
+  gcp_service_account_key: '{"type": "service_account", ...}'
+
+- provider: digitalocean
+  id: production
+  digitalocean_token: dop_v1_...
+```
+
+Protect it like any credential file:
+
+```bash
+chmod 600 cloudlist.yaml
+```
+
+### Step 3 — mount it and point the setting at it
+
+In your `.env`:
+
+```bash
+EXACTSURFACE_CLOUDLIST_CONFIG=/etc/exactsurface/cloudlist.yaml
+```
+
+And in your compose override, mount it read-only into the worker:
+
+```yaml
+services:
+  worker:
+    volumes:
+      - ./cloudlist.yaml:/etc/exactsurface/cloudlist.yaml:ro
+```
+
+Then enable **Cloud asset inventory** on the program's *Scan modules* panel. It is
+opt-in and off by default, because it does nothing without credentials.
+
+### Where the results appear
+
+Two places, and the split is deliberate:
+
+| What | Where | Why |
+|---|---|---|
+| Assets **covered by a domain you verified** | **Surface** tab, alongside everything else, tagged `cloudlist:<provider>` | They are now monitored like any other asset — probed, crawled, scanned on the next run |
+| Assets your cloud account owns that **no verified domain covers** | **Findings** tab, as one Medium finding listing them | These are *not* scanned. Your provider confirming you own something answers **ownership**, not **authorisation** — see §8 |
+
+That second row is usually the interesting one. An asset nobody attached a monitored
+domain to is, more often than not, an asset nobody is watching. To bring them into
+monitoring, add the relevant domain and verify it; nothing is scanned until you do.
+
+> Filter the Findings tab by module `cloud_assets` to see them on their own.
+
+### If it finds nothing
+
+* Check the module is enabled and your tier includes it (Business and above).
+* Watch the Activity tab during a run — the stage logs the providers it queried and
+  says plainly when no config is set.
+* Test the credentials outside the product: `cloudlist -config cloudlist.yaml -json`.
+
+---
+
 ## 6. Day-2 operations
 
 ### 6.1 Backups — set this up on day one
