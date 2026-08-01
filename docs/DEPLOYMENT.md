@@ -46,7 +46,7 @@ makes `assert_prod_safe()` refuse insecure secrets. Grafana is published on
    port scanning is not shipped at all (ADR-0004) and every scanner subprocess stays
    rate-capped (ADR-0009 + ADR-0013).
 
-## Kubernetes (Helm)
+## Kubernetes
 ```bash
 kubectl create secret generic exactsurface-secrets --from-env-file=.env
 # (Kubernetes/Helm is not shipped — the supported deployment is Docker Compose above.)
@@ -149,7 +149,7 @@ docker compose -f docker/docker-compose.yml up -d prometheus grafana
 
 Prometheus is not published to the host — reach it through Grafana. Set
 `GRAFANA_ADMIN_PASSWORD` before exposing Grafana anywhere reachable; it can query
-every metric the platform emits. Under Helm, `metrics.enabled` adds
+every metric the platform emits. In Compose, `EXACTSURFACE_METRICS_ENABLED` adds
 `prometheus.io/scrape` annotations to the worker/scheduler pods (swap for a
 PodMonitor if you run the Prometheus Operator).
 

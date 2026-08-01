@@ -183,13 +183,10 @@ Nothing below has run in the dev environment — do it once on a real box before
 docker build -f docker/Dockerfile.pipeline .
 docker build -f docker/Dockerfile.api .
 
-# 2. Helm chart renders
-# (no Helm chart — Docker Compose is the supported deployment)
-
-# 3. Prod compose merges and is safe (no daemon needed)
+# 2. Prod compose merges and is safe (no daemon needed)
 docker compose -f docker/docker-compose.prod.yml config | grep -E "27017|6379"  # must NOT be published
 
-# 4. THE MOST IMPORTANT ONE — restore a backup into a scratch DB
+# 3. THE MOST IMPORTANT ONE — restore a backup into a scratch DB
 python -m scripts.backup run
 python -m scripts.backup restore <archive> --identity id.txt   # into a throwaway EXACTSURFACE_MONGO_DB
 ```

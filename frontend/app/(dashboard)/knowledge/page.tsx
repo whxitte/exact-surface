@@ -425,6 +425,40 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: "cloud-assets",
+    title: "Connecting your cloud accounts",
+    icon: Boxes,
+    keywords: "cloud aws gcp azure digitalocean cloudlist credentials read-only inventory shadow it",
+    body: (
+      <>
+        <p>
+          DNS enumeration finds what somebody <em>published</em>. Your cloud provider knows
+          what actually <Term>exists</Term> — the load balancer nobody pointed a name at, the
+          VM left over from a migration. Turning on <Term>Cloud asset inventory</Term> asks
+          your own AWS/GCP/Azure/DigitalOcean accounts what they are running.
+        </p>
+        <p>
+          <Term>It needs read-only credentials, not SSO and not your console login.</Term>{" "}
+          Create a dedicated read-only user or service account per provider (AWS{" "}
+          <Term>ReadOnlyAccess</Term>, GCP <Term>roles/viewer</Term>, Azure{" "}
+          <Term>Reader</Term>), put them in a <Term>cloudlist.yaml</Term>, mount it, and set{" "}
+          <Term>EXACTSURFACE_CLOUDLIST_CONFIG</Term>. The module only ever lists resources, so
+          write access buys nothing. Because you host this yourself, those credentials are
+          read by your own deployment and never leave it.
+        </p>
+        <p>
+          <Term>Results land in two places.</Term> Assets covered by a domain you have
+          verified join the Surface tab and are monitored normally. Assets your cloud account
+          owns that <em>no verified domain covers</em> are reported as a finding and are{" "}
+          <Term>not scanned</Term> — your provider confirming you own something answers
+          ownership, not authorisation. That second group is usually the interesting one: an
+          asset nobody attached a monitored name to is often an asset nobody is watching. Add
+          and verify the relevant domain to bring it into monitoring.
+        </p>
+      </>
+    ),
+  },
+  {
     id: "modules",
     title: "Turning modules on and off",
     icon: Boxes,
