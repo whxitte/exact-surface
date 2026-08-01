@@ -19,11 +19,13 @@ NOW = datetime(2026, 8, 1, tzinfo=UTC)
 
 
 async def _seed(mongo, collection: str, tenant: str, *, age_days: int, field: str) -> None:
-    await mongo.collection(collection).insert_one({
-        "tenant_id": tenant,
-        field: NOW - timedelta(days=age_days),
-        "_id": f"{collection}-{age_days}",
-    })
+    await mongo.collection(collection).insert_one(
+        {
+            "tenant_id": tenant,
+            field: NOW - timedelta(days=age_days),
+            "_id": f"{collection}-{age_days}",
+        }
+    )
 
 
 async def test_expired_records_are_deleted_and_current_ones_kept():
@@ -40,11 +42,13 @@ async def test_a_record_re_confirmed_last_night_survives_however_old_it_is():
     """The window applies to last_seen, not first_seen. A finding re-observed by
     yesterday's scan is current information whatever its discovery date."""
     mongo = FakeMongo()
-    await mongo.collection("findings").insert_one({
-        "tenant_id": "t1",
-        "first_seen": NOW - timedelta(days=900),
-        "last_seen": NOW - timedelta(days=1),
-    })
+    await mongo.collection("findings").insert_one(
+        {
+            "tenant_id": "t1",
+            "first_seen": NOW - timedelta(days=900),
+            "last_seen": NOW - timedelta(days=1),
+        }
+    )
     result = await purge_tenant(mongo, "t1", 30, now=NOW)
     assert result.total == 0
 
@@ -64,9 +68,12 @@ async def test_assets_and_authorizations_are_never_purged():
     that a scan was permitted."""
     mongo = FakeMongo()
     for collection in ("assets", "authorizations", "programs"):
-        await mongo.collection(collection).insert_one({
-            "tenant_id": "t1", "last_seen": NOW - timedelta(days=5000),
-        })
+        await mongo.collection(collection).insert_one(
+            {
+                "tenant_id": "t1",
+                "last_seen": NOW - timedelta(days=5000),
+            }
+        )
     await purge_tenant(mongo, "t1", 30, now=NOW)
     for collection in ("assets", "authorizations", "programs"):
         assert await mongo.collection(collection).find({}).to_list(None), collection

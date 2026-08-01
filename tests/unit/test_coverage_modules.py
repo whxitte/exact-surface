@@ -16,10 +16,13 @@ from modules.scanning import http_misconfig as mis
 
 
 def test_reflected_origin_with_credentials_is_high():
-    v = mis.analyse_cors("https://a.com/api", {
-        "Access-Control-Allow-Origin": mis.PROBE_ORIGIN,
-        "Access-Control-Allow-Credentials": "true",
-    })
+    v = mis.analyse_cors(
+        "https://a.com/api",
+        {
+            "Access-Control-Allow-Origin": mis.PROBE_ORIGIN,
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
     assert v.vulnerable and v.severity is Severity.HIGH and v.kind == "reflected-origin"
 
 
@@ -37,23 +40,35 @@ def test_plain_wildcard_is_not_a_finding():
 
 
 def test_wildcard_with_credentials_is_flagged():
-    v = mis.analyse_cors("https://a.com", {
-        "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Credentials": "true",
-    })
+    v = mis.analyse_cors(
+        "https://a.com",
+        {
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
     assert v.kind == "wildcard-with-credentials"
 
 
 def test_null_origin_with_credentials_is_high():
-    v = mis.analyse_cors("https://a.com", {
-        "Access-Control-Allow-Origin": "null", "Access-Control-Allow-Credentials": "true",
-    })
+    v = mis.analyse_cors(
+        "https://a.com",
+        {
+            "Access-Control-Allow-Origin": "null",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    )
     assert v.kind == "null-origin" and v.severity is Severity.HIGH
 
 
 def test_own_origin_echo_is_not_reflection():
-    assert not mis.analyse_cors("https://a.com", {
-        "Access-Control-Allow-Origin": "https://a.com", "Access-Control-Allow-Credentials": "true",
-    }).vulnerable
+    assert not mis.analyse_cors(
+        "https://a.com",
+        {
+            "Access-Control-Allow-Origin": "https://a.com",
+            "Access-Control-Allow-Credentials": "true",
+        },
+    ).vulnerable
 
 
 # -- open redirect ----------------------------------------------------------
@@ -68,16 +83,18 @@ def test_only_existing_redirect_params_are_probed():
 
 
 def test_redirect_to_probe_host_is_reported():
-    v = mis.analyse_redirect("https://a.com/go?next=x", "next", 302,
-                             {"Location": mis.PROBE_REDIRECT_URL})
+    v = mis.analyse_redirect(
+        "https://a.com/go?next=x", "next", 302, {"Location": mis.PROBE_REDIRECT_URL}
+    )
     assert v.vulnerable and v.severity is Severity.MEDIUM
 
 
 def test_protocol_relative_redirect_is_caught():
     """`//evil.com` has no scheme but still leaves the site — a classic bypass of
     naive "does it start with http" checks."""
-    v = mis.analyse_redirect("https://a.com/go?u=x", "u", 302,
-                             {"Location": f"//{mis.PROBE_REDIRECT_HOST}/x"})
+    v = mis.analyse_redirect(
+        "https://a.com/go?u=x", "u", 302, {"Location": f"//{mis.PROBE_REDIRECT_HOST}/x"}
+    )
     assert v.vulnerable
 
 
@@ -87,8 +104,9 @@ def test_internal_redirect_is_not_a_finding():
 
 
 def test_non_redirect_status_is_ignored():
-    assert not mis.analyse_redirect("https://a.com", "u", 200,
-                                    {"Location": mis.PROBE_REDIRECT_URL}).vulnerable
+    assert not mis.analyse_redirect(
+        "https://a.com", "u", 200, {"Location": mis.PROBE_REDIRECT_URL}
+    ).vulnerable
 
 
 # -- WAF --------------------------------------------------------------------
@@ -96,8 +114,12 @@ def test_non_redirect_status_is_ignored():
 
 def test_waf_detected_from_header_name_and_value():
     assert mis.fingerprint_waf("https://a.com", {"CF-Ray": "abc"}).products == ("Cloudflare",)
-    assert "Imperva Incapsula" in mis.fingerprint_waf("https://a.com", {
-        "Set-Cookie": "visid_incap_1=xyz; path=/"}).products
+    assert (
+        "Imperva Incapsula"
+        in mis.fingerprint_waf(
+            "https://a.com", {"Set-Cookie": "visid_incap_1=xyz; path=/"}
+        ).products
+    )
 
 
 def test_no_waf_is_reported_as_unprotected():
@@ -133,29 +155,43 @@ def test_sitemap_urls_are_extracted_and_bounded():
 
 
 def test_openapi_schema_yields_its_routes():
-    body = json.dumps({"openapi": "3.0.0", "info": {"title": "Acme"},
-                       "paths": {"/users": {}, "/admin/keys": {}}})
+    body = json.dumps(
+        {"openapi": "3.0.0", "info": {"title": "Acme"}, "paths": {"/users": {}, "/admin/keys": {}}}
+    )
     s = api_surface.analyse_schema("https://a.com/openapi.json", 200, body, "application/json")
     assert s and s.kind == "openapi" and set(s.endpoints) == {"/users", "/admin/keys"}
 
 
 def test_html_error_page_is_not_an_api_schema():
     """A 200 that is really the site's error page is the standard false positive here."""
-    assert api_surface.analyse_schema("https://a.com/openapi.json", 200,
-                                      "<html>Not found</html>", "text/html") is None
+    assert (
+        api_surface.analyse_schema(
+            "https://a.com/openapi.json", 200, "<html>Not found</html>", "text/html"
+        )
+        is None
+    )
 
 
 def test_graphql_introspection_enabled_is_reported():
-    body = json.dumps({"data": {"__schema": {"queryType": {"name": "Query"},
-                                             "mutationType": {"name": "Mutation"},
-                                             "types": [{"name": "User"}, {"name": "__Type"}]}}})
+    body = json.dumps(
+        {
+            "data": {
+                "__schema": {
+                    "queryType": {"name": "Query"},
+                    "mutationType": {"name": "Mutation"},
+                    "types": [{"name": "User"}, {"name": "__Type"}],
+                }
+            }
+        }
+    )
     s = api_surface.analyse_graphql("https://a.com/graphql", 200, body)
     assert s and s.severity is Severity.MEDIUM and s.endpoints == ("User",)
 
 
 def test_graphql_with_introspection_disabled_is_info_only():
-    s = api_surface.analyse_graphql("https://a.com/graphql", 400,
-                                    json.dumps({"errors": [{"message": "disabled"}]}))
+    s = api_surface.analyse_graphql(
+        "https://a.com/graphql", 400, json.dumps({"errors": [{"message": "disabled"}]})
+    )
     assert s and s.severity is Severity.INFO
 
 
@@ -219,15 +255,23 @@ def test_unscoped_miss_is_lower_confidence_than_scoped():
 
 
 def _f(module, check, sev, host="app.acme.com", fp=None):
-    return {"module": module, "check_id": check, "name": check, "severity": sev,
-            "location": f"https://{host}/x", "fingerprint": fp or f"{module}-{check}"}
+    return {
+        "module": module,
+        "check_id": check,
+        "name": check,
+        "severity": sev,
+        "location": f"https://{host}/x",
+        "fingerprint": fp or f"{module}-{check}",
+    }
 
 
 def test_two_phases_on_one_host_becomes_a_path():
-    paths = narrative.build_paths([
-        _f("secrets", "aws-key", "high"),
-        _f("bypass_403", "bypass", "medium"),
-    ])
+    paths = narrative.build_paths(
+        [
+            _f("secrets", "aws-key", "high"),
+            _f("bypass_403", "bypass", "medium"),
+        ]
+    )
     assert len(paths) == 1
     p = paths[0]
     assert p.host == "app.acme.com" and p.is_real_path
@@ -242,29 +286,35 @@ def test_a_single_finding_is_not_called_an_attack_chain():
 
 
 def test_steps_are_ordered_by_attacker_phase_not_discovery_order():
-    paths = narrative.build_paths([
-        _f("cve_watch", "cve-2024-1", "critical"),   # escalation
-        _f("takeover", "dangling", "high"),          # exposure
-        _f("secrets", "key", "high"),                # credentials
-    ])
+    paths = narrative.build_paths(
+        [
+            _f("cve_watch", "cve-2024-1", "critical"),  # escalation
+            _f("takeover", "dangling", "high"),  # exposure
+            _f("secrets", "key", "high"),  # credentials
+        ]
+    )
     assert [s.phase for s in paths[0].steps] == ["exposure", "credentials", "escalation"]
 
 
 def test_findings_on_different_hosts_do_not_form_one_story():
-    paths = narrative.build_paths([
-        _f("secrets", "key", "high", host="a.acme.com"),
-        _f("bypass_403", "bypass", "high", host="b.acme.com"),
-    ])
+    paths = narrative.build_paths(
+        [
+            _f("secrets", "key", "high", host="a.acme.com"),
+            _f("bypass_403", "bypass", "high", host="b.acme.com"),
+        ]
+    )
     assert paths == []
 
 
 def test_paths_are_ranked_worst_first():
-    paths = narrative.build_paths([
-        _f("secrets", "k", "low", host="low.acme.com"),
-        _f("bypass_403", "b", "low", host="low.acme.com"),
-        _f("secrets", "k", "critical", host="hot.acme.com"),
-        _f("cve_watch", "c", "critical", host="hot.acme.com"),
-    ])
+    paths = narrative.build_paths(
+        [
+            _f("secrets", "k", "low", host="low.acme.com"),
+            _f("bypass_403", "b", "low", host="low.acme.com"),
+            _f("secrets", "k", "critical", host="hot.acme.com"),
+            _f("cve_watch", "c", "critical", host="hot.acme.com"),
+        ]
+    )
     assert paths[0].host == "hot.acme.com"
 
 
@@ -274,9 +324,13 @@ def test_paths_are_ranked_worst_first():
 def test_observed_params_cost_nothing_and_come_from_our_own_data():
     from modules.scanning import params as P
 
-    obs = P.extract_observed([
-        "https://a.com/r?debug=1&id=5", "https://a.com/r?id=6", "https://a.com/plain",
-    ])
+    obs = P.extract_observed(
+        [
+            "https://a.com/r?debug=1&id=5",
+            "https://a.com/r?id=6",
+            "https://a.com/plain",
+        ]
+    )
     by_name = {o.name: o for o in obs}
     assert set(by_name) == {"debug", "id"}
     assert by_name["id"].values_seen == 2  # two distinct values seen
@@ -378,10 +432,12 @@ def test_in_scope_reverse_hit_is_new_surface():
 def test_cloudlist_parses_names_and_public_ips():
     from modules.recon import cloudlist as cl
 
-    assets = cl.parse([
-        {"provider": "aws", "dns_name": "lb-1.acme.com", "public_ipv4": "93.184.216.34"},
-        {"provider": "gcp", "hostname": "vm-old.acme.com"},
-    ])
+    assets = cl.parse(
+        [
+            {"provider": "aws", "dns_name": "lb-1.acme.com", "public_ipv4": "93.184.216.34"},
+            {"provider": "gcp", "hostname": "vm-old.acme.com"},
+        ]
+    )
     by_value = {a.value: a for a in assets}
     assert by_value["lb-1.acme.com"].provider == "aws"
     assert by_value["93.184.216.34"].is_ip and by_value["93.184.216.34"].ip == "93.184.216.34"
@@ -395,11 +451,13 @@ def test_private_addresses_are_dropped():
 
     # NOTE: 203.0.113.x and friends are documentation ranges and Python's ipaddress
     # reports them as private, so a real public address is needed here.
-    assets = cl.parse([
-        {"provider": "aws", "public_ipv4": "10.0.0.5"},
-        {"provider": "aws", "public_ipv4": "127.0.0.1"},
-        {"provider": "aws", "public_ipv4": "93.184.216.34"},
-    ])
+    assets = cl.parse(
+        [
+            {"provider": "aws", "public_ipv4": "10.0.0.5"},
+            {"provider": "aws", "public_ipv4": "127.0.0.1"},
+            {"provider": "aws", "public_ipv4": "93.184.216.34"},
+        ]
+    )
     assert [a.value for a in assets] == ["93.184.216.34"]
 
 
@@ -490,7 +548,8 @@ def test_pooled_cloud_ip_with_nothing_answering_is_dangling():
 
     hits = find_dangling_a_records(
         [{"hostname": "gone.acme.com", "resolved_ips": ["13.32.1.1"], "dns_records": {}}],
-        classify=_cloud, alive_hosts=set(),
+        classify=_cloud,
+        alive_hosts=set(),
     )
     assert [h.host for h in hits] == ["gone.acme.com"]
     assert "returns to the provider's pool" in hits[0].evidence
@@ -501,38 +560,65 @@ def test_a_host_that_is_alive_is_never_dangling():
     """It is serving traffic. Whatever its address class, something is behind it."""
     from modules.takeover import find_dangling_a_records
 
-    assert find_dangling_a_records(
-        [{"hostname": "live.acme.com", "resolved_ips": ["13.32.1.1"], "dns_records": {}}],
-        classify=_cloud, alive_hosts={"live.acme.com"},
-    ) == []
+    assert (
+        find_dangling_a_records(
+            [{"hostname": "live.acme.com", "resolved_ips": ["13.32.1.1"], "dns_records": {}}],
+            classify=_cloud,
+            alive_hosts={"live.acme.com"},
+        )
+        == []
+    )
 
 
 def test_an_ip_the_customer_owns_is_not_dangling():
     """Dedicated address space is not a provider pool — nobody else can receive it."""
     from modules.takeover import find_dangling_a_records
 
-    assert find_dangling_a_records(
-        [{"hostname": "own.acme.com", "resolved_ips": ["198.51.100.9"], "dns_records": {}}],
-        classify=_cloud, alive_hosts=set(),
-    ) == []
+    assert (
+        find_dangling_a_records(
+            [{"hostname": "own.acme.com", "resolved_ips": ["198.51.100.9"], "dns_records": {}}],
+            classify=_cloud,
+            alive_hosts=set(),
+        )
+        == []
+    )
 
 
 def test_a_host_with_a_cname_is_left_to_the_cname_check():
     """Reporting both would double-count the same exposure under two names."""
     from modules.takeover import find_dangling_a_records
 
-    assert find_dangling_a_records(
-        [{"hostname": "cn.acme.com", "resolved_ips": ["13.32.1.1"],
-          "dns_records": {"cname": ["x.s3.amazonaws.com"]}}],
-        classify=_cloud, alive_hosts=set(),
-    ) == []
+    assert (
+        find_dangling_a_records(
+            [
+                {
+                    "hostname": "cn.acme.com",
+                    "resolved_ips": ["13.32.1.1"],
+                    "dns_records": {"cname": ["x.s3.amazonaws.com"]},
+                }
+            ],
+            classify=_cloud,
+            alive_hosts=set(),
+        )
+        == []
+    )
 
 
 def test_unmonitored_assets_are_skipped():
     from modules.takeover import find_dangling_a_records
 
-    assert find_dangling_a_records(
-        [{"hostname": "muted.acme.com", "resolved_ips": ["13.32.1.1"],
-          "dns_records": {}, "monitored": False}],
-        classify=_cloud, alive_hosts=set(),
-    ) == []
+    assert (
+        find_dangling_a_records(
+            [
+                {
+                    "hostname": "muted.acme.com",
+                    "resolved_ips": ["13.32.1.1"],
+                    "dns_records": {},
+                    "monitored": False,
+                }
+            ],
+            classify=_cloud,
+            alive_hosts=set(),
+        )
+        == []
+    )

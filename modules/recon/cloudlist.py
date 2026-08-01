@@ -44,9 +44,23 @@ Runner = Callable[..., Awaitable[list[dict]]]
 #: Providers cloudlist supports that we surface. Others still work — this is only used
 #: for the friendly label on a finding.
 PROVIDERS = (
-    "aws", "gcp", "azure", "digitalocean", "scaleway", "cloudflare", "heroku",
-    "linode", "fastly", "alibaba", "namecheap", "terraform", "hetzner", "openstack",
-    "kubernetes", "consul", "nomad",
+    "aws",
+    "gcp",
+    "azure",
+    "digitalocean",
+    "scaleway",
+    "cloudflare",
+    "heroku",
+    "linode",
+    "fastly",
+    "alibaba",
+    "namecheap",
+    "terraform",
+    "hetzner",
+    "openstack",
+    "kubernetes",
+    "consul",
+    "nomad",
 )
 
 #: Bound a single run. A large estate can return tens of thousands of records, and the
@@ -105,9 +119,7 @@ def parse(rows: list[dict]) -> list[CloudAsset]:
                 is_ip = _looks_like_ip(text)
                 if is_ip and _is_private(text):
                     continue  # internal-only; not external attack surface
-                seen[text] = CloudAsset(
-                    value=text, provider=provider, service=service, is_ip=is_ip
-                )
+                seen[text] = CloudAsset(value=text, provider=provider, service=service, is_ip=is_ip)
                 if len(seen) >= MAX_ASSETS:
                     return list(seen.values())
     return list(seen.values())
@@ -152,6 +164,7 @@ async def enumerate_assets(
     assets = parse(rows)
     logger.info(
         "cloudlist: {} external asset(s) across {} provider(s)",
-        len(assets), len({a.provider for a in assets}),
+        len(assets),
+        len({a.provider for a in assets}),
     )
     return assets

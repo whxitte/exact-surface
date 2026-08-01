@@ -62,7 +62,6 @@ class Settings(BaseSettings):
     # what makes this acceptable to ask for at all. READ-ONLY keys are sufficient.
     cloudlist_config: str | None = Field(default=None)
 
-
     # -- scope engine ----------------------------------------------------
     scope_feed_refresh_hours: int = Field(default=24)
     lab_allow_private: bool = Field(
@@ -172,6 +171,7 @@ class Settings(BaseSettings):
         single-organisation self-hosted deployment.
         """
         return self.allow_public_signup or not self.is_prod
+
     require_email_verification: bool = Field(
         default=False,
         description=(

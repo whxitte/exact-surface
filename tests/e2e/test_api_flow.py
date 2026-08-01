@@ -403,9 +403,7 @@ def _set_plan(fake, tenant_id: str, plan: str) -> None:
     import asyncio
 
     asyncio.run(
-        fake.collection("tenants").update_one(
-            {"tenant_id": tenant_id}, {"$set": {"plan": plan}}
-        )
+        fake.collection("tenants").update_one({"tenant_id": tenant_id}, {"$set": {"plan": plan}})
     )
 
 

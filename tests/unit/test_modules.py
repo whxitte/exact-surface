@@ -83,7 +83,10 @@ def test_catalogue_exposes_what_the_ui_needs():
     assert crawl["turned_off"] is True and crawl["enabled"] is False
     # supply_chain is transitive: crawl -> js_mine -> supply_chain
     assert set(crawl["required_by"]) == {
-        "js_mine", "broken_links", "supply_chain", "param_discovery",
+        "js_mine",
+        "broken_links",
+        "supply_chain",
+        "param_discovery",
     }
     assert rows["ingest"]["essential"] is True
     assert rows["js_mine"]["requires"] == ["crawl"]

@@ -57,8 +57,13 @@ async def _run(mongo, **kw):
         return BUNDLE
 
     return await run_js_mine(
-        mongo=mongo, engine=ENGINE, scope=SCOPE, tenant=TENANT,
-        program_id="p1", fetch=kw.pop("fetch", fetch), **kw,
+        mongo=mongo,
+        engine=ENGINE,
+        scope=SCOPE,
+        tenant=TENANT,
+        program_id="p1",
+        fetch=kw.pop("fetch", fetch),
+        **kw,
     )
 
 

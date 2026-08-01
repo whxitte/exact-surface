@@ -122,7 +122,10 @@ async def run_cloud_assets(
     logger.info(
         "cloud_assets: {} asset(s) from cloud accounts → {} in scope ({} new), "
         "{} outside any verified domain",
-        len(assets), len(in_scope), new, len(outside),
+        len(assets),
+        len(in_scope),
+        new,
+        len(outside),
     )
     return {
         "discovered": len(assets),

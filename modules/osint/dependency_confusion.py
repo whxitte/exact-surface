@@ -26,18 +26,57 @@ _SCOPED = re.compile(r"[\"'`/](@[a-z0-9][\w.-]{0,63}/[a-z0-9][\w.-]{0,127})[\"'`
 _NODE_MODULES = re.compile(r"node_modules/((?:@[\w.-]+/)?[a-z0-9][\w.-]*)", re.I)
 
 #: Names that are certainly public or are framework noise, not internal packages.
-_IGNORE = frozenset({
-    "react", "react-dom", "next", "vue", "angular", "lodash", "axios", "moment",
-    "jquery", "core-js", "rxjs", "tslib", "webpack", "babel", "regenerator-runtime",
-    "scheduler", "prop-types", "classnames", "date-fns", "uuid", "zod", "swr",
-})
+_IGNORE = frozenset(
+    {
+        "react",
+        "react-dom",
+        "next",
+        "vue",
+        "angular",
+        "lodash",
+        "axios",
+        "moment",
+        "jquery",
+        "core-js",
+        "rxjs",
+        "tslib",
+        "webpack",
+        "babel",
+        "regenerator-runtime",
+        "scheduler",
+        "prop-types",
+        "classnames",
+        "date-fns",
+        "uuid",
+        "zod",
+        "swr",
+    }
+)
 
 #: Scopes owned by well-known vendors — a miss there is a typo, not an exposure.
-_PUBLIC_SCOPES = frozenset({
-    "@babel", "@types", "@next", "@vue", "@angular", "@emotion", "@mui", "@reduxjs",
-    "@tanstack", "@sentry", "@stripe", "@aws-sdk", "@azure", "@google-cloud",
-    "@testing-library", "@floating-ui", "@radix-ui", "@headlessui", "@vercel",
-})
+_PUBLIC_SCOPES = frozenset(
+    {
+        "@babel",
+        "@types",
+        "@next",
+        "@vue",
+        "@angular",
+        "@emotion",
+        "@mui",
+        "@reduxjs",
+        "@tanstack",
+        "@sentry",
+        "@stripe",
+        "@aws-sdk",
+        "@azure",
+        "@google-cloud",
+        "@testing-library",
+        "@floating-ui",
+        "@radix-ui",
+        "@headlessui",
+        "@vercel",
+    }
+)
 
 MAX_CANDIDATES = 150
 

@@ -101,16 +101,26 @@ async def test_run_update_applies_then_skips_when_current(tmp_path):
     dest = tmp_path / "templates"
 
     r1 = await run_update(
-        mongo=mongo, feed_url="https://feed", license_token="tok", public_key_pem=pub,
-        dest_dir=str(dest), json_get=json_get, bytes_get=bytes_get,
+        mongo=mongo,
+        feed_url="https://feed",
+        license_token="tok",
+        public_key_pem=pub,
+        dest_dir=str(dest),
+        json_get=json_get,
+        bytes_get=bytes_get,
     )
     assert r1["applied"] is True and r1["version"] == "2026.07.21"
     assert (dest / "http" / "x.yaml").exists()
 
     # second run with the same manifest → no re-apply
     r2 = await run_update(
-        mongo=mongo, feed_url="https://feed", license_token="tok", public_key_pem=pub,
-        dest_dir=str(dest), json_get=json_get, bytes_get=bytes_get,
+        mongo=mongo,
+        feed_url="https://feed",
+        license_token="tok",
+        public_key_pem=pub,
+        dest_dir=str(dest),
+        json_get=json_get,
+        bytes_get=bytes_get,
     )
     assert r2["applied"] is False and r2["reason"] == "already current"
 
@@ -125,7 +135,12 @@ async def test_run_update_ignores_unsigned_manifest(tmp_path):
         raise AssertionError("must not download an unverified bundle")
 
     r = await run_update(
-        mongo=FakeMongo(), feed_url="https://feed", license_token="t", public_key_pem=pub,
-        dest_dir=str(tmp_path), json_get=json_get, bytes_get=bytes_get,
+        mongo=FakeMongo(),
+        feed_url="https://feed",
+        license_token="t",
+        public_key_pem=pub,
+        dest_dir=str(tmp_path),
+        json_get=json_get,
+        bytes_get=bytes_get,
     )
     assert r["applied"] is False and r["reason"] == "invalid signature"

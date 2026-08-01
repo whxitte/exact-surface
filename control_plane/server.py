@@ -152,6 +152,9 @@ def create_app() -> Any:  # pragma: no cover - thin wrapper; logic is tested dir
     return app
 
 
-app = create_app() if os.environ.get("EXACTSURFACE_CP_PRIVATE_KEY") or os.environ.get(
-    "EXACTSURFACE_CP_PRIVATE_KEY_FILE"
-) else None
+app = (
+    create_app()
+    if os.environ.get("EXACTSURFACE_CP_PRIVATE_KEY")
+    or os.environ.get("EXACTSURFACE_CP_PRIVATE_KEY_FILE")
+    else None
+)

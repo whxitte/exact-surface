@@ -98,9 +98,7 @@ async def _fetch_ok():
     """A realistic fetch: it REPLACES the managed providers (cloudflare, aws_*), so
     it must return counts comparable to the seeded baseline (cloudflare 22,
     cloudfront 13) or the shrink guard rejects it — which is the point of the guard."""
-    cloudfront = [
-        {"ip_prefix": f"13.{i}.0.0/16", "service": "CLOUDFRONT"} for i in range(14)
-    ]
+    cloudfront = [{"ip_prefix": f"13.{i}.0.0/16", "service": "CLOUDFRONT"} for i in range(14)]
     ec2 = [{"ip_prefix": f"52.{i}.0.0/16", "service": "EC2"} for i in range(30)]
     cloudflare = "\n".join(f"104.{i}.0.0/16" for i in range(24)) + "\n"
     return {"prefixes": cloudfront + ec2}, cloudflare

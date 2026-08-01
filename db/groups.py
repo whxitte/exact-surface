@@ -25,9 +25,9 @@ class GroupRepo:
     async def list_by_ids(self, tenant_id: str, group_ids: list[str]) -> list[dict]:
         if not group_ids:
             return []
-        return await self._c.find(
-            {"tenant_id": tenant_id, "group_id": {"$in": group_ids}}
-        ).to_list(None)
+        return await self._c.find({"tenant_id": tenant_id, "group_id": {"$in": group_ids}}).to_list(
+            None
+        )
 
     async def save(self, group: Group) -> dict:
         doc = _to_bson(group.model_dump(mode="python"))

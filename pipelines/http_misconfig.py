@@ -50,9 +50,11 @@ async def run_http_misconfig(
     )
 
     def allowed(host: str) -> bool:
-        return bool(host) and scope.owns_host(host) and engine.evaluate(
-            host, ips_by_host.get(host, []), scope
-        ).permits(Action.HTTP_PROBE)
+        return (
+            bool(host)
+            and scope.owns_host(host)
+            and engine.evaluate(host, ips_by_host.get(host, []), scope).permits(Action.HTTP_PROBE)
+        )
 
     origins: dict[str, str] = {}
     redirect_targets: list[tuple[str, str]] = []
@@ -73,7 +75,8 @@ async def run_http_misconfig(
 
     logger.info(
         "http_misconfig: {} origin(s) for CORS, {} redirect candidate(s)",
-        len(origins), len(redirect_targets),
+        len(origins),
+        len(redirect_targets),
     )
 
     sem = asyncio.Semaphore(CONCURRENCY)
@@ -98,7 +101,9 @@ async def run_http_misconfig(
         verdict = mis.analyse_cors(origin, headers)
         logger.info(
             "http_misconfig: CORS {} → allow-origin={!r} credentials={}",
-            origin, verdict.allow_origin or "(none)", verdict.allow_credentials,
+            origin,
+            verdict.allow_origin or "(none)",
+            verdict.allow_credentials,
         )
         if not verdict.vulnerable:
             return
@@ -115,8 +120,7 @@ async def run_http_misconfig(
                 description=verdict.evidence,
                 severity=verdict.severity,
                 reproduction=(
-                    f"curl -s -I {origin} -H 'Origin: {mis.PROBE_ORIGIN}' "
-                    "| grep -i access-control"
+                    f"curl -s -I {origin} -H 'Origin: {mis.PROBE_ORIGIN}' | grep -i access-control"
                 ),
                 raw={
                     "allow_origin": verdict.allow_origin,
@@ -163,7 +167,10 @@ async def run_http_misconfig(
     total, new = await FindingRepo.from_mongo(mongo).upsert_many(findings)
     logger.info(
         "http_misconfig: {} finding(s) ({} new) · {} host(s) behind a WAF, {} without",
-        len(findings), new, protected, unprotected,
+        len(findings),
+        new,
+        protected,
+        unprotected,
     )
     return {
         "origins": len(origins),

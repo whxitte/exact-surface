@@ -79,6 +79,7 @@ async def test_data_found_before_the_stop_is_kept():
 
     audit.__class__.is_cancel_requested = cancel_after_first_stage
     try:
+
         async def subfinder(domain, timeout):
             return ["app.customer.com"]
 

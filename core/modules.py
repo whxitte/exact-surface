@@ -43,17 +43,20 @@ class ModuleSpec:
 #: Declaration order = pipeline execution order, so the UI can render the real chain.
 MODULES: tuple[ModuleSpec, ...] = (
     ModuleSpec(
-        "domain_intel", "Domain intelligence",
+        "domain_intel",
+        "Domain intelligence",
         "Email spoofability (SPF/DMARC/DKIM) and domain registration risk. Fully "
         "passive — reads DNS and the public registry, never touches your servers.",
     ),
     ModuleSpec(
-        "ingest", "Subdomain discovery",
+        "ingest",
+        "Subdomain discovery",
         "Finds your subdomains and resolves them. Everything else works from this list.",
         essential=True,
     ),
     ModuleSpec(
-        "cloud_assets", "Cloud asset inventory",
+        "cloud_assets",
+        "Cloud asset inventory",
         "Asks your own AWS/GCP/Azure/DigitalOcean accounts what they are running, so "
         "you find the load balancer or VM nobody pointed a DNS name at. Credentials "
         "stay in your deployment and are never sent anywhere.",
@@ -61,143 +64,174 @@ MODULES: tuple[ModuleSpec, ...] = (
         opt_in_reason="needs read-only credentials for your cloud accounts",
     ),
     ModuleSpec(
-        "uncover", "Internet-index search",
+        "uncover",
+        "Internet-index search",
         "Looks your assets up in Shodan/Censys/Fofa to find hosts DNS never reveals.",
         default_enabled=False,
         opt_in_reason="needs a Shodan/Censys API key",
     ),
     ModuleSpec(
-        "reverse_dns", "Reverse-DNS sweep",
+        "reverse_dns",
+        "Reverse-DNS sweep",
         "PTR-sweeps the IP ranges confirmed to be yours, finding hosts that exist in "
         "IP space but were never published in DNS. Only runs on ASN-verified ranges.",
-        requires=("ingest",), default_enabled=False,
+        requires=("ingest",),
+        default_enabled=False,
         opt_in_reason="needs ASN-confirmed dedicated IP ranges; sweeps up to 8192 addresses",
     ),
     ModuleSpec(
-        "probe", "Live-host probing",
+        "probe",
+        "Live-host probing",
         "Checks which hosts answer over HTTP/S and fingerprints their technology.",
-        requires=("ingest",), essential=True,
+        requires=("ingest",),
+        essential=True,
     ),
     ModuleSpec(
-        "tls", "TLS inspection",
+        "tls",
+        "TLS inspection",
         "Certificate expiry and weak TLS configuration.",
-        requires=("ingest",), default_enabled=False,
+        requires=("ingest",),
+        default_enabled=False,
         opt_in_reason="adds a TLS handshake per host",
     ),
     ModuleSpec(
-        "takeover", "Subdomain takeover",
+        "takeover",
+        "Subdomain takeover",
         "Dangling DNS records pointing at cloud services somebody else could claim.",
         requires=("ingest",),
     ),
     ModuleSpec(
-        "crawl", "Crawling & archives",
+        "crawl",
+        "Crawling & archives",
         "Crawls your live sites and mines Wayback/CommonCrawl history for URLs.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "content_discovery", "Content discovery",
+        "content_discovery",
+        "Content discovery",
         "Brute-forces hidden paths and files with tech-aware wordlists.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "js_mine", "JavaScript mining",
+        "js_mine",
+        "JavaScript mining",
         "Reads your own JS bundles for API routes, internal hostnames and source maps — "
         "the routes the app tells every visitor about.",
         requires=("crawl",),
     ),
     ModuleSpec(
-        "api_surface", "API & path disclosure",
+        "api_surface",
+        "API & path disclosure",
         "Reads robots.txt, sitemaps, API schemas (Swagger/OpenAPI), GraphQL "
         "introspection and .well-known — the surface each host advertises about itself.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "http_misconfig", "CORS, redirects & WAF",
+        "http_misconfig",
+        "CORS, redirects & WAF",
         "Checks whether hosts hand data to any origin (CORS), can launder a phishing "
         "link (open redirect), and which of them sit behind a WAF.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "param_discovery", "Hidden parameters",
+        "param_discovery",
+        "Hidden parameters",
         "Inventories the query parameters your pages already use, and probes for "
         "undocumented ones that change how the application behaves.",
-        requires=("crawl",), default_enabled=False,
+        requires=("crawl",),
+        default_enabled=False,
         opt_in_reason="sends extra requests per URL to compare responses",
     ),
     ModuleSpec(
-        "broken_links", "Broken-link hijacking",
+        "broken_links",
+        "Broken-link hijacking",
         "Outbound links whose destination is an unregistered domain or an unclaimed "
         "social handle that an attacker could take over.",
         requires=("crawl",),
     ),
     ModuleSpec(
-        "port_scan", "Port scanning",
+        "port_scan",
+        "Port scanning",
         "Open ports on infrastructure you have confirmed as yours.",
         requires=("ingest",),
     ),
     ModuleSpec(
-        "service_scan", "Service fingerprinting",
+        "service_scan",
+        "Service fingerprinting",
         "Identifies the software and version behind each open port.",
-        requires=("port_scan",), default_enabled=False,
+        requires=("port_scan",),
+        default_enabled=False,
         opt_in_reason="slower, deeper probing of each open port",
     ),
     ModuleSpec(
-        "scan", "Vulnerability scanning",
+        "scan",
+        "Vulnerability scanning",
         "Runs the Nuclei template corpus against your live endpoints.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "secrets", "Exposed secrets",
+        "secrets",
+        "Exposed secrets",
         "Scans page and script bodies for leaked API keys, tokens and credentials.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "cve_watch", "CVE watch",
+        "cve_watch",
+        "CVE watch",
         "Matches known (and actively exploited) CVEs to your fingerprinted software.",
         requires=("probe",),
     ),
     ModuleSpec(
-        "github_osint", "Public code leaks",
+        "github_osint",
+        "Public code leaks",
         "Searches public repositories for secrets tied to your domain.",
     ),
     ModuleSpec(
-        "cloud_buckets", "Cloud storage exposure",
+        "cloud_buckets",
+        "Cloud storage exposure",
         "Guesses and checks S3/GCS/Azure bucket names derived from your domain.",
         default_enabled=False,
         opt_in_reason="probes ~45 third-party endpoints; name-derived attribution",
     ),
     ModuleSpec(
-        "nuclei_watch", "New-template watch",
+        "nuclei_watch",
+        "New-template watch",
         "Alerts when a newly published Nuclei template starts matching your stack.",
-        requires=("probe",), default_enabled=False,
+        requires=("probe",),
+        default_enabled=False,
         opt_in_reason="baselines the template set on first run",
     ),
     ModuleSpec(
-        "dork", "Search-engine exposure",
+        "dork",
+        "Search-engine exposure",
         "Finds content of yours that search engines have indexed but shouldn't have.",
         default_enabled=False,
         opt_in_reason="needs a search API key (SerpAPI/Brave/Google CSE)",
     ),
     ModuleSpec(
-        "supply_chain", "Dependency confusion",
+        "supply_chain",
+        "Dependency confusion",
         "Internal package names referenced in your public JavaScript that nobody has "
         "claimed on npm — an attacker who publishes one lands code inside your build.",
         requires=("js_mine",),
     ),
     ModuleSpec(
-        "typosquat", "Lookalike domains",
+        "typosquat",
+        "Lookalike domains",
         "Registered domains that impersonate yours to phish your staff and customers. "
         "Third-party DNS only — never contacts the lookalike host.",
         default_enabled=False,
         opt_in_reason="resolves several hundred candidate domains per run",
     ),
     ModuleSpec(
-        "correlate", "Risk correlation",
+        "correlate",
+        "Risk correlation",
         "Groups related findings per host into ranked attack chains.",
         schedulable=False,
     ),
     ModuleSpec(
-        "notify", "Alerting",
+        "notify",
+        "Alerting",
         "Delivers new findings to your configured channels.",
     ),
 )
@@ -307,9 +341,7 @@ def resolve(
 def sanitize_disabled(names: object) -> list[str]:
     """Keep only real, non-essential module names — an essential module can never be
     disabled, so silently dropping it here is the single enforcement point."""
-    return sorted(
-        {str(n) for n in (names or ()) if str(n) in BY_NAME and str(n) not in ESSENTIAL}
-    )
+    return sorted({str(n) for n in (names or ()) if str(n) in BY_NAME and str(n) not in ESSENTIAL})
 
 
 def catalogue(

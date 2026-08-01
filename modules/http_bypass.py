@@ -165,8 +165,20 @@ def _path_mutations(path: str) -> list[tuple[str, str]]:
 
     # Suffix tricks.
     _suffixes = (
-        "/", "//", "/.", "/./", "/..;/", "%20", "%09", "%00",
-        ".json", ".html", "~", "?", "#", ";",
+        "/",
+        "//",
+        "/.",
+        "/./",
+        "/..;/",
+        "%20",
+        "%09",
+        "%00",
+        ".json",
+        ".html",
+        "~",
+        "?",
+        "#",
+        ";",
     )
     for suffix in _suffixes:
         muts.append((f"suffix {suffix!r}", p + suffix))

@@ -127,7 +127,8 @@ async def run_param_discovery(
             found = sum(len(v) for v in by_arjun.values())
             logger.info(
                 "param_discovery: arjun found {} parameter(s) across {} URL(s)",
-                found, len(by_arjun),
+                found,
+                len(by_arjun),
             )
         except Exception as exc:  # noqa: BLE001 - never let one engine sink the stage
             logger.warning("param_discovery: arjun engine failed ({}); using built-in probe", exc)
@@ -166,7 +167,9 @@ async def run_param_discovery(
                         if hit:
                             logger.info(
                                 "param_discovery: hidden ?{}= on {} ({})",
-                                hit.name, url, hit.severity.value,
+                                hit.name,
+                                url,
+                                hit.severity.value,
                             )
                             hidden.append(hit)
                         continue
@@ -219,7 +222,10 @@ async def run_param_discovery(
     total, new = await FindingRepo.from_mongo(mongo).upsert_many(findings)
     logger.info(
         "param_discovery: {} observed, {} hidden found in {} request(s) ({} new finding(s))",
-        len(observed), len(hidden), probes, new,
+        len(observed),
+        len(hidden),
+        probes,
+        new,
     )
     return {
         "observed": len(observed),
@@ -251,4 +257,3 @@ async def _default_fetch(url: str):  # pragma: no cover - real network
             url, timeout=aiohttp.ClientTimeout(total=15), ssl=False, allow_redirects=False
         ) as resp:
             return resp.status, (await resp.text(errors="ignore"))[:400_000]
-

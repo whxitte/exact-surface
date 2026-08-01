@@ -122,7 +122,9 @@ async def run_takeover(
     for record in dangling:
         logger.info(
             "takeover: {} → {} is pooled {} with nothing answering",
-            record.host, record.ip, record.ip_class,
+            record.host,
+            record.ip,
+            record.ip_class,
         )
         findings.append(
             Finding(
@@ -139,8 +141,11 @@ async def run_takeover(
                 # pooled address on demand, so the exposure is real but opportunistic.
                 severity=Severity.MEDIUM,
                 reproduction=f"dig +short {record.host}   # then check whether anything answers",
-                raw={"ip": record.ip, "ip_class": record.ip_class,
-                     "remediation": record.remediation},
+                raw={
+                    "ip": record.ip,
+                    "ip_class": record.ip_class,
+                    "remediation": record.remediation,
+                },
             )
         )
 

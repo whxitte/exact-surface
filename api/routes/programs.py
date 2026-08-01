@@ -100,8 +100,7 @@ async def create_program(
         limits = await tenant_limits(mongo, principal.tenant_id)
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            f"your licence allows {limits.max_domains} domain(s) — "
-            "contact your vendor to add more",
+            f"your licence allows {limits.max_domains} domain(s) — contact your vendor to add more",
         )
     program = Program(
         tenant_id=principal.tenant_id,
@@ -837,6 +836,8 @@ router.add_api_route("/{program_id}/deltas", _reader(DeltaRepo), methods=["GET"]
 router.add_api_route(
     "/{program_id}/scan-runs", _reader(ScanRunRepo), methods=["GET"], tags=["data"]
 )
+
+
 @router.get("/{program_id}/domain-intel", tags=["data"])
 async def get_domain_intel(
     program: dict = Depends(require_program),
@@ -845,9 +846,7 @@ async def get_domain_intel(
 ) -> dict:
     """Email posture + registration facts for this domain — the current state, as
     opposed to the Findings the same assessment raised."""
-    doc = await DomainIntelRepo.from_mongo(mongo).get(
-        principal.tenant_id, program["program_id"]
-    )
+    doc = await DomainIntelRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
     return clean_doc(doc) or {"email": {}, "registration": {}}
 
 

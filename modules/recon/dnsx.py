@@ -49,9 +49,7 @@ async def recon_hosts(
             if isinstance(vals, str):
                 vals = [vals]
             rec[key].update(str(v) for v in vals if v)
-    return {
-        host: {k: sorted(v) for k, v in rec.items() if v} for host, rec in out.items()
-    }
+    return {host: {k: sorted(v) for k, v in rec.items() if v} for host, rec in out.items()}
 
 
 async def resolve_hosts(

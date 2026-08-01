@@ -23,7 +23,9 @@ FROM node:20-alpine AS build
 WORKDIR /app
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+# --omit=optional drops `sharp` (see frontend/next.config.mjs: image optimisation is
+# off, and sharp's bundled libvips has unfixed high-severity CVEs).
+RUN npm ci --omit=optional
 
 COPY frontend/ ./
 
@@ -44,10 +46,16 @@ RUN npm run build \
 FROM node:20-alpine AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
-COPY --from=build /app/package.json /app/package-lock.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/.next ./.next
+# Patch the OS packages, then delete npm and yarn. We start the server with
+# `node server.js` and never install anything at runtime, so npm is not a dependency —
+# it is just its own large tree of vulnerable packages (tar, glob, sigstore, minimatch)
+# sitting in a shipped image. Trivy reports them because they really are there.
+RUN apk upgrade --no-cache \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx \
+              /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+COPY --from=build /app/.next/standalone ./
+COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
-COPY --from=build /app/next.config.mjs ./
 EXPOSE 3000
-CMD ["npm", "run", "start"]
+ENV PORT=3000 HOSTNAME=0.0.0.0
+CMD ["node", "server.js"]

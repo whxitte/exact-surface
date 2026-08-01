@@ -209,8 +209,7 @@ async def create_member(
     if not can_add_user(limits, len(existing)):
         raise HTTPException(
             status.HTTP_402_PAYMENT_REQUIRED,
-            f"your licence allows {limits.max_users} user(s) — "
-            "contact your vendor to add seats",
+            f"your licence allows {limits.max_users} user(s) — contact your vendor to add seats",
         )
     group_ids = await _validate_group_ids(mongo, principal.tenant_id, body.group_ids)
     # Always MEMBER — the owner role is never conferred through this API.

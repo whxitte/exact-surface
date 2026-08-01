@@ -71,9 +71,7 @@ def _set_plan(client, tenant_id: str, plan: str) -> None:
 
     fake = client.app.dependency_overrides[get_mongo_dep]()
     asyncio.run(
-        fake.collection("tenants").update_one(
-            {"tenant_id": tenant_id}, {"$set": {"plan": plan}}
-        )
+        fake.collection("tenants").update_one({"tenant_id": tenant_id}, {"$set": {"plan": plan}})
     )
 
 

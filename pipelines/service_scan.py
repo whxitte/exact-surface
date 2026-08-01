@@ -53,7 +53,9 @@ async def run_service_scan(
     per_ip = min(timeout, PER_IP_TIMEOUT)
     logger.info(
         "service_scan: nmap -sV on {} IP(s) (≤{:.0f}s each, {} at a time)",
-        len(ports_by_ip), per_ip, CONCURRENCY,
+        len(ports_by_ip),
+        per_ip,
+        CONCURRENCY,
     )
     sem = asyncio.Semaphore(CONCURRENCY)
 
@@ -67,9 +69,7 @@ async def run_service_scan(
                 logger.warning("service_scan: nmap failed for {}: {}", ip, exc)
                 return ip, {}
 
-    svc_maps = dict(
-        await asyncio.gather(*(_scan_ip(ip, pl) for ip, pl in ports_by_ip.items()))
-    )
+    svc_maps = dict(await asyncio.gather(*(_scan_ip(ip, pl) for ip, pl in ports_by_ip.items())))
 
     updated: list[Port] = []
     for p in ports:

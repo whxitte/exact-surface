@@ -81,8 +81,10 @@ def _rdap_payload(expiry_days: int, *, locked=True, dnssec=True) -> dict:
         "entities": [
             {
                 "roles": ["registrar"],
-                "vcardArray": ["vcard", [["version", {}, "text", "4.0"],
-                                          ["fn", {}, "text", "Example Registrar Inc"]]],
+                "vcardArray": [
+                    "vcard",
+                    [["version", {}, "text", "4.0"], ["fn", {}, "text", "Example Registrar Inc"]],
+                ],
             }
         ],
         "nameservers": [{"ldhName": "NS1.EXAMPLE.COM"}],
@@ -229,9 +231,12 @@ async def test_live_domain_is_not_reported():
     async def resolve(_host):
         return ["93.184.216.34"]
 
-    assert await bl.check_link(
-        "https://live-partner.com/docs", "https://acme.com/about", resolve=resolve
-    ) is None
+    assert (
+        await bl.check_link(
+            "https://live-partner.com/docs", "https://acme.com/about", resolve=resolve
+        )
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -290,7 +295,7 @@ def test_hostnames_are_still_found_in_url_context():
 @pytest.mark.parametrize(
     "url",
     [
-        "https://x.com/js/moment/locale/af.js",     # ~100 identical locale bundles
+        "https://x.com/js/moment/locale/af.js",  # ~100 identical locale bundles
         "https://x.com/js/i18n/de.js",
         "https://x.com/static/vendor/thing.js",
         "https://x.com/node_modules/pkg/index.js",

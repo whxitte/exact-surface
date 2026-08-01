@@ -95,8 +95,7 @@ async def run_supply_chain(
             description=risk.evidence,
             severity=risk.severity,
             reproduction=(
-                "curl -s -o /dev/null -w '%{http_code}' "
-                + dc.registry_url(risk.package.name)
+                "curl -s -o /dev/null -w '%{http_code}' " + dc.registry_url(risk.package.name)
             ),
             raw={
                 "package": risk.package.name,
@@ -110,7 +109,9 @@ async def run_supply_chain(
     total, new = await FindingRepo.from_mongo(mongo).upsert_many(findings)
     logger.info(
         "supply_chain: {}/{} package name(s) are unclaimed on npm ({} new)",
-        len(risks), len(packages), new,
+        len(risks),
+        len(packages),
+        new,
     )
     return {
         "packages": len(packages),
@@ -127,9 +128,7 @@ async def _default_fetch(url: str) -> str:  # pragma: no cover - real network
 
     assert_url_allowed(url)
     async with guarded_session() as session:
-        async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=20), ssl=False
-        ) as resp:
+        async with session.get(url, timeout=aiohttp.ClientTimeout(total=20), ssl=False) as resp:
             if resp.status != 200:
                 return ""
             return (await resp.text(errors="ignore"))[:5_000_000]

@@ -36,9 +36,28 @@ PROBE_REDIRECT_URL = f"https://{PROBE_REDIRECT_HOST}/"
 
 #: Query parameters that conventionally carry a post-action destination.
 REDIRECT_PARAMS: tuple[str, ...] = (
-    "url", "redirect", "redirect_uri", "redirect_url", "next", "return", "returnUrl",
-    "return_url", "returnTo", "return_to", "goto", "dest", "destination", "continue",
-    "target", "rurl", "forward", "callback", "back", "backurl", "r", "u",
+    "url",
+    "redirect",
+    "redirect_uri",
+    "redirect_url",
+    "next",
+    "return",
+    "returnUrl",
+    "return_url",
+    "returnTo",
+    "return_to",
+    "goto",
+    "dest",
+    "destination",
+    "continue",
+    "target",
+    "rurl",
+    "forward",
+    "callback",
+    "back",
+    "backurl",
+    "r",
+    "u",
 )
 
 #: header -> product. Matched case-insensitively against header NAMES.

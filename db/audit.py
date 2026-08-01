@@ -77,16 +77,14 @@ class ScanRunRepo:
         """
         now = now or datetime.now(UTC)
         cutoff = now - timedelta(seconds=within_seconds)
-        rows = (
-            await self._c.find(
-                {
-                    "tenant_id": tenant_id,
-                    "program_id": program_id,
-                    "pipeline": "full",
-                    "status": ScanStatus.CANCELLED.value,
-                }
-            ).to_list(None)
-        )
+        rows = await self._c.find(
+            {
+                "tenant_id": tenant_id,
+                "program_id": program_id,
+                "pipeline": "full",
+                "status": ScanStatus.CANCELLED.value,
+            }
+        ).to_list(None)
         for doc in rows:
             finished = _as_aware(doc.get("finished_at") or doc.get("cancelled_at"))
             if finished and finished >= cutoff:
