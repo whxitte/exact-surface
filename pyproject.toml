@@ -1,6 +1,6 @@
 [project]
 name = "exactsurface"
-version = "0.1.0"
+version = "1.0.0"
 description = "Continuous external attack-surface intelligence platform (detection only)"
 requires-python = ">=3.11"
 readme = "README.md"
