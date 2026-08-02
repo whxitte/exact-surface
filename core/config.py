@@ -252,6 +252,38 @@ class Settings(BaseSettings):
     metrics_port: int = Field(default=9100, description="worker/scheduler /metrics port")
     log_level: str = Field(default="INFO")
 
+    @field_validator("license_public_key")
+    @classmethod
+    def _accept_base64_public_key(cls, v: str | None) -> str | None:
+        """Accept the verify key as a PEM *or* as base64 of a PEM.
+
+        A PEM is multi-line, and the two channels that carry this value into an image
+        are both single-line-only:
+
+        * ``build-args:`` in docker/build-push-action is a newline-delimited KEY=VALUE
+          list, so a PEM silently truncates to ``-----BEGIN PUBLIC KEY-----`` and every
+          licence fails to verify -- an instance that enforces but can never be
+          licensed. This shipped in v1.0.0 and was invisible in local builds, where
+          compose's `args:` mapping handles newlines correctly.
+        * ``.env`` has no multi-line syntax either.
+
+        Rather than require operators to remember which channel mangles what, take
+        base64 as well and normalise here.
+        """
+        if not v:
+            return v
+        text = v.strip()
+        if "BEGIN" in text and "END" in text:
+            return text  # already a well-formed PEM
+        import base64
+        import binascii
+
+        try:
+            decoded = base64.b64decode(text, validate=True).decode("utf-8").strip()
+        except (binascii.Error, UnicodeDecodeError, ValueError):
+            return text  # not base64 either; let verification report it
+        return decoded if "BEGIN" in decoded else text
+
     @field_validator("env")
     @classmethod
     def _known_env(cls, v: str) -> str:

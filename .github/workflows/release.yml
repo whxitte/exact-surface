@@ -119,6 +119,25 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # The verify key is a multi-line PEM, and `build-args:` is a newline-delimited
+      # KEY=VALUE list -- passed raw, it truncates to "-----BEGIN PUBLIC KEY-----" and
+      # every image ships unable to verify any licence. v1.0.0 shipped exactly that.
+      # Local builds were fine (compose's `args:` mapping keeps newlines), so this was
+      # only ever visible in a published image. Collapse it to one line here;
+      # core.config accepts base64 or PEM.
+      - name: Collapse the verify key to a single line
+        id: pubkey
+        run: |
+          echo "b64=$(printf '%s' "${{ secrets.LICENSE_PUBLIC_KEY }}" | base64 | tr -d '\n')" >> "$GITHUB_OUTPUT"
+
+      - name: Fail early if the verify key is missing or malformed
+        run: |
+          KEY="$(printf '%s' '${{ steps.pubkey.outputs.b64 }}' | base64 -d 2>/dev/null || true)"
+          case "$KEY" in
+            *"BEGIN PUBLIC KEY"*"END PUBLIC KEY"*) echo "verify key looks well-formed" ;;
+            *) echo "::error::LICENSE_PUBLIC_KEY secret is empty or not a full PEM. Images built from it cannot verify any licence, so every customer would be permanently read-only." ; exit 1 ;;
+          esac
+
       - name: Build + push ${{ matrix.name }}
         id: build
         uses: docker/build-push-action@v6
@@ -134,7 +153,7 @@ jobs:
           build-args: |
             BUILD_ID=${{ needs.verify.outputs.version }}
             GIT_COMMIT=${{ github.sha }}
-            LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
+            LICENSE_PUBLIC_KEY=${{ steps.pubkey.outputs.b64 }}
           cache-from: type=gha,scope=${{ matrix.name }}
           # mode=min + ignore-error, both deliberate.
           #
