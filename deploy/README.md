@@ -200,6 +200,27 @@ docker compose pull && docker compose up -d
 Images are pinned to a version rather than `latest` on purpose: an image that changes
 underneath a running scan is not something you should have to debug.
 
+**Renewing your licence.** You'll receive a new token before or shortly after the old
+one lapses. Update it, then **restart is required** — editing `.env` alone does nothing
+to an already-running container:
+
+```bash
+# edit EXACTSURFACE_LICENSE= in .env, then:
+docker compose up -d
+docker compose logs api | grep "license active"    # confirm the new expiry shows
+```
+
+This isn't optional busywork: the licence is read once when the `api` process starts
+and cached for its whole lifetime, so a container that's already running has no way to
+notice `.env` changed underneath it. If you edit the file and don't see anything
+different, that's why — you haven't recreated the container yet.
+
+You don't need to do this *before* the old licence expires — there's a grace period
+(shown in `docker compose logs api | grep -i licen`) that keeps scanning working for a
+few days past expiry so a slightly-late renewal doesn't interrupt anything. Past grace,
+the instance goes read-only: existing findings stay fully visible and exportable,
+scanning simply pauses until the new token is in and the container is restarted.
+
 ---
 
 ## Troubleshooting
