@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ExactSurface — Continuous attack-surface intelligence, self-hosted</title>
+<meta name="description" content="ExactSurface finds what an attacker sees on your internet-facing surface — subdomains, exposed secrets, misconfigurations, dangling DNS — and runs entirely on your own infrastructure. Your data never leaves your servers." />
+<link rel="icon" href="/favicon.png" type="image/png" />
+<style>
+  :root {
+    --background: 240 10% 4%;
+    --foreground: 0 0% 98%;
+    --card: 240 6% 8%;
+    --primary: 158 64% 42%;
+    --muted: 240 5% 14%;
+    --muted-foreground: 240 5% 60%;
+    --border: 240 5% 16%;
+    --radius: 0.6rem;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  a { color: inherit; }
+
+  /* nav */
+  nav { border-bottom: 1px solid hsl(var(--border)); position: sticky; top: 0; background: hsl(var(--background) / 0.85); backdrop-filter: blur(8px); z-index: 10; }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; border-radius: 6px; }
+  .navlinks { display: flex; align-items: center; gap: 28px; font-size: 14px; color: hsl(var(--muted-foreground)); }
+  .navlinks a { text-decoration: none; }
+  .navlinks a:hover { color: hsl(var(--foreground)); }
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 9px 18px; border-radius: var(--radius); font-size: 14px; font-weight: 600; text-decoration: none; border: 1px solid transparent; white-space: nowrap; }
+  .btn-primary { background: hsl(var(--primary)); color: #06120c; }
+  .btn-primary:hover { opacity: 0.9; }
+  .btn-ghost { border-color: hsl(var(--border)); color: hsl(var(--foreground)); }
+  .btn-ghost:hover { border-color: hsl(var(--primary)); }
+
+  /* hero */
+  header.hero { padding: 96px 0 72px; text-align: center; }
+  .eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: hsl(var(--primary)); background: hsl(var(--primary) / 0.1); border: 1px solid hsl(var(--primary) / 0.3); padding: 5px 12px; border-radius: 999px; margin-bottom: 24px; }
+  h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; max-width: 760px; margin: 0 auto 20px; }
+  .lede { font-size: 18px; color: hsl(var(--muted-foreground)); max-width: 620px; margin: 0 auto 36px; }
+  .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .btn-lg { padding: 12px 24px; font-size: 15px; }
+
+  section { padding: 64px 0; border-top: 1px solid hsl(var(--border)); }
+  h2 { font-size: clamp(24px, 3.5vw, 32px); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 12px; }
+  .section-lede { color: hsl(var(--muted-foreground)); font-size: 15px; max-width: 640px; margin-bottom: 40px; }
+
+  /* trust card */
+  .trust-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 32px; }
+  .trust-card h3 { font-size: 19px; margin-bottom: 10px; }
+  .trust-card p { color: hsl(var(--muted-foreground)); font-size: 14.5px; margin-bottom: 14px; }
+  .trust-card p:last-child { margin-bottom: 0; }
+  .trust-card .label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: hsl(var(--primary)); margin-bottom: 6px; display: block; }
+
+  /* steps */
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+  .step { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 22px; }
+  .step .num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 999px; background: hsl(var(--primary) / 0.15); color: hsl(var(--primary)); font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+  .step h4 { font-size: 15px; margin-bottom: 6px; }
+  .step p { font-size: 13.5px; color: hsl(var(--muted-foreground)); }
+
+  /* capability grid */
+  .cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .cap { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 20px; }
+  .cap h4 { font-size: 14.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+  .cap .dot { width: 7px; height: 7px; border-radius: 999px; background: hsl(var(--primary)); flex-shrink: 0; }
+  .cap p { font-size: 13px; color: hsl(var(--muted-foreground)); }
+  .cap-group-label { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: hsl(var(--muted-foreground)); margin: 32px 0 14px; }
+  .cap-group-label:first-child { margin-top: 0; }
+
+  /* self-hosted band */
+  .band { background: hsl(var(--card)); border-radius: 16px; padding: 48px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; }
+  .band h2 { margin-bottom: 14px; }
+  .band p { color: hsl(var(--muted-foreground)); font-size: 15px; margin-bottom: 14px; }
+  .band code { display: block; background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 16px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: hsl(var(--primary)); overflow-x: auto; white-space: pre; }
+  .checklist { list-style: none; }
+  .checklist li { font-size: 14px; color: hsl(var(--muted-foreground)); padding-left: 24px; position: relative; margin-bottom: 12px; }
+  .checklist li::before { content: "✓"; position: absolute; left: 0; color: hsl(var(--primary)); font-weight: 700; }
+
+  /* pricing */
+  table.pricing { width: 100%; border-collapse: collapse; font-size: 14px; }
+  table.pricing th, table.pricing td { padding: 14px 16px; text-align: left; border-bottom: 1px solid hsl(var(--border)); }
+  table.pricing th { color: hsl(var(--muted-foreground)); font-weight: 600; font-size: 13px; }
+  table.pricing th:not(:first-child), table.pricing td:not(:first-child) { text-align: center; }
+  table.pricing tr td:first-child { color: hsl(var(--muted-foreground)); }
+  table.pricing thead th span.tier { display: block; color: hsl(var(--foreground)); font-size: 15px; font-weight: 700; margin-top: 2px; }
+  .pricing-note { font-size: 13px; color: hsl(var(--muted-foreground)); margin-top: 18px; }
+
+  /* cta band */
+  .cta-band { text-align: center; padding: 80px 0; }
+  .cta-band h2 { margin-bottom: 12px; }
+  .cta-band p { color: hsl(var(--muted-foreground)); margin-bottom: 28px; }
+
+  footer { border-top: 1px solid hsl(var(--border)); padding: 36px 0; }
+  footer .wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+  footer .flinks { display: flex; gap: 22px; font-size: 13px; color: hsl(var(--muted-foreground)); }
+  footer .flinks a { text-decoration: none; }
+  footer .flinks a:hover { color: hsl(var(--foreground)); }
+  footer .fnote { font-size: 12.5px; color: hsl(var(--muted-foreground)); }
+
+  @media (max-width: 860px) {
+    .steps, .cap-grid { grid-template-columns: 1fr 1fr; }
+    .band { grid-template-columns: 1fr; padding: 32px; }
+    .navlinks { display: none; }
+  }
+  @media (max-width: 560px) {
+    .steps, .cap-grid { grid-template-columns: 1fr; }
+    table.pricing { display: block; overflow-x: auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="/logo.png" alt="" /> ExactSurface</a>
+    <div class="navlinks">
+      <a href="#how-it-works">How it works</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#pricing">Pricing</a>
+      <a href="https://demo.exactsurface.com" target="_blank" rel="noopener">Live demo</a>
+    </div>
+    <a class="btn btn-primary" href="https://demo.exactsurface.com" target="_blank" rel="noopener">Try the demo</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <span class="eyebrow">Self-hosted · Detection-only</span>
+    <h1>See your attack surface the way an attacker does — on your own infrastructure.</h1>
+    <p class="lede">ExactSurface continuously discovers what's internet-facing, watches it for change, and reports exposures with the exact request behind every finding. You run it. Your data never leaves your servers.</p>
+    <div class="hero-ctas">
+      <a class="btn btn-primary btn-lg" href="https://demo.exactsurface.com" target="_blank" rel="noopener">Try the live demo</a>
+      <a class="btn btn-ghost btn-lg" href="#pricing">See pricing</a>
+    </div>
+  </div>
+</header>
+
+<section id="trust">
+  <div class="wrap">
+    <h2>Nobody can point it at a domain they have not verified</h2>
+    <p class="section-lede">Every scan starts with proof of control — a DNS TXT record or an HTTP file only the domain's owner could place. That gate cannot be skipped in the UI or the API, for any user of the product.</p>
+    <div class="trust-card">
+      <span class="label">What we do not claim</span>
+      <p>Because you host it, whoever administers your deployment also owns its database and could write a verification record by hand. No self-hosted software can prevent that, and we would rather say so than imply a guarantee we cannot keep.</p>
+      <p>What the verification gate does guarantee: no user of the product — including one with an API key — can get the scanner to touch a domain nobody on that instance has proven they control. That protection is centralized in one scope engine, not scattered per-module, so a bug in one detector can't quietly open a hole in it.</p>
+    </div>
+  </div>
+</section>
+
+<section id="how-it-works">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="section-lede">The same flow every time — no domain is ever touched without going through all four steps.</p>
+    <div class="steps">
+      <div class="step">
+        <span class="num">1</span>
+        <h4>Add a domain</h4>
+        <p>Point ExactSurface at a domain you own or are contractually authorized to test.</p>
+      </div>
+      <div class="step">
+        <span class="num">2</span>
+        <h4>Verify ownership</h4>
+        <p>A DNS TXT record or an HTTP file — proof only the real owner could place.</p>
+      </div>
+      <div class="step">
+        <span class="num">3</span>
+        <h4>Authorize scanning</h4>
+        <p>Confirm the authorization record. Dedicated IP ranges are checked against your domain's real announced ASN before anything aggressive runs.</p>
+      </div>
+      <div class="step">
+        <span class="num">4</span>
+        <h4>Watch continuously</h4>
+        <p>Subdomains, then live hosts, then exposures — findings arrive progressively and re-scan on your schedule.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="capabilities">
+  <div class="wrap">
+    <h2>What it actually finds</h2>
+    <p class="section-lede">Every module below runs in the product today. Detection only — nothing here ever attempts exploitation.</p>
+
+    <div class="cap-group-label">Discovery</div>
+    <div class="cap-grid">
+      <div class="cap"><h4><span class="dot"></span>Subdomain discovery</h4><p>subfinder + certificate transparency, resolved and probed for what's actually alive.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Cloud asset inventory</h4><p>Asks your own AWS/GCP/Azure/DigitalOcean accounts what they're running — the load balancer nobody named.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Reverse-DNS sweep</h4><p>PTR-sweeps ASN-confirmed ranges for hosts that exist but were never published in DNS.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Hidden parameters</h4><p>Finds undocumented parameters a URL silently accepts, without submitting a hostile value.</p></div>
+      <div class="cap"><h4><span class="dot"></span>JavaScript mining</h4><p>Extracts endpoints, internal paths and secrets referenced in shipped JS bundles.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Content discovery</h4><p>Finds hidden paths and files on hosts confirmed to be dedicated to you.</p></div>
+    </div>
+
+    <div class="cap-group-label">Exposure & misconfiguration</div>
+    <div class="cap-grid">
+      <div class="cap"><h4><span class="dot"></span>Vulnerability scanning</h4><p>Nuclei detection templates, with a safe policy that always excludes DoS, intrusive and fuzzing tags.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Exposed secrets</h4><p>Scans endpoint responses for leaked credentials — stored masked, never in the clear.</p></div>
+      <div class="cap"><h4><span class="dot"></span>CORS, redirects & WAF</h4><p>Misconfigured cross-origin policy, open redirects, and which CDN/WAF actually fronts each host.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Subdomain takeover</h4><p>Dangling CNAMEs and dangling A-records pointed at infrastructure nobody controls anymore.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Cloud storage exposure</h4><p>Checks S3/GCS/Azure bucket names derived from your domain for public access.</p></div>
+      <div class="cap"><h4><span class="dot"></span>TLS inspection</h4><p>Certificate chain and expiry across every alive host.</p></div>
+    </div>
+
+    <div class="cap-group-label">Intelligence & supply chain</div>
+    <div class="cap-grid">
+      <div class="cap"><h4><span class="dot"></span>Domain intelligence</h4><p>Email spoofability (SPF/DMARC/DKIM) and registration risk — fully passive.</p></div>
+      <div class="cap"><h4><span class="dot"></span>CVE watch</h4><p>Matches fingerprinted technology against new CVE and CISA-KEV feeds.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Dependency confusion</h4><p>Internal package names referenced in your code that nobody has claimed on the public registry.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Lookalike domains</h4><p>Registered typosquats set up to phish your staff and customers, checked for live mail.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Public code leaks</h4><p>Searches public repositories for secrets referencing your domain.</p></div>
+      <div class="cap"><h4><span class="dot"></span>Risk correlation</h4><p>Chains related findings across modules into a prioritized attack path, not a flat list.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="self-hosted">
+  <div class="wrap">
+    <div class="band">
+      <div>
+        <h2>Runs on your infrastructure. Full stop.</h2>
+        <p>There is no vendor cloud holding your attack surface data. Every finding, every scan log, every credential you configure stays inside your own deployment.</p>
+        <p>Three pre-built images, no source code required. Install is a compose file and a licence token.</p>
+        <ul class="checklist">
+          <li>MongoDB and Redis never publish a port to the host</li>
+          <li>TLS terminated automatically via Let's Encrypt</li>
+          <li>Politeness rate cap on every scan, so it never looks like an attack to your own monitoring</li>
+          <li>Images pinned to a version — nothing changes under a running scan</li>
+        </ul>
+      </div>
+      <code>tar xzf exactsurface-1.0.0.tar.gz
+cd exactsurface-1.0.0
+cp .env.example .env
+docker compose up -d</code>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="wrap">
+    <h2>Pricing</h2>
+    <p class="section-lede">Domains are the metric. Every tier gets the full detection core — subdomain discovery, probing, crawling, vulnerability scanning, secrets, CVE watch, correlation and alerting are in Free too. Tiers differ on scale, speed and a handful of modules that need scale or a third-party key.</p>
+    <table class="pricing">
+      <thead>
+        <tr>
+          <th></th>
+          <th><span class="tier">Free</span></th>
+          <th><span class="tier">Pro</span></th>
+          <th><span class="tier">Business</span></th>
+          <th><span class="tier">Enterprise</span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Domains</td><td>1</td><td>5</td><td>25</td><td>Unlimited</td></tr>
+        <tr><td>Users</td><td>1</td><td>3</td><td>15</td><td>Unlimited</td></tr>
+        <tr><td>Fastest re-scan</td><td>Daily</td><td>Every 6h</td><td>Hourly</td><td>Every 15 min</td></tr>
+        <tr><td>History kept</td><td>30 days</td><td>180 days</td><td>1 year</td><td>3 years</td></tr>
+        <tr><td>On-demand bypass</td><td>—</td><td>✓</td><td>✓</td><td>✓</td></tr>
+        <tr><td>Scheduled reports</td><td>—</td><td>✓</td><td>✓</td><td>✓</td></tr>
+      </tbody>
+    </table>
+    <p class="pricing-note">Pro adds TLS inspection, service fingerprinting and hidden parameters. Business adds lookalike domains, cloud buckets, cloud asset inventory, template watch, dorking and internet-index search. Enterprise includes every module, present and future.</p>
+  </div>
+</section>
+
+<section class="cta-band">
+  <div class="wrap">
+    <h2>See what's already on your surface.</h2>
+    <p>The live demo is read-only, seeded with real output, and needs no signup.</p>
+    <a class="btn btn-primary btn-lg" href="https://demo.exactsurface.com" target="_blank" rel="noopener">Open the demo</a>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="/logo.png" alt="" /> ExactSurface</a>
+    <div class="flinks">
+      <a href="#pricing">Pricing</a>
+      <a href="https://demo.exactsurface.com" target="_blank" rel="noopener">Demo</a>
+    </div>
+    <div class="fnote">Detection only. Never exploitation. © ExactSurface.</div>
+  </div>
+</footer>
+
+</body>
+</html>

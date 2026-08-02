@@ -379,6 +379,19 @@ def test_the_demo_site_never_enters_a_product_image():
     assert "demo" in (REPO / ".dockerignore").read_text().split()
 
 
+def test_the_marketing_site_never_enters_a_product_image():
+    """website/ is static marketing HTML deployed to Vercel -- it has no reason to be
+    in a product image, and shipping it there would just be bloat and an unreviewed
+    surface. Same hygiene as demo/ and devtools/, for the same reason: an explicit
+    COPY list can't accidentally sweep it in, but only if nobody adds `COPY . .`."""
+    assert (REPO / "website").is_dir(), "website/ is missing"
+    for name in ("Dockerfile.api", "Dockerfile.pipeline", "Dockerfile.frontend"):
+        path = REPO / "docker" / name
+        if path.exists():
+            assert "website/" not in path.read_text(), f"{name} references website/"
+    assert "website" in (REPO / ".dockerignore").read_text().split()
+
+
 def test_devtools_is_not_a_service_in_the_production_compose_file():
     compose = REPO / "docker-compose.yml"
     if compose.exists():
