@@ -230,6 +230,13 @@ mismatch is how customers end up on a build you can't identify.
 licence you mint, not a code change or a new tier. `--features` adds individual optional
 modules on top of the tier's set.
 
+> **Unlimited is an omitted flag, never `0`.** A cap of zero allows *nothing* —
+> `can_add_domain()` reads it as "fewer than zero domains", so the customer can never add
+> one and only finds out after installing. Leave `--domains` off to get the tier's
+> default, which is unlimited on `enterprise`. The CLI now refuses `0` outright, and the
+> summary line it prints says either a number or the word `unlimited` — read it before
+> you send the file.
+
 ```bash
 python -m scripts.license issue \
     --private-key ~/exactsurface-keys/private.pem \
@@ -253,6 +260,32 @@ docker cp ./cp-data/licenses.json exactsurface-control-plane-control-plane-1:/da
 
 Record in your own ledger (a spreadsheet is fine): customer, `license_id`, plan, domains,
 paid-through date, contact email, invoice number.
+
+### 3.2b Your own licence, for testing release images
+
+A release image enforces licensing unconditionally — `RELEASE_BUILD` is stamped into
+`core/build_info.py` at build time and `licence_enforced()` ignores every environment
+variable once it is set. **That includes yours.** It has to: customers run the identical
+image, so an owner-only escape hatch would be a customer-usable one.
+
+So when you pull a published image to smoke-test it, you need a licence like anyone else.
+Mint yourself one and keep it:
+
+```bash
+python -m scripts.license issue --private-key ~/exactsurface-keys/private.pem --customer "ExactSurface (internal)" --plan enterprise --months 120 --out ~/exactsurface-keys/owner.jwt
+```
+
+```bash
+EXACTSURFACE_LICENSE="$(cat ~/exactsurface-keys/owner.jwt)" docker compose -f docker/docker-compose.yml up -d
+```
+
+Do **not** register this one with `--store`: it is not a sale and should not appear in the
+control plane's ledger or your revenue count.
+
+For day-to-day development, use the dev build instead — it is not stamped `--release`, so
+enforcement follows `EXACTSURFACE_LICENSE_ENFORCED` and defaults to off. Needing a licence
+locally is a sign you are running the customer image, which you only want when you are
+deliberately checking the customer's experience.
 
 ### 3.3 What you hand over
 

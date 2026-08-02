@@ -65,6 +65,21 @@ def _cmd_keygen(args: argparse.Namespace) -> int:
 def _cmd_issue(args: argparse.Namespace) -> int:
     private_pem = Path(args.private_key).read_text()
     plan = Plan(args.plan)
+    # 0 is the trap: it looks like "no limit" but means a cap of zero, and
+    # can_add_domain() then refuses every domain forever. Unlimited is None, which you
+    # get by omitting the flag. Minting one of these for a paying customer would ship
+    # them a product that cannot be used at all, so refuse rather than obey.
+    for name, value in (("--domains", args.domains), ("--users", args.users)):
+        if value is not None and value < 1:
+            print(
+                f"error: {name} must be 1 or more (got {value}). For unlimited, omit "
+                f"{name} entirely -- a cap of 0 allows nothing, it does not mean 'no cap'.",
+                file=sys.stderr,
+            )
+            return 2
+    if args.months < 1:
+        print(f"error: --months must be 1 or more (got {args.months}).", file=sys.stderr)
+        return 2
     domains = args.domains if args.domains is not None else _PLAN_DEFAULT_DOMAINS[args.plan]
     now = datetime.now(UTC)
     ent = Entitlements(
