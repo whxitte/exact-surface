@@ -61,7 +61,17 @@ MODULES: tuple[ModuleSpec, ...] = (
         "you find the load balancer or VM nobody pointed a DNS name at. Credentials "
         "stay in your deployment and are never sent anywhere.",
         default_enabled=False,
-        opt_in_reason="needs read-only credentials for your cloud accounts",
+        # Deliberately NOT "set it in Settings" — unlike every other opt-in module's
+        # reason string, this one is not a per-tenant API key. Cloud provider
+        # credentials carry read access to a whole account, wider blast radius than a
+        # Shodan/SerpAPI key, so this module was built to never let them touch the
+        # database at all (modules/recon/cloudlist.py) — they live only in a file the
+        # operator mounts. The Settings page has no field for this on purpose; without
+        # this sentence a customer has no way to discover that from the product itself.
+        opt_in_reason=(
+            "set up by whoever deployed this instance, not from Settings — see "
+            "CLIENT_GUIDE.md §5.9 (EXACTSURFACE_CLOUDLIST_CONFIG)"
+        ),
     ),
     ModuleSpec(
         "uncover",

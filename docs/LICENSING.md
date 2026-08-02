@@ -69,8 +69,20 @@ the scheduler/worker), so a patched frontend cannot re-enable scanning.
 ## Renewal
 
 - **Offline:** mint a new token with a later `--expires`/`--months` and hand it to the
-  customer (new env value or replace the mounted file). It takes effect on the next
-  license check — no restart needed.
+  customer. **Whether a restart is needed depends on which of the two delivery methods
+  they use** — this genuinely differs, do not conflate them:
+  - `EXACTSURFACE_LICENSE_FILE` (a mounted file) — replacing the file's *contents* on
+    the host takes effect on the next license check, **no restart needed**: the
+    instance re-reads the file from disk on every check, and a bind-mounted file's
+    content is live inside the container the instant it changes on the host.
+  - `EXACTSURFACE_LICENSE` (a plain env var, which is what `deploy/.env.example` — the
+    customer bundle — actually uses) — **a restart *is* required.** `Settings` is
+    built once per process and cached; an env var's value is fixed for the container's
+    entire lifetime regardless of what the host's `.env` file says afterward. The
+    customer edits `.env`, then runs `docker compose up -d` to recreate the container
+    with the new value. Telling them "just edit the file" without the restart step
+    leaves a valid new token sitting unused while the instance keeps enforcing the old,
+    expiring one — and nothing in the UI explains why renewing appeared to do nothing.
 - **Hybrid (online refresh):** run a small license server at `EXACTSURFACE_LICENSE_REFRESH_URL`.
   Each instance periodically calls it:
 

@@ -152,6 +152,25 @@ def test_opt_in_modules_explain_themselves():
             assert spec.opt_in_reason.strip(), f"{spec.name} is opt-in but gives no reason"
 
 
+def test_cloud_assets_reason_does_not_imply_a_settings_field():
+    """The one opt-in module with no per-tenant credential field must say so.
+
+    Every other opt-in module's reason names an API key you paste into Settings
+    (Shodan, Censys, SerpApi, ...) and INTEGRATION_KEYS backs that with a real field.
+    cloud_assets is different on purpose -- cloud provider credentials are wider blast
+    radius than an API key, so the module was built to never let them touch the
+    database (modules/recon/cloudlist.py); they live only in an operator-mounted file.
+    Reusing the generic "needs a ... key" phrasing here reads exactly like every
+    self-service module and sends a customer looking for a field that does not exist.
+    """
+    spec = next(m for m in registry.MODULES if m.name == "cloud_assets")
+    reason = spec.opt_in_reason.lower()
+    assert "settings" not in reason or "not from settings" in reason
+    assert "cloudlist" in reason or "client_guide" in reason.lower(), (
+        "cloud_assets' opt_in_reason must point at where the real setup steps live"
+    )
+
+
 def test_every_module_has_user_facing_text():
     for spec in registry.MODULES:
         assert spec.label.strip(), f"{spec.name} has no label"
