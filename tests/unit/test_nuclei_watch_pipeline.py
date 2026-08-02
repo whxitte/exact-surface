@@ -46,6 +46,57 @@ async def test_uses_the_real_corpus_by_default():
     assert res.get("new_templates") == []
 
 
+async def test_unreadable_template_dir_degrades_instead_of_raising(tmp_path, monkeypatch):
+    """A corpus directory we cannot stat must skip to the next candidate.
+
+    The default search path includes /root/nuclei-templates, which every non-root
+    process is forbidden to stat. Letting that PermissionError escape took the whole
+    nuclei_watch stage down on any deployment not running the scanner as root — and
+    silently, since the stage is scheduled rather than user-triggered.
+    """
+    import os
+
+    import pytest
+
+    from modules.scanning import nuclei
+
+    if os.geteuid() == 0:
+        pytest.skip("root can stat any directory, so mode 000 proves nothing")
+
+    # Two ways a candidate can be unusable, both of which happen in the wild:
+    #   unstattable -- parent is mode 700, so we cannot even stat the child. This is
+    #                  literally /root/nuclei-templates seen by a non-root scanner.
+    #   unlistable  -- the directory stats fine but cannot be opened.
+    home = tmp_path / "home"
+    (home / "nuclei-templates").mkdir(parents=True)
+    unstattable = home / "nuclei-templates"
+
+    unlistable = tmp_path / "unlistable"
+    unlistable.mkdir()
+
+    readable = tmp_path / "corpus" / "http" / "cves" / "2024"
+    readable.mkdir(parents=True)
+    (readable / "CVE-2024-1234.yaml").write_text("id: CVE-2024-1234\n")
+
+    home.chmod(0o000)
+    unlistable.chmod(0o000)
+    try:
+        monkeypatch.setattr(
+            nuclei,
+            "_TEMPLATE_DIRS",
+            (str(unstattable), str(unlistable), str(tmp_path / "corpus")),
+            raising=True,
+        )
+        found = await nuclei.list_templates()
+    finally:
+        home.chmod(0o755)
+        unlistable.chmod(0o755)
+
+    # Skipped the unreadable candidate and used the next one, rather than raising.
+    assert [t["id"] for t in found] == ["CVE-2024-1234"]
+    assert found[0]["tags"] == ["http", "cves", "2024"]
+
+
 async def test_no_tech_skips():
     mongo = FakeMongo()
     await ProgramRepo.from_mongo(mongo).save(

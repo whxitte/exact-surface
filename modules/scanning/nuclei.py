@@ -188,14 +188,35 @@ def _scan_template_dir() -> list[dict]:
     root: Path | None = None
     for candidate in _TEMPLATE_DIRS:
         path = Path(os.path.expanduser(candidate))
-        if path.is_dir():
+        # A candidate we are not allowed to stat is not a corpus we can read. The
+        # default list includes /root/nuclei-templates, which is unreadable to every
+        # non-root process, so this is the ordinary case whenever the scanner is not
+        # running as root -- it must skip to the next candidate, not raise.
+        try:
+            is_dir = path.is_dir()
+        except OSError:
+            continue
+        # Being a directory is not enough: one we cannot list would make us commit to an
+        # empty corpus and never try the readable candidate behind it -- a silent
+        # false "no templates" is worse than the crash this replaced.
+        if is_dir and os.access(path, os.R_OK | os.X_OK):
             root = path
             break
     if root is None:
         return []
 
     out: list[dict] = []
-    for path in root.rglob("*.yaml"):
+    # rglob yields lazily, so a permission error deep in the tree surfaces mid-walk.
+    # Keep whatever we read rather than discarding a good partial listing.
+    try:
+        walked = list(root.rglob("*.yaml"))
+    except OSError as exc:
+        from core.logging import logger
+
+        logger.warning("nuclei: template tree {} is not fully readable ({})", root, exc)
+        return []
+
+    for path in walked:
         rel = path.relative_to(root)
         if rel.parts and rel.parts[0].startswith("."):
             continue

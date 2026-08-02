@@ -175,10 +175,17 @@ async def test_stream_tool_handles_lines_over_64kb():
     # raise "Separator is not found, and chunk exceed the limit" (the nuclei crash).
     from modules.exec import stream_tool
 
-    big = "x" * 200_000  # 200 KB, well past the 64 KB readline limit
+    # The child generates the long line itself. Passing 200 KB as an argv entry instead
+    # fails with E2BIG on Linux, which caps a *single* argument at MAX_ARG_STRLEN
+    # (128 KB) -- the process would die before reaching the code under test.
+    size = 200_000  # well past the 64 KB readline limit
+    big = "x" * size
     seen: list[str] = []
     rc, out, _err, timed_out = await stream_tool(
-        "sh", ["-c", f"printf '%s\\nsmall\\n' '{big}'"], timeout=10, on_stdout=seen.append
+        "sh",
+        ["-c", f"head -c {size} /dev/zero | tr '\\0' 'x'; printf '\\nsmall\\n'"],
+        timeout=10,
+        on_stdout=seen.append,
     )
     assert not timed_out and rc == 0
     assert out == [big, "small"] and seen == [big, "small"]
