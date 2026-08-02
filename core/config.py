@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 from functools import lru_cache
 
-from pydantic import Field, SecretStr, field_validator
+from pydantic import AliasChoices, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -193,7 +193,17 @@ class Settings(BaseSettings):
     license_public_key: str | None = Field(default=None)
     # The signed license token itself, or a path to a file containing it. The token
     # (env) wins if both are set; the file lets ops mount a license without an env var.
-    license_token: str | None = Field(default=None)
+    #
+    # Accepts EXACTSURFACE_LICENSE as well as the prefix-derived
+    # EXACTSURFACE_LICENSE_TOKEN. Every document we ship tells customers to set
+    # EXACTSURFACE_LICENSE, and without this alias that variable was read by nothing:
+    # the instance stayed read-only with "no license configured" while the operator
+    # stared at a correctly-set environment variable. The short name is the documented
+    # one, so it is the one that must work.
+    license_token: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("EXACTSURFACE_LICENSE", "EXACTSURFACE_LICENSE_TOKEN"),
+    )
     license_file: str | None = Field(default=None)
     # How often the instance re-evaluates the clock and (if configured) refreshes the
     # license from the license server. Also the clock high-water-mark cadence.

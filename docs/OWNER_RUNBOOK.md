@@ -276,8 +276,21 @@ python -m scripts.license issue --private-key ~/exactsurface-keys/private.pem --
 ```
 
 ```bash
-EXACTSURFACE_LICENSE="$(cat ~/exactsurface-keys/owner.jwt)" docker compose -f docker/docker-compose.yml up -d
+export LICENSE_PUBLIC_KEY="$(cat ~/exactsurface-keys/public.pem)"
+export EXACTSURFACE_LICENSE="$(cat ~/exactsurface-keys/owner.jwt)"
+docker compose -f docker/docker-compose.yml up -d --build
 ```
+
+Both variables matter, for different reasons. `EXACTSURFACE_LICENSE` is the token and is
+read at run time. `LICENSE_PUBLIC_KEY` is a **build** arg: the verify key is baked into
+the image, so an image built without it verifies every licence against an empty key and
+stays read-only no matter what token you supply. Images pulled from GHCR already carry
+the key (the release workflow supplies it), so you only need it when building locally.
+
+If the banner persists, check the token actually reached the container — `docker compose
+exec api printenv EXACTSURFACE_LICENSE` should print it, and
+`docker compose exec api printenv EXACTSURFACE_LICENSE_PUBLIC_KEY` a PEM block. A service
+compose reports as `Running` rather than `Recreated` did not pick up new environment.
 
 Do **not** register this one with `--store`: it is not a sale and should not appear in the
 control plane's ledger or your revenue count.

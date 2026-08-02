@@ -7,6 +7,19 @@ name: exactsurface
 x-backend-env: &backend-env
   EXACTSURFACE_MONGO_URI: mongodb://mongo:27017
   EXACTSURFACE_REDIS_URI: redis://redis:6379/0
+  # The licence, passed through from the host environment. Without these two lines
+  # `EXACTSURFACE_LICENSE=… docker compose up` set the variable on the compose CLI and
+  # nowhere else: the containers never saw it, compose reported the services already
+  # "Running" because nothing about them had changed, and the app sat in read-only mode
+  # insisting no licence was configured. Empty is equivalent to unset (core.entitlements
+  # tests the token for truthiness), so leaving them off the host env is harmless.
+  #
+  # Not listed here: EXACTSURFACE_LICENSE_PUBLIC_KEY. It is baked into the image as an
+  # ENV at build time, and a `${…:-}` default would overwrite that with an empty string
+  # for anyone who has not exported it -- turning a correctly-licensed deployment
+  # read-only. Override it through ../.env, which only sets what it actually contains.
+  EXACTSURFACE_LICENSE: ${EXACTSURFACE_LICENSE:-}
+  EXACTSURFACE_LICENSE_FILE: ${EXACTSURFACE_LICENSE_FILE:-}
 
 services:
   mongo:
@@ -42,6 +55,8 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.pipeline
+      args:
+        LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
     command: ["python", "-m", "daemon.main", "--dry-run"]
     env_file: ../.env
     environment: *backend-env
@@ -82,6 +97,10 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
+      # Without this a locally built image bakes an EMPTY verify key, so every licence
+      # fails verification and the instance is read-only no matter what token you set.
+      args:
+        LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
     env_file: ../.env
     environment: *backend-env
     restart: unless-stopped
