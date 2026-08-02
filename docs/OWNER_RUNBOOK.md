@@ -27,6 +27,24 @@ because a security scanner running stale detections is worthless within weeks.
 **What you never have:** their attack-surface data, their findings, their traffic, their
 compute bill, or liability for their scanning.
 
+**The customer's instance works completely with the control plane never having existed.**
+Licence checks verify a signed token locally against a baked-in public key — no network
+call required. The control plane only adds automatic renewal and fresh detection content
+between releases, both best-effort; either can be absent and nothing about scanning,
+verification, or findings is affected. If a customer stands one up before you have a
+control plane running, or you take yours down for maintenance, their instance keeps
+working on whatever it already had. This is confirmed in a real deployment, not just by
+reading the code — a licensed instance ran a full scan to completion with no control
+plane configured at all during the pre-launch dry run (§3.2d).
+
+**If a customer or their counsel asks whether the deployment owner (them, or you if you
+manage it for them) can bypass domain-ownership verification:** yes, technically —
+whoever has direct database access can write a verified record by hand, the same as
+anyone with root on the box could. This is the same trust boundary as licence
+enforcement, stated in full in [`SECURITY.md`](SECURITY.md) §2b, including the exact
+command that would do it. Point them there rather than answering from memory — it is
+the one page written to be quoted back to a skeptical security team.
+
 ---
 
 ## 1. One-time setup (do this once, ever)

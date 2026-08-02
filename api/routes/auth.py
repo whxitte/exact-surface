@@ -69,6 +69,22 @@ async def _issue_and_send_verification(
         logger.warning("verification email to {} not sent: {}", email, type(exc).__name__)
 
 
+@router.get("/signup-open")
+async def signup_open(mongo: Any = Depends(get_mongo_dep)) -> dict:
+    """Whether /auth/signup will currently accept a new tenant.
+
+    Unauthenticated on purpose — the login page calls this to decide whether to show
+    "Create one" at all. Without it the link was unconditional: on any instance past
+    its first account, clicking it walked a customer through a full signup form only
+    to fail at submission with a 403. The signup endpoint's own check
+    (self.count() > 0 and not public_signup_open) is unchanged and remains the actual
+    enforcement — this only mirrors that decision so the UI can match reality instead
+    of a raw boolean and a count().
+    """
+    open_ = get_settings().public_signup_open or await TenantRepo.from_mongo(mongo).count() == 0
+    return {"open": open_}
+
+
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("60/minute")
 async def signup(

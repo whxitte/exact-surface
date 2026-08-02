@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
@@ -16,6 +16,17 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  // Self-hosted instances serve one organisation: signup closes after the first
+  // account. Defaults to hidden rather than shown-then-yanked, so the common case
+  // (an already-set-up instance) never flashes a link that would 403 on submit.
+  const [signupOpen, setSignupOpen] = useState(false);
+
+  useEffect(() => {
+    api
+      .signupOpen()
+      .then((r) => setSignupOpen(r.open))
+      .catch(() => {}); // instance state is unknown; stay hidden rather than guess
+  }, []);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -61,12 +72,14 @@ export default function LoginPage() {
         </CardContent>
       </Card>
 
-      <p className="text-center text-sm text-muted-foreground">
-        No account?{" "}
-        <Link href="/signup" className="text-primary hover:underline">
-          Create one
-        </Link>
-      </p>
+      {signupOpen && (
+        <p className="text-center text-sm text-muted-foreground">
+          No account?{" "}
+          <Link href="/signup" className="text-primary hover:underline">
+            Create one
+          </Link>
+        </p>
+      )}
     </div>
   );
 }

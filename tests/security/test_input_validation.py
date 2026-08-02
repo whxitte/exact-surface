@@ -147,6 +147,35 @@ def test_public_signup_closes_after_the_first_org_in_prod(app_ctx, monkeypatch):
     assert "already set up" in r.json()["detail"]
 
 
+def test_signup_open_endpoint_matches_what_signup_itself_enforces(app_ctx, monkeypatch):  # noqa: F811
+    """/auth/signup-open must agree with /auth/signup, or the frontend lies.
+
+    The login page shows "Create one" only when this says open: true. Before this
+    endpoint existed the link was unconditional -- shown on every instance, whether
+    or not signup would actually succeed -- so a customer past their first account
+    could walk an entire signup form only to be 403'd on submit. Unauthenticated on
+    purpose: the login page has no session yet when it needs the answer.
+    """
+    from core.config import get_settings
+
+    client, _ = app_ctx
+    assert client.get("/auth/signup-open").json() == {"open": True}
+
+    signup(client, email="owner@self.host", name="Self Hosted")
+    monkeypatch.setattr(get_settings(), "env", "prod")
+    monkeypatch.setattr(get_settings(), "allow_public_signup", False)
+    assert client.get("/auth/signup-open").json() == {"open": False}
+
+    r = client.post(
+        "/auth/signup",
+        json={"email": "stranger@evil.com", "password": "supersecret1", "tenant_name": "Evil"},
+    )
+    assert r.status_code == 403  # signup-open said closed, and signup itself agrees
+
+    monkeypatch.setattr(get_settings(), "allow_public_signup", True)
+    assert client.get("/auth/signup-open").json() == {"open": True}
+
+
 def test_operator_can_opt_into_multi_tenant_signup(app_ctx, monkeypatch):  # noqa: F811
     """The lock is a safe default, not a hard limit — a multi-tenant deployment opts in."""
     from core.config import get_settings
