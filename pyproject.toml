@@ -58,7 +58,11 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
 ignore = ["S101", "UP042", "ASYNC109"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S", "B"]
+# ASYNC240: test fakes routinely stand in for a tool-runner by writing a tiny fixture
+# file synchronously inside an `async def` -- same justification as backup.py below,
+# a single test's event loop has nothing else pending, so it is not actually blocking
+# anything. Recurs every time a test fakes a tool that writes an output file.
+"tests/**" = ["S", "B", "ASYNC240"]
 # HTML template strings are more readable unwrapped than line-broken.
 "modules/reporting/html_report.py" = ["E501"]
 # ASYNC230/240 guard against blocking a loop that has other work to do. backup.py is

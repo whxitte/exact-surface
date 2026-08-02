@@ -229,18 +229,36 @@ def build_attempts(url: str) -> list[Attempt]:
 
 
 # -- decision ----------------------------------------------------------------
-def classify(baseline: ProbeResult, cand: ProbeResult) -> str | None:
+def classify(
+    baseline: ProbeResult, cand: ProbeResult, *, root_baseline: ProbeResult | None = None
+) -> str | None:
     """Confidence that *cand* bypassed the *baseline* 403/401 — "high"/"medium"/None.
 
     A 2xx where we were forbidden is a bypass — unless the body is byte-identical to
     the forbidden response (a WAF/block page served with a 200). A non-auth redirect is
     a weaker (medium) signal. Anything else is not a bypass.
+
+    ``root_baseline`` matters only for the URL-rewrite header techniques (X-Original-URL
+    and friends), whose request target is the site ROOT, not the forbidden endpoint —
+    the technique asks the backend to rewrite root to the forbidden path. Without this
+    check, a target whose root is simply public passes every one of those four
+    techniques trivially: the candidate response only proves root is public, which was
+    already true and says nothing about whether the header reached the forbidden
+    endpoint. If the candidate is identical to what root already returns with no header
+    at all, the header did nothing and this must not be reported as a bypass.
     """
     if baseline.status not in FORBIDDEN_STATUSES:
         return None
     if cand.status in SUCCESS_STATUSES:
         if cand.body_sample and cand.body_sample == baseline.body_sample:
             return None  # same page, just a different status code — not a real bypass
+        if (
+            root_baseline is not None
+            and root_baseline.status in SUCCESS_STATUSES
+            and cand.body_sample
+            and cand.body_sample == root_baseline.body_sample
+        ):
+            return None  # identical to root's own unconditional response — the header did nothing
         return "high"
     if cand.status in REDIRECT_STATUSES:
         loc = (cand.location or "").lower()
@@ -307,6 +325,18 @@ async def run_bypass(
             "bypasses": [],
         }
 
+    # One extra request, used only to keep the URL-rewrite header techniques honest —
+    # see classify()'s root_baseline docstring. Skipped when the forbidden URL already
+    # IS root, since baseline already covers that case.
+    parts = urlsplit(url)
+    root_url = urlunsplit((parts.scheme, parts.netloc, "/", "", ""))
+    root_baseline: ProbeResult | None = None
+    if root_url != url:
+        try:
+            root_baseline = await probe(root_url, "GET", {})
+        except Exception:  # noqa: BLE001, S112 - no root baseline just disables that guard
+            root_baseline = None
+
     attempts = build_attempts(url)
     found: list[dict] = []
     for attempt in attempts:
@@ -316,7 +346,7 @@ async def run_bypass(
             cand = await probe(attempt.url, attempt.method, attempt.headers)
         except Exception:  # noqa: BLE001, S112 - a failed probe is simply not a bypass
             continue
-        confidence = classify(baseline, cand)
+        confidence = classify(baseline, cand, root_baseline=root_baseline)
         if confidence is None:
             continue
         if reconfirm:
@@ -324,7 +354,7 @@ async def run_bypass(
                 again = await probe(attempt.url, attempt.method, attempt.headers)
             except Exception:  # noqa: BLE001, S112
                 continue
-            if classify(baseline, again) is None:
+            if classify(baseline, again, root_baseline=root_baseline) is None:
                 continue  # didn't reproduce — drop it
             cand = again
         record = _bypass_record(attempt, cand, confidence, baseline.status)
