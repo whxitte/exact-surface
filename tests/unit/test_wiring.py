@@ -555,3 +555,36 @@ def test_the_bundle_env_template_names_every_required_variable():
     # The licence itself is the one value with no compose-level guard (an empty licence
     # is a legitimate state -- it just means read-only), so assert it explicitly.
     assert re.search(r"^EXACTSURFACE_LICENSE=", template, re.M)
+
+
+def test_dev_and_customer_compose_projects_cannot_collide():
+    """Two compose files sharing a project name are the same project to Docker.
+
+    Compose scopes containers/networks/volumes by the com.docker.compose.project
+    label, not by which file started them. If docker/docker-compose.yml (dev) and
+    deploy/docker-compose.yml (what a customer -- or an owner simulating one --
+    runs) ever share a `name:`, bringing one up after the other is running sees the
+    existing containers as belonging to ITS project, detects the service configs
+    differ, and recreates them to match: whichever stack was live gets silently
+    torn down and rebuilt as the other. This happened in practice: both were named
+    `exactsurface` until this test was added.
+    """
+    import re
+    from pathlib import Path
+
+    def project_name(path: str) -> str:
+        text = Path(path).read_text()
+        m = re.search(r"^name:\s*(\S+)", text, re.M)
+        assert m, f"{path} has no top-level `name:`"
+        return m.group(1)
+
+    names = {
+        "docker/docker-compose.yml": project_name("docker/docker-compose.yml"),
+        "deploy/docker-compose.yml": project_name("deploy/docker-compose.yml"),
+        "docker/docker-compose.control-plane.yml": project_name(
+            "docker/docker-compose.control-plane.yml"
+        ),
+    }
+    assert len(set(names.values())) == len(names), (
+        f"compose project names must all be distinct, got {names}"
+    )

@@ -1,6 +1,16 @@
 # Full local dev stack. `docker compose -f docker/docker-compose.yml up` gives the
 # whole platform on any OS. MongoDB is self-hosted here (free) — no Atlas required.
-name: exactsurface
+#
+# Project name is DELIBERATELY distinct from deploy/docker-compose.yml (which is
+# "exactsurface" -- the customer stack). Compose scopes containers, networks and
+# volumes by project name via the com.docker.compose.project label, not by file path.
+# Two compose files sharing a name are the same project as far as compose is
+# concerned: bringing this dev stack up after the customer stack was already running
+# under "exactsurface" would see those containers as belonging to ITS project, detect
+# the config differs (this one builds locally and publishes 8000/3000; the customer
+# one pulls from GHCR and publishes nothing but Caddy), and recreate them to match --
+# destroying whatever the customer-stack test was doing, silently.
+name: exactsurface-dev
 
 # Inside the compose network Mongo/Redis are reached by SERVICE NAME (not localhost).
 # These override the localhost defaults from ../.env for the backend services.

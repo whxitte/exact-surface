@@ -314,6 +314,84 @@ enforcement follows `EXACTSURFACE_LICENSE_ENFORCED` and defaults to off. Needing
 locally is a sign you are running the customer image, which you only want when you are
 deliberately checking the customer's experience.
 
+### 3.2c The four steps, plainly
+
+This is the whole customer flow, once a licence exists. Everything else in §3.2–§3.3 is
+detail underneath these four steps:
+
+1. **You mint their licence** (§3.2) — `python -m scripts.license issue …`.
+2. **You give them the deployment bundle** — `exactsurface-<version>.tar.gz` from the
+   GitHub release, or just the `deploy/` folder if you are handing it over directly. It
+   is self-contained: compose file, `.env.example`, Caddy/Prometheus/Grafana config, and
+   the guide. No source, no build step.
+3. **They copy `.env.example` to `.env` and fill in the required values** — the licence
+   token from step 1, `DOMAIN`, and the datastore/app secrets. `deploy/README.md` inside
+   the bundle walks through every field.
+4. **They run `docker compose up -d`.** That is the entire install.
+
+Nothing else is required. If you find yourself telling a customer to run a fifth command,
+something in the bundle needs fixing rather than the customer needing more instructions.
+
+### 3.2d Do a dry run yourself before you ever ship to a real customer
+
+Simulate the exact flow above, on your own machine, before the first real sale — this is
+what actually found the gaps below.
+
+```bash
+mkdir ~/exactsurface-trial && cp -r deploy/* deploy/.env.example ~/exactsurface-trial/
+cd ~/exactsurface-trial
+cp .env.example .env
+```
+
+Fill in `.env`. Two things a real customer runs into that are easy to miss doing this
+yourself:
+
+> **Use `openssl rand -hex 24` for `MONGO_ROOT_PASSWORD` and `REDIS_PASSWORD` —
+> never `openssl rand -base64`.** Both values go straight into a connection URI with no
+> encoding, and base64's alphabet includes `+`, `/`, `=`, all URI-reserved. A password
+> that happens to contain one breaks Mongo/Redis authentication with an error that never
+> mentions the password — `docker compose logs api` just says "Authentication failed."
+> This is not hypothetical; it is what broke the first real dry run of this bundle.
+
+> **No real domain to test with?** Set `DOMAIN=localhost`. Caddy has a built-in special
+> case for that exact hostname: it skips Let's Encrypt entirely and issues its own
+> internal self-signed certificate, so the stack comes up with working HTTPS and no DNS
+> needed. Your browser will show a certificate warning — click through it (this is Caddy
+> talking to itself, not a real client ever seeing this warning on a real deployment,
+> where DOMAIN is a real A-record and the certificate is trusted).
+
+Then:
+
+```bash
+docker compose up -d
+docker compose logs api | grep "license active"
+```
+
+If you changed `MONGO_ROOT_PASSWORD` or `REDIS_PASSWORD` **after** a first attempt already
+initialised the database, `docker compose down` alone will not fix it — Mongo only
+applies root credentials to a **fresh, empty** volume, so it keeps enforcing the old
+(broken) password until the volume is wiped:
+
+```bash
+docker compose down -v      # only if nothing in it is worth keeping — check first
+docker compose up -d
+```
+
+> **If you also run the dev stack (`docker/docker-compose.yml`) on the same machine**,
+> confirm the two project names differ (`docker compose ls`). They must — Compose scopes
+> containers, networks and volumes by project name, not by which file started them, so
+> two compose files sharing a name are the same project as far as Docker is concerned.
+> Bringing the dev stack up while a customer-bundle test is running under the same name
+> would see those containers as its own, detect the service configs differ, and silently
+> recreate them — tearing down whatever the other stack was doing. `docker/docker-compose.yml`
+> is named `exactsurface-dev` and `deploy/docker-compose.yml` is named `exactsurface`
+> specifically so this cannot happen; do not rename either back to match the other.
+
+Open `https://your-domain` (or `https://localhost`), click **Create one**, and sign up —
+this is the one step you do as the customer would, not as yourself: the first account
+created becomes the org owner, and there is no seed account or default credential to
+hand out. There is nothing to "log in" with until you create it.
+
 ### 3.3 What you hand over
 
 Send these five things — nothing more, nothing less:
