@@ -448,6 +448,24 @@ def test_every_surfaced_collection_has_a_backend_route():
     assert not missing, f"collections with no API route: {missing}"
 
 
+def test_every_module_has_an_activity_stepper_label():
+    """Every backend module name needs a human label in the frontend's stepper.
+
+    frontend/lib/pipelines.ts' PIPELINE_INFO is a SEPARATE list from core.modules'
+    ModuleSpec.label -- it exists because the Activity page's stage stepper wants
+    shorter labels ("Discover" vs "Subdomain discovery") than the Settings panel does.
+    Being separate means it drifts: twelve modules built after this file was last
+    touched (domain_intel, cloud_assets, reverse_dns, js_mine, api_surface,
+    http_misconfig, param_discovery, broken_links, cloud_buckets, nuclei_watch,
+    supply_chain, typosquat) fell back to their raw snake_case name with no entry,
+    which is also what made the stepper look cluttered -- long unstyled names sitting
+    next to short Title Case ones threw off what should have been consistent spacing.
+    """
+    ts = (REPO / "frontend" / "lib" / "pipelines.ts").read_text()
+    missing = [spec.name for spec in registry.MODULES if f"\n  {spec.name}: {{" not in ts]
+    assert not missing, f"pipelines.ts PIPELINE_INFO has no entry for: {missing}"
+
+
 def test_the_bundled_scope_feed_is_committed():
     """The scope engine's CDN/cloud ranges must be IN GIT, not just on disk.
 

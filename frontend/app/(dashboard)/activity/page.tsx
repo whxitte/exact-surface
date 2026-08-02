@@ -57,7 +57,13 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
   const explain = stages.filter((s) => s.status === "skipped" || s.status === "failed");
   return (
     <div className="mt-3 space-y-2 overflow-x-auto">
-      <div className="flex min-w-[720px] items-center pb-1">
+      {/* Fixed-width, non-shrinking nodes with a fixed-width connector between them.
+          A `flex-1` connector against a fixed container min-width used to compress
+          every node as stage count grew (some scans carry 28), squeezing labels like
+          "param_discovery" and "http_misconfig" into each other. Each node now
+          reserves its own slot regardless of how many stages there are; the row's
+          natural width grows instead, and overflow-x-auto (above) scrolls it. */}
+      <div className="flex items-start pb-1">
         {stages.map((st, i) => {
           const dot = STAGE_DOT[st.status] || STAGE_DOT.queued;
           const done = st.status === "success";
@@ -69,15 +75,15 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
               {i > 0 && (
                 <div
                   className={cn(
-                    "h-px flex-1",
+                    "mt-2.5 h-px w-5 shrink-0",
                     stages[i - 1].status === "success" ? "bg-primary" : "bg-border",
                   )}
                 />
               )}
-              <div className="flex flex-col items-center gap-1" title={tip}>
+              <div className="flex w-16 shrink-0 flex-col items-center gap-1" title={tip}>
                 <span
                   className={cn(
-                    "flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-semibold",
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-semibold",
                     dot,
                   )}
                 >
@@ -97,7 +103,7 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
                 </span>
                 <span
                   className={cn(
-                    "text-[10px] leading-none",
+                    "w-full truncate text-center text-[10px] leading-tight",
                     st.status === "queued" || st.status === "skipped"
                       ? "text-muted-foreground"
                       : "text-foreground",
