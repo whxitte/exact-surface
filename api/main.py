@@ -64,7 +64,16 @@ async def lifespan(app: FastAPI):
     # expiry (or a renewal) takes effect without a restart. Enforcement is server-side
     # in the value routes; this just keeps the cached state current.
     license_task: asyncio.Task | None = None
-    if settings.license_enforced:
+    # Must be the SAME predicate the routes enforce with (api/deps.py ->
+    # enforcement_active()). Guarding the *loader* on the raw settings flag while the
+    # *gate* used enforcement_active() meant a release image enforced without ever
+    # loading a licence: RELEASE_BUILD makes enforcement_active() true, the flag stays
+    # false, so this block was skipped and the cached state remained MISSING. Every
+    # customer would have been permanently read-only with a perfectly valid licence
+    # installed, and nothing in the logs would say why.
+    from core.entitlements import enforcement_active
+
+    if enforcement_active():
         try:
             from core.entitlements import refresh as refresh_license
             from db.mongo import get_mongo

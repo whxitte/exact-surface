@@ -101,3 +101,29 @@ def test_unenforced_is_full_function(app_ctx):  # noqa: F811
     pid = make_program(client, owner, "lic4.com")
     assert client.post(f"/programs/{pid}/scan", headers=auth(owner)).status_code == 202
     assert client.get("/auth/me", headers=auth(owner)).json()["license"]["status"] == "unlicensed"
+
+
+def test_the_licence_loader_and_the_gate_use_the_same_predicate():
+    """Enforcing without loading makes a valid licence impossible to install.
+
+    api/deps.py gates on enforcement_active(), which a release image forces true via
+    RELEASE_BUILD. If the startup loader guards on settings.license_enforced instead --
+    the raw env flag, still false in a release image -- the licence is never evaluated,
+    the cached state stays MISSING, and the instance is permanently read-only no matter
+    what token the customer supplies. Nothing in the logs explains it.
+
+    This asserts the loader does not reintroduce the raw flag.
+    """
+    from pathlib import Path
+
+    main_py = Path("api/main.py").read_text()
+    start = main_py.index("license_task")
+    block = main_py[start : start + 1200]
+    assert "enforcement_active()" in block, (
+        "the startup licence loader must gate on enforcement_active(), the same "
+        "predicate api/deps.py enforces with"
+    )
+    assert "if settings.license_enforced:" not in main_py, (
+        "settings.license_enforced is the raw env flag and is false in a release image; "
+        "use enforcement_active() so release builds actually load their licence"
+    )

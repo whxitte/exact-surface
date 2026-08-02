@@ -211,13 +211,26 @@ def test_compose_passes_the_licence_into_the_containers():
     from pathlib import Path
 
     compose = Path("docker/docker-compose.yml").read_text()
-    assert "EXACTSURFACE_LICENSE: ${EXACTSURFACE_LICENSE" in compose, (
-        "docker-compose.yml must pass EXACTSURFACE_LICENSE through to the backend "
-        "services, or no self-hosted customer can ever activate their licence"
+
+    # The licence reaches the containers through env_file, not `environment:`.
+    # `environment:` outranks `env_file:`, so a `${...:-}` default silently blanks a
+    # real licence for anyone running compose from a shell without the export --
+    # turning a working deployment read-only on an ordinary restart.
+    for var in ("EXACTSURFACE_LICENSE", "EXACTSURFACE_LICENSE_PUBLIC_KEY"):
+        assert f"{var}: ${{" not in compose, (
+            f"{var} must not be given a ${{...:-}} default in `environment:` -- it "
+            "overrides env_file and wipes the licence on any restart without the export"
+        )
+    # Every backend service must actually load the file the licence lives in.
+    assert compose.count("env_file: ../.env") >= 4, (
+        "api, pipeline, scheduler and worker all need env_file: ../.env, which is how "
+        "the licence reaches them"
     )
-    # The public key is baked into the image; a ${...:-} default would blank it out for
-    # anyone who has not exported it, turning a licensed deployment read-only.
-    assert "EXACTSURFACE_LICENSE_PUBLIC_KEY: ${" not in compose
+    # A locally built image must still be able to bake the verify key, or it checks
+    # every licence against an empty key and is read-only whatever token you set.
+    assert compose.count("LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY") == 2, (
+        "both locally built images (api, pipeline) need the LICENSE_PUBLIC_KEY build arg"
+    )
 
     # ...but a locally built image must still be able to BAKE the verify key, or it
     # verifies every licence against an empty key and is read-only whatever you set.

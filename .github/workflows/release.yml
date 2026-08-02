@@ -136,7 +136,19 @@ jobs:
             GIT_COMMIT=${{ github.sha }}
             LICENSE_PUBLIC_KEY=${{ secrets.LICENSE_PUBLIC_KEY }}
           cache-from: type=gha,scope=${{ matrix.name }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+          # mode=min + ignore-error, both deliberate.
+          #
+          # mode=max exports every intermediate layer. The pipeline image carries the Go
+          # recon toolchain, the nuclei corpus and the wordlists, and its full layer set
+          # does not fit the 10 GB per-repo Actions cache — the export failed *after* the
+          # image had already been pushed, so the release job went red while GHCR showed
+          # a perfectly good package. mode=min caches the final layers only.
+          #
+          # ignore-error matters more than the mode: a build cache is a speed
+          # optimisation, and once the image is published and its digest recorded, a
+          # failed cache write has no bearing on whether the release is good. It must
+          # never be what turns a successful release red.
+          cache-to: type=gha,mode=min,scope=${{ matrix.name }},ignore-error=true
 
       - name: Record digest
         run: |
