@@ -133,3 +133,52 @@ def test_enforcement_disabled_is_full_function():
     st = evaluate(None, now=datetime.now(UTC), enforced=False)
     assert st.status is LicenseStatus.UNLICENSED
     assert st.read_only is False and st.full_function is True
+
+
+def test_issuing_a_zero_cap_licence_is_refused(tmp_path, capsys):
+    """`--domains 0` looks like "unlimited" and means the exact opposite.
+
+    can_add_domain() resolves a cap of 0 to `current_count < 0`, which is never true,
+    so such a licence refuses every domain for its whole life. Issued to a paying
+    customer it ships a product that cannot be used at all, and the failure appears
+    only after they install it. Unlimited is None -- omit the flag.
+    """
+    import sys
+
+    from core.license import generate_keypair
+    from scripts.license import main
+
+    private = tmp_path / "private.pem"
+    private_pem, _public = generate_keypair()
+    private.write_text(private_pem)
+
+    base = [
+        "issue",
+        "--private-key",
+        str(private),
+        "--customer",
+        "Acme",
+        "--plan",
+        "enterprise",
+    ]
+    for bad in (["--domains", "0"], ["--users", "0"], ["--domains", "-1"], ["--months", "0"]):
+        argv = ["scripts.license", *base, *bad]
+        old = sys.argv
+        sys.argv = argv
+        try:
+            assert main() == 2, f"{bad} should be refused"
+        finally:
+            sys.argv = old
+        assert "must be 1 or more" in capsys.readouterr().err
+
+    # Omitting --domains on enterprise is the supported way to get unlimited.
+    out_file = tmp_path / "ok.jwt"
+    argv = ["scripts.license", *base, "--months", "1", "--out", str(out_file)]
+    old = sys.argv
+    sys.argv = argv
+    try:
+        assert main() == 0
+    finally:
+        sys.argv = old
+    # The human summary goes to stderr so stdout stays pipeable when --out is omitted.
+    assert "unlimited domains" in capsys.readouterr().err
