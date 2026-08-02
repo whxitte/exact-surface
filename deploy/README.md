@@ -87,8 +87,8 @@ Generate real secrets. The stack refuses to start with placeholder values, and c
 will tell you exactly which one is missing rather than booting insecurely.
 
 ```bash
-python3 -c "import secrets; print(secrets.token_urlsafe(48))"   # run once per secret
-openssl rand -base64 32                                          # or this
+openssl rand -hex 24                                             # for the two below
+python3 -c "import secrets; print(secrets.token_urlsafe(48))"    # for everything else
 ```
 
 Required, no defaults:
@@ -97,9 +97,9 @@ Required, no defaults:
 |---|---|
 | `EXACTSURFACE_LICENSE` | The token we sent you, on **one line**. |
 | `DOMAIN` | The hostname this instance serves. Must already resolve to this server. |
-| `MONGO_ROOT_PASSWORD` | Random. |
-| `REDIS_PASSWORD` | Random. |
-| `GRAFANA_ADMIN_PASSWORD` | Random. |
+| `MONGO_ROOT_PASSWORD` | **Use `openssl rand -hex 24`, not base64.** This value goes into a Mongo connection URI unescaped; a `base64` password containing `+`, `/` or `=` breaks authentication with an error that never mentions the password. |
+| `REDIS_PASSWORD` | Same rule, same reason — it goes into a Redis URI the same way. |
+| `GRAFANA_ADMIN_PASSWORD` | Random — not URI-embedded, any generator is fine. |
 | `EXACTSURFACE_JWT_SECRET` | Random. Signs your users' sessions. |
 | `EXACTSURFACE_SECRET_HASH_KEY` | Random. See the warning below. |
 
@@ -203,6 +203,14 @@ underneath a running scan is not something you should have to debug.
 ---
 
 ## Troubleshooting
+
+### `api` keeps restarting, logs show "Authentication failed" against Mongo
+
+`MONGO_ROOT_PASSWORD` or `REDIS_PASSWORD` contains a character with special meaning in a
+URI — most often `+`, `/`, `=`, `@` or `%`, which is exactly what `openssl rand -base64`
+can produce. Both values are placed straight into a connection string with no encoding,
+so this fails authentication in a way that never mentions the password. Regenerate both
+with `openssl rand -hex 24` (hex only — always URI-safe) and `docker compose up -d`.
 
 ### Red "read-only mode — no license configured" banner
 
