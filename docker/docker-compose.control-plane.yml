@@ -2,7 +2,7 @@
 #
 #   docker compose -f docker/docker-compose.control-plane.yml up -d --build
 #
-# Customers run the product stack (docker-compose.prod.yml) in their own infra. This
+# Customers run the product stack (deploy/docker-compose.yml) in their own infra. This
 # stack is yours alone. It does two jobs:
 #   * renews subscription licences  (POST /v1/license/refresh)
 #   * serves the licence-gated update manifest + template bundles

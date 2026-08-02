@@ -16,8 +16,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-DASHBOARD = ROOT / "docker/grafana/dashboards/exactsurface-operations.json"
-ALERTS = ROOT / "docker/alerts.yml"
+DASHBOARD = ROOT / "deploy/grafana/dashboards/exactsurface-operations.json"
+ALERTS = ROOT / "deploy/alerts.yml"
 
 #: Source dirs that may emit metrics. `tests/` is excluded on purpose — a probe
 #: metric invented by a test must not satisfy a dashboard reference.

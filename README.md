@@ -18,6 +18,7 @@ re-scan), multi-tenant from line one, and **never exploits — only detects**.
 | [`docs/ADRs/`](docs/ADRs/) | why things are the way they are — read before changing a control |
 | [`docs/TESTING.md`](docs/TESTING.md) | run it end-to-end against a target you own (quick) |
 | [`docs/PRICING_AND_LIMITS.md`](docs/PRICING_AND_LIMITS.md) | **the commercial model** — tiers, what each limit is, where it is enforced, and why the signed licence is the only authority |
+| [`deploy/README.md`](deploy/README.md) | **what a customer receives** — the self-contained deployment folder: what comes up, how the licence is installed, troubleshooting. Copied verbatim into the release archive |
 | [`demo/README.md`](demo/README.md) | **the public demo site** — a separate, static, backend-free build of the real frontend; how it is deployed and how it stays out of product images |
 | [`docs/DEVTOOLS.md`](docs/DEVTOOLS.md) | **the Workbench** — the internal module test bench: why it is a separate app, how it is contained, how to use it |
 | [`docs/TESTING_GUIDE.md`](docs/TESTING_GUIDE.md) | **full test coverage** — the 7 layers, what to test when, security/safety verification |
@@ -36,7 +37,7 @@ Four applications. Only the first is shipped to customers.
 
 | | What | Who runs it | Built from |
 |---|---|---|---|
-| **The product** | api + frontend + pipeline images | **the customer**, self-hosted | `docker/Dockerfile.{api,frontend,pipeline}` |
+| **The product** | api + frontend + pipeline images, run from `deploy/` | **the customer**, self-hosted | `docker/Dockerfile.{api,frontend,pipeline}` |
 | **The demo** | a static, backend-free build of the real frontend | you, at `demo.exactsurface.com` | `demo/Dockerfile` |
 | **The control plane** | licence refresh + update feed | you, one small VPS | `control_plane/` |
 | **The workbench** | internal module test bench | you, on your laptop only | `devtools/`, never containerised |

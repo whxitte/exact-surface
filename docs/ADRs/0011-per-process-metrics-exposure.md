@@ -33,7 +33,7 @@ while being the single process whose silent death stops *all* scanning.
 the standard multi-process Prometheus pattern. `daemon/metrics_server.py` provides
 the listener for the headless roles (worker, scheduler) on
 `EXACTSURFACE_METRICS_PORT` (default 9100); the API keeps serving its own from FastAPI.
-`docker/prometheus.yml` scrapes all three roles, using `dns_sd_configs` for the
+`deploy/prometheus.yml` scrapes all three roles, using `dns_sd_configs` for the
 worker so each replica becomes its own target rather than whichever one DNS
 happened to return.
 
@@ -66,7 +66,7 @@ metric something actually emits.
 
 **Cost.** Counters are per-process and reset on restart — `rate()` handles that,
 but *absolute* counter values are per-replica and must be `sum()`ed across
-targets. Alert thresholds in `docker/alerts.yml` duplicate values from
+targets. Alert thresholds in `deploy/alerts.yml` duplicate values from
 `core.config.Settings` because Prometheus cannot read app config; only the
 politeness cap is currently pinned by a test.
 

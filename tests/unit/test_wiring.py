@@ -517,12 +517,19 @@ def test_the_customer_bundle_is_installable_without_source():
     for name in ("mongo", "redis"):
         assert "ports" not in services[name], f"{name} must not be reachable from the host"
 
-    # Every file the compose mounts has to exist to be copied into the bundle.
-    for relative in ("Caddyfile", "prometheus.yml", "alerts.yml"):
-        assert Path("docker") / relative, f"docker/{relative} is missing"
-        assert (Path("docker") / relative).exists(), f"docker/{relative} is missing"
-    assert (Path("docker/grafana/provisioning")).is_dir()
-    assert (Path("docker/grafana/dashboards")).is_dir()
+    # deploy/ must be COPYABLE ON ITS OWN. Every host path the compose file mounts has
+    # to sit beside it, because that folder is what a customer receives. When these
+    # lived in docker/, copying deploy/ to a server produced a compose file mounting
+    # four paths that were not there -- and Docker creates a *directory* in place of a
+    # missing bind-mount source, so Caddy failed with a confusing error instead of a
+    # useful one.
+    import re
+
+    for mount in re.findall(r"^\s+- \./([^:]+):", text, re.M):
+        assert (Path("deploy") / mount).exists(), (
+            f"docker-compose.yml mounts ./{mount} but deploy/{mount} does not exist; "
+            "deploy/ must be self-contained, since it is copied verbatim to customers"
+        )
 
 
 def test_the_bundle_env_template_names_every_required_variable():

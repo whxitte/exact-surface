@@ -460,7 +460,7 @@ Ask them to check, in order:
    - `expired` → billing issue, see 5.1
    - `missing`/`invalid` → their `EXACTSURFACE_LICENSE` env is wrong or unset
    - `tampered` → their server clock jumped backwards; fix NTP
-2. Is the **worker** running? `docker compose -f docker/docker-compose.prod.yml ps`
+2. Is the **worker** running? `docker compose ps`
 3. Is the program **verified + authorised**? Unauthorised programs never scan (by design).
 
 ### 5.5 "We can't pull the images"

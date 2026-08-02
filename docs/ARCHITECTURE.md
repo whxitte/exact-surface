@@ -164,7 +164,7 @@ scanning are not emitted by the API*. Stage outcomes, run durations, politeness
 decisions and port-scan rates all happen in the **worker**; scheduler liveness
 happens in the **scheduler**. Neither runs an HTTP server of its own, so
 `daemon/metrics_server.py` gives them one (ADR-0011) and Prometheus scrapes all
-three roles separately (`docker/prometheus.yml`). Scraping only the API shows you
+three roles separately (`deploy/prometheus.yml`). Scraping only the API shows you
 HTTP counters and nothing about scanning.
 
 What is emitted, and why each earns its place:
@@ -190,7 +190,7 @@ swallows tick exceptions so one bad tick cannot kill the loop, which means a
 scheduler failing *every* tick still has a live process and an answering port
 while never enqueueing again. A liveness probe cannot see that; the gauge can.
 
-Dashboards (`docker/grafana/dashboards/`) and alerts (`docker/alerts.yml`) are
+Dashboards (`deploy/grafana/dashboards/`) and alerts (`deploy/alerts.yml`) are
 provisioned from git, not click-ops. `tests/unit/test_dashboard_queries.py` asserts
 every panel/rule references a metric something actually emits — a renamed metric
 otherwise leaves a permanently empty panel that looks like "no problems".
@@ -246,7 +246,7 @@ just enough of motor; every tool wrapper takes an injectable runner.
   `mongodump`/`age`/`mongorestore`; only the pure command builders and the retention
   policy are tested. An untested backup is a hypothesis — restore one into a scratch
   database before relying on it.
-- **The alert thresholds in `docker/alerts.yml` are duplicated from app config**
+- **The alert thresholds in `deploy/alerts.yml` are duplicated from app config**
   because Prometheus cannot read `Settings`. `test_dashboard_queries.py` pins the
   politeness cap against `global_rate_per_target`; the others are unguarded.
 - **`worker_fleet_size` is duplicated config.** It must be ≥ the real worker replica
