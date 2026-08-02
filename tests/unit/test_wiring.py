@@ -379,6 +379,51 @@ def test_the_demo_site_never_enters_a_product_image():
     assert "demo" in (REPO / ".dockerignore").read_text().split()
 
 
+def test_demo_attack_surface_fixture_matches_the_current_ui_contract():
+    """The demo shares product pages, so its fixtures must evolve with their API shape.
+
+    The attack-surface endpoint once returned ``totals`` and ``by_interest``. The
+    product grew a timeline and change log, but the demo fixture was not updated;
+    opening a program or Changes therefore crashed in the browser. Keep the static
+    fixture explicit about every field the shared UI reads.
+    """
+    text = (REPO / "demo" / "lib" / "fixtures.ts").read_text()
+    start = text.index("export const ATTACK_SURFACE = {")
+    end = text.index("} as const;", start)
+    fixture = text[start:end]
+
+    required = (
+        '"generated_at"',
+        '"latest_scan_at"',
+        '"previous_scan_at"',
+        '"scan_count"',
+        '"current"',
+        '"total"',
+        '"assets"',
+        '"endpoints"',
+        '"ports"',
+        '"findings"',
+        '"secrets"',
+        '"leaks"',
+        '"change"',
+        '"opened"',
+        '"resolved"',
+        '"net"',
+        '"series"',
+        '"recent"',
+        '"kind"',
+        '"type"',
+        '"label"',
+        '"at"',
+        '"severity"',
+    )
+    missing = [field for field in required if field not in fixture]
+    assert not missing, f"demo ATTACK_SURFACE is stale; missing current UI fields: {missing}"
+    assert '"totals"' not in fixture and '"by_interest"' not in fixture, (
+        "demo ATTACK_SURFACE still uses the retired response shape"
+    )
+
+
 def test_the_marketing_site_never_enters_a_product_image():
     """website/ is static marketing HTML deployed to Vercel -- it has no reason to be
     in a product image, and shipping it there would just be bloat and an unreviewed
