@@ -4860,22 +4860,45 @@ export const CORRELATION = {
 } as const;
 
 export const ATTACK_SURFACE = {
-  "program_id": "prog_demo",
-  "apex_domain": "demo.exactsurface.com",
-  "totals": {
-    "assets": 12,
-    "alive": 10,
-    "endpoints": 15,
-    "ports": 4,
-    "findings": 15
+  "generated_at": "2026-08-02T16:03:52.000Z",
+  "latest_scan_at": "2026-08-02T16:03:52.000Z",
+  "previous_scan_at": "2026-08-01T16:01:17.000Z",
+  "scan_count": 7,
+  "current": {
+    "total": 56,
+    "assets": { "total": 12 },
+    "endpoints": { "total": 15 },
+    "ports": { "total": 10, "high": 2, "medium": 5, "low": 3 },
+    "findings": { "total": 15, "critical": 3, "high": 5, "medium": 4, "low": 3 },
+    "secrets": { "total": 3, "high": 2, "medium": 1 },
+    "leaks": { "total": 1, "medium": 1 }
   },
-  "by_interest": {
-    "critical": 3,
-    "high": 4,
-    "medium": 3,
-    "low": 1,
-    "noise": 1
-  }
+  "change": {
+    "opened": 9,
+    "resolved": 2,
+    "net": 7,
+    "assets": { "opened": 2, "resolved": 0 },
+    "endpoints": { "opened": 3, "resolved": 1 },
+    "ports": { "opened": 1, "resolved": 0 },
+    "findings": { "opened": 2, "resolved": 1 },
+    "secrets": { "opened": 1, "resolved": 0 },
+    "leaks": { "opened": 0, "resolved": 0 }
+  },
+  "series": [
+    { "at": "2026-07-27T16:00:00.000Z", "total": 42, "assets": 9, "endpoints": 11, "ports": 7, "findings": 12, "secrets": 2, "leaks": 1 },
+    { "at": "2026-07-29T16:00:00.000Z", "total": 45, "assets": 10, "endpoints": 12, "ports": 8, "findings": 12, "secrets": 2, "leaks": 1 },
+    { "at": "2026-07-31T16:00:00.000Z", "total": 49, "assets": 10, "endpoints": 13, "ports": 9, "findings": 14, "secrets": 2, "leaks": 1 },
+    { "at": "2026-08-01T16:01:17.000Z", "total": 49, "assets": 10, "endpoints": 13, "ports": 9, "findings": 14, "secrets": 2, "leaks": 1 },
+    { "at": "2026-08-02T16:03:52.000Z", "total": 56, "assets": 12, "endpoints": 15, "ports": 10, "findings": 15, "secrets": 3, "leaks": 1 }
+  ],
+  "recent": [
+    { "kind": "opened", "type": "asset", "label": "jenkins.demo.exactsurface.com", "at": "2026-08-02T16:03:52.000Z", "severity": "critical" },
+    { "kind": "opened", "type": "endpoint", "label": "https://api.demo.exactsurface.com/graphql", "at": "2026-08-02T16:03:52.000Z", "severity": "medium" },
+    { "kind": "opened", "type": "finding", "label": "Exposed .git repository", "at": "2026-08-02T16:03:52.000Z", "severity": "critical" },
+    { "kind": "opened", "type": "secret", "label": "AWS access key in public JavaScript", "at": "2026-08-02T16:03:52.000Z", "severity": "high" },
+    { "kind": "resolved", "type": "endpoint", "label": "https://old-shop.demo.exactsurface.com/debug", "at": "2026-08-02T16:03:52.000Z", "severity": null },
+    { "kind": "resolved", "type": "finding", "label": "Missing security.txt", "at": "2026-08-02T16:03:52.000Z", "severity": "low" }
+  ]
 } as const;
 
 export const SCHEDULE_DEFAULTS = {
@@ -5731,4 +5754,3 @@ export const MODULES = {
     }
   ]
 } as const;
-
