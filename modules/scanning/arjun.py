@@ -24,7 +24,7 @@ from pathlib import Path
 
 from core.errors import ToolNotFound
 from core.logging import logger
-from modules.exec import run_tool
+from modules.exec import stream_tool
 
 Runner = Callable[..., Awaitable[tuple]]
 
@@ -43,13 +43,21 @@ async def find_params(
     *,
     threads: int = DEFAULT_THREADS,
     delay: float = DEFAULT_DELAY,
-    runner: Runner = run_tool,
+    runner: Runner = stream_tool,
 ) -> dict[str, list[str]]:
     """``{url: [param, ...]}`` for each URL arjun found hidden parameters on.
 
     Returns ``{}`` — not an exception — when arjun is not installed, so the caller can
     fall back. Every other failure is also swallowed into ``{}`` for the same reason:
     this is one signal among several, not the stage.
+
+    Runs via :func:`modules.exec.stream_tool`, not the simpler buffered ``run_tool``.
+    That matters specifically on timeout: ``run_tool`` calls ``proc.communicate()``
+    under ``asyncio.wait_for``, and when that call times out the buffered stdout/stderr
+    is never returned at all — a hung arjun produced nothing in the logs but "killed
+    after 1200s timeout", with no way to tell whether it hung on the first URL or the
+    last, or whether it printed a real error right before being killed. stream_tool
+    reads and logs output as it arrives, so whatever arjun DID print survives the kill.
     """
     urls = [u for u in urls if u][:MAX_URLS]
     if not urls:
@@ -72,15 +80,42 @@ async def find_params(
             "--stable",  # compare against a stable baseline rather than one sample
             "-q",
         ]
+
+        seen_lines = 0
+
+        def _on_line(line: str) -> None:
+            # -q keeps arjun's own progress noise down, but a real error (a stack
+            # trace, a connection failure) still prints. Log it as it happens rather
+            # than only finding out after the fact whether anything printed at all.
+            nonlocal seen_lines
+            line = line.strip()
+            if not line:
+                return
+            seen_lines += 1
+            logger.info("arjun: {}", line[:300])
+
         try:
-            await runner("arjun", args, timeout=timeout, check=False)
+            _rc, _out, _err, timed_out = await runner(
+                "arjun", args, timeout=timeout, on_stdout=_on_line, on_stderr=_on_line
+            )
         except ToolNotFound:
             logger.info("arjun not installed — falling back to the built-in parameter probe")
             return {}
         except Exception as exc:  # noqa: BLE001 - one tool never sinks the stage
             logger.warning("arjun failed ({}); falling back to the built-in probe", exc)
             return {}
+        if timed_out:
+            logger.warning(
+                "arjun killed after {:.0f}s timeout ({} line(s) of output seen before the kill); "
+                "falling back to the built-in probe",
+                timeout,
+                seen_lines,
+            )
+            return {}
 
+        # Exit code is deliberately not checked beyond this: arjun has been observed
+        # exiting non-zero on a run that still wrote usable results, and the JSON file
+        # is the authoritative signal either way.
         if not out_path.exists():
             return {}
         try:

@@ -82,6 +82,35 @@ def test_no_baseline_forbidden_means_nothing_to_bypass():
     assert classify(base, ProbeResult(200, 500, "still public")) is None
 
 
+def test_url_rewrite_header_against_a_public_root_is_not_a_bypass():
+    """The false positive this was built to catch: root is public on its own, so
+    every X-Original-URL-style attempt 'succeeds' whether or not the header does
+    anything. Root's own response, unmodified, is the control that proves it."""
+    base = ProbeResult(401, 50, "unauthorized")
+    homepage = ProbeResult(200, 9000, "<html>the public homepage</html>")
+    candidate_via_header = ProbeResult(200, 9000, "<html>the public homepage</html>")
+    assert classify(base, candidate_via_header, root_baseline=homepage) is None
+
+
+def test_url_rewrite_header_that_genuinely_serves_the_forbidden_page_still_counts():
+    """The guard must not blanket-suppress every rewrite-header hit — only ones that
+    match what root already returns unconditionally. A header that actually reaches
+    different (forbidden) content is still a real bypass."""
+    base = ProbeResult(401, 50, "unauthorized")
+    homepage = ProbeResult(200, 9000, "<html>the public homepage</html>")
+    candidate_via_header = ProbeResult(200, 4096, "<html>the secret admin panel</html>")
+    assert classify(base, candidate_via_header, root_baseline=homepage) == "high"
+
+
+def test_url_rewrite_header_still_flags_when_root_is_itself_forbidden():
+    """root_baseline only disables the guard when root is genuinely public. If root is
+    ALSO 401/403 on its own, a header that unlocks it is real signal."""
+    base = ProbeResult(401, 50, "unauthorized")
+    root_also_forbidden = ProbeResult(403, 40, "forbidden")
+    candidate_via_header = ProbeResult(200, 4096, "<html>the secret admin panel</html>")
+    assert classify(base, candidate_via_header, root_baseline=root_also_forbidden) == "high"
+
+
 # -- orchestration -----------------------------------------------------------
 def _fake_probe(*, header_that_works: str | None = None, path_that_works: str | None = None):
     """A probe that returns 200 only for the one winning mutation, else 403."""
@@ -107,6 +136,25 @@ async def test_run_bypass_finds_header_bypass():
     assert all(b["confidence"] == "high" for b in result["bypasses"])
     # a reproduction is provided for the user
     assert all(b["curl"].startswith("curl ") for b in result["bypasses"])
+
+
+@pytest.mark.asyncio
+async def test_run_bypass_does_not_flag_rewrite_headers_against_a_public_root():
+    """End-to-end reproduction of a real false positive: /admin is forbidden, but the
+    site's root is a normal public homepage. Every X-Original-URL-style header request
+    lands on root and gets root's ordinary 200 -- that must not be reported as four
+    'high confidence' bypasses of /admin, which is what happened before root_baseline
+    existed. A real bypass would still light up (see the header_that_works case)."""
+
+    async def probe(url: str, method: str, headers: dict[str, str]) -> ProbeResult:
+        if urlsplit(url).path in ("", "/"):
+            return ProbeResult(200, 8000, "<html>public homepage</html>")
+        return ProbeResult(403, 100, "Forbidden")
+
+    result = await run_bypass("https://x.com/admin", probe=probe)
+    assert result["baseline_status"] == 403
+    rewrite_hits = [b for b in result["bypasses"] if "X-Original-URL" in b["label"]]
+    assert not rewrite_hits, f"false-positive rewrite-header bypasses: {rewrite_hits}"
 
 
 @pytest.mark.asyncio
