@@ -184,7 +184,7 @@ docker build -f docker/Dockerfile.pipeline .
 docker build -f docker/Dockerfile.api .
 
 # 2. Prod compose merges and is safe (no daemon needed)
-docker compose -f docker/docker-compose.prod.yml config | grep -E "27017|6379"  # must NOT be published
+docker compose -f deploy/docker-compose.yml config | grep -E "27017|6379"  # must NOT be published
 
 # 3. THE MOST IMPORTANT ONE — restore a backup into a scratch DB
 python -m scripts.backup run

@@ -317,15 +317,15 @@ jobs:
           VERSION="${{ needs.verify.outputs.version }}"
           NS=$(echo "ghcr.io/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           DIR="exactsurface-$VERSION"
-          mkdir -p "$DIR/grafana"
 
-          cp deploy/docker-compose.yml "$DIR/docker-compose.yml"
-          cp deploy/.env.example       "$DIR/.env.example"
-          cp docker/Caddyfile          "$DIR/Caddyfile"
-          cp docker/prometheus.yml     "$DIR/prometheus.yml"
-          cp docker/alerts.yml         "$DIR/alerts.yml"
-          cp -r docker/grafana/provisioning docker/grafana/dashboards "$DIR/grafana/"
-          cp docs/CLIENT_GUIDE.md      "$DIR/INSTALL.md"
+          # deploy/ IS the bundle -- copied whole, not assembled from pieces. Anything
+          # the compose file mounts lives beside it there, so the archive cannot ship
+          # missing a file that the repo has (which is how the first attempt at this
+          # would have failed: Caddyfile and the Prometheus config were still in
+          # docker/, and Docker would have created a *directory* in place of the
+          # missing config rather than erroring usefully).
+          cp -r deploy "$DIR"
+          cp docs/CLIENT_GUIDE.md "$DIR/INSTALL.md"
 
           # Pin the bundle to the version it was cut for. A bundle whose .env.example
           # names an older release would quietly install the wrong images.
@@ -338,6 +338,15 @@ jobs:
             echo "::error::customer bundle contains a build: section — it requires source code"; exit 1
           fi
           grep -q "EXACTSURFACE_VERSION=$VERSION" "$DIR/.env.example"
+
+          # Every host path the compose file mounts must exist in the archive. Without
+          # this the bundle can ship a compose file referencing a config it does not
+          # contain, and the customer's first `up` fails in a way that points nowhere.
+          missing=0
+          for path in $(grep -oE '^\s+- \./[^:]+' "$DIR/docker-compose.yml" | sed 's|.*\./||'); do
+            [ -e "$DIR/$path" ] || { echo "::error::bundle is missing $path, which docker-compose.yml mounts"; missing=1; }
+          done
+          [ "$missing" -eq 0 ] || exit 1
 
           tar czf "$DIR.tar.gz" "$DIR"
           echo "bundle: $(du -h "$DIR.tar.gz" | cut -f1)"

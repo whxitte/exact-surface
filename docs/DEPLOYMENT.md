@@ -28,7 +28,7 @@ This is enough for a single tenant on one host (min 4 GB / 2 vCPU, §3.8).
 2. `git clone`; set `.env` (strong `EXACTSURFACE_JWT_SECRET`, `EXACTSURFACE_SECRET_HASH_KEY`)
    **and** the prod-only vars `DOMAIN`, `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD`,
    `REDIS_PASSWORD`, `GRAFANA_ADMIN_PASSWORD`.
-3. `docker compose -f docker/docker-compose.prod.yml up -d --build`.
+3. `cd deploy && docker compose up -d`.
 
 The prod compose differs from the dev stack in the ways that matter for exposure:
 Mongo and Redis have **no host ports** (internal network only) and **both require
@@ -157,7 +157,7 @@ PodMonitor if you run the Prometheus Operator).
 degrades to a warning and never blocks the process from starting. On a shared
 host, bind loopback rather than publishing 9100.
 
-**The two alerts that matter** (`docker/alerts.yml`):
+**The two alerts that matter** (`deploy/alerts.yml`):
 - `SchedulerNotTicking` — `run_forever` swallows tick errors, so a scheduler that
   has silently stopped enqueueing still passes a liveness probe and keeps its port
   open. This is the only thing that catches it.
