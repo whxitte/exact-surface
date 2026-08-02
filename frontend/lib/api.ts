@@ -405,6 +405,7 @@ export interface Member {
 const json = (b: unknown) => ({ method: "POST", body: JSON.stringify(b) });
 
 export const api = {
+  signupOpen: () => request<{ open: boolean }>("/auth/signup-open"),
   signup: (email: string, password: string, tenant_name: string) =>
     request<TokenResponse>("/auth/signup", json({ email, password, tenant_name })),
   login: (email: string, password: string) =>

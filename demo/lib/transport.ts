@@ -94,6 +94,7 @@ function resolve(path: string): unknown {
     case "/activity":                  return fx.ACTIVITY;
     case "/auth/me":                   return fx.ME;
     case "/auth/license":              return fx.LICENSE;
+    case "/auth/signup-open":          return { open: false };
     case "/members":                   return fx.MEMBERS;
     case "/members/groups":            return fx.GROUPS;
     case "/members/permissions":       return fx.PERMISSIONS;

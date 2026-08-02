@@ -181,7 +181,12 @@ deliberate: it's what keeps your usage lawful and defensible.
 
 1. **Add the domain.** Programs → add e.g. `yourcompany.com`.
 2. **Verify ownership.** Choose DNS TXT or an HTTP file, place the token it gives you,
-   then click check.
+   then click check. This is a direct DNS/HTTP lookup **from your own instance** — it
+   never contacts us, and your domain never leaves your infrastructure to be verified.
+   See §2b of `SECURITY.md` for the one honest limit on this: whoever has direct
+   database access to your instance can, in principle, write a verified record by
+   hand. No self-hosted software can prevent that — it's the same trust boundary as
+   who has root on the box.
 3. **Authorise scanning.** Create the authorization record. Optionally request specific
    IP ranges as "dedicated" — the platform confirms them against your domain's real
    announced ASN before ever treating them as yours. Self-declaration alone never
@@ -409,9 +414,24 @@ docker compose logs -f scheduler
 
 ## 7. Your subscription
 
-Your instance carries a cryptographically signed licence and checks it periodically. If
-your instance can reach the control plane, renewals apply **automatically** — nothing to
-do when you pay.
+Your instance carries a cryptographically signed licence and checks it periodically. It
+is verified **entirely locally** — the licence is a signed token checked against a public
+key baked into your images, and no network call is required to confirm it's valid.
+
+**The control plane is optional, and the product runs completely without one ever
+being reachable.** It exists for exactly two things, both best-effort:
+
+- **Automatic renewal.** If your instance can reach it, a paid renewal applies on the
+  next check with nothing for you to do. If it can't (air-gapped, or the control plane
+  is simply unreachable right now), the signed token you already have keeps working
+  until it expires — see the states below.
+- **Fresh detection content between releases** (new nuclei templates, updated tooling).
+  Without this, your instance keeps using whatever was baked into the image at build
+  time, which is a complete and current corpus as of that release — it does not stop
+  working, it just doesn't get newer detections until your next upgrade.
+
+Nothing about scanning, verification, or findings ever depends on the control plane
+being reachable.
 
 | State | What happens |
 |---|---|
