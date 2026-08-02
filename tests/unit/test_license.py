@@ -237,3 +237,36 @@ def test_compose_passes_the_licence_into_the_containers():
     assert compose.count("LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY") == 2, (
         "both locally built images (api, pipeline) need the LICENSE_PUBLIC_KEY build arg"
     )
+
+
+def test_verify_key_survives_a_single_line_channel(monkeypatch):
+    """The verify key reaches an image only through single-line-only channels.
+
+    `build-args:` is a newline-delimited KEY=VALUE list and `.env` has no multi-line
+    syntax, so a raw PEM truncates to its first line. v1.0.0 shipped with exactly
+    "-----BEGIN PUBLIC KEY-----" baked in: enforcement on, every licence unverifiable,
+    every customer permanently read-only. Nothing in a local build showed it, because
+    compose's `args:` mapping preserves newlines.
+    """
+    import base64
+
+    from core.config import Settings
+    from core.license import generate_keypair, sign_license, verify_license
+
+    private_pem, public_pem = generate_keypair()
+    token = sign_license(_ent(), private_pem)
+
+    for label, value in (
+        ("raw PEM", public_pem),
+        ("base64 of PEM", base64.b64encode(public_pem.encode()).decode()),
+    ):
+        monkeypatch.setenv("EXACTSURFACE_LICENSE_PUBLIC_KEY", value)
+        key = Settings().license_public_key
+        assert "BEGIN" in key and "END" in key, f"{label} did not normalise to a PEM"
+        # The real proof: a licence actually verifies against what was loaded.
+        assert verify_license(token, key).customer_name == "Acme", f"{label} cannot verify"
+
+    # A truncated PEM must NOT quietly look fine -- it has to fail loudly at verify.
+    monkeypatch.setenv("EXACTSURFACE_LICENSE_PUBLIC_KEY", "-----BEGIN PUBLIC KEY-----")
+    with pytest.raises(LicenseError):
+        verify_license(token, Settings().license_public_key)
