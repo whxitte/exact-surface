@@ -68,25 +68,35 @@ async def test_data_found_before_the_stop_is_kept():
     discovered must survive — that's the difference between 'stopped' and 'lost'."""
     mongo = FakeMongo()
     audit = ScanRunRepo.from_mongo(mongo)
-    calls = {"n": 0}
 
     real_check = audit.__class__.is_cancel_requested
 
-    async def cancel_after_first_stage(self, tenant_id, scan_id):
-        calls["n"] += 1
-        # domain_intel runs first, then ingest; stop after ingest has persisted.
-        return calls["n"] > 2
+    # Stop as soon as ingest's asset is on disk. Counting calls instead would be
+    # timing-dependent: _run_stage_with_heartbeat POLLS this on a timer, so a stage
+    # that runs slowly is asked more times than one that runs quickly, and the stop
+    # would land mid-ingest -- before the write -- on a slow machine.
+    async def cancel_once_ingest_has_persisted(self, tenant_id, scan_id):
+        found = await AssetRepo.from_mongo(mongo).list("t1", "p1", limit=100)
+        return any(a["hostname"] == "app.customer.com" for a in found)
 
-    audit.__class__.is_cancel_requested = cancel_after_first_stage
+    audit.__class__.is_cancel_requested = cancel_once_ingest_has_persisted
     try:
 
         async def subfinder(domain, timeout):
             return ["app.customer.com"]
 
+        async def crtsh(_domain):
+            return []
+
         async def resolve(hosts, _timeout):
             return {h: ["93.184.216.34"] for h in hosts}
 
-        result = await _run(mongo, "scan-cancel-2", subfinder=subfinder, resolve=resolve)
+        # crtsh must be injected too. Left real, ingest reaches out to crt.sh over the
+        # network: slow or hanging wherever egress is restricted, and not something a
+        # unit test should depend on at all.
+        result = await _run(
+            mongo, "scan-cancel-2", subfinder=subfinder, crtsh=crtsh, resolve=resolve
+        )
     finally:
         audit.__class__.is_cancel_requested = real_check
 
