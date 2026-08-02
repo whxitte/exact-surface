@@ -107,6 +107,18 @@ async def refresh(mongo: Any, *, now: datetime | None = None) -> LicenseState:
     _last_refresh_monotonic = time.monotonic()
     if _state.status not in (LicenseStatus.ACTIVE, LicenseStatus.UNLICENSED):
         logger.warning("license state: {} — {}", _state.status.value, _state.reason)
+    elif _state.entitlements is not None:
+        # Success was silent, which made a misconfigured licence hard to tell apart from
+        # a working one: both produced no output. Say once, at startup, exactly which
+        # licence this instance is running -- the first question any support case asks.
+        ent = _state.entitlements
+        logger.info(
+            "license active: {} ({}), {} domain(s), expires {}",
+            ent.customer_name,
+            ent.plan.value,
+            "unlimited" if ent.max_domains is None else ent.max_domains,
+            ent.expires_at.date().isoformat(),
+        )
     return _state
 
 

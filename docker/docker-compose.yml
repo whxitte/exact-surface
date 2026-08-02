@@ -7,19 +7,15 @@ name: exactsurface
 x-backend-env: &backend-env
   EXACTSURFACE_MONGO_URI: mongodb://mongo:27017
   EXACTSURFACE_REDIS_URI: redis://redis:6379/0
-  # The licence, passed through from the host environment. Without these two lines
-  # `EXACTSURFACE_LICENSE=… docker compose up` set the variable on the compose CLI and
-  # nowhere else: the containers never saw it, compose reported the services already
-  # "Running" because nothing about them had changed, and the app sat in read-only mode
-  # insisting no licence was configured. Empty is equivalent to unset (core.entitlements
-  # tests the token for truthiness), so leaving them off the host env is harmless.
+  # The LICENCE IS NOT LISTED HERE, deliberately. Put it in ../.env as
+  # `EXACTSURFACE_LICENSE=vlic1.…` -- every backend service loads that file.
   #
-  # Not listed here: EXACTSURFACE_LICENSE_PUBLIC_KEY. It is baked into the image as an
-  # ENV at build time, and a `${…:-}` default would overwrite that with an empty string
-  # for anyone who has not exported it -- turning a correctly-licensed deployment
-  # read-only. Override it through ../.env, which only sets what it actually contains.
-  EXACTSURFACE_LICENSE: ${EXACTSURFACE_LICENSE:-}
-  EXACTSURFACE_LICENSE_FILE: ${EXACTSURFACE_LICENSE_FILE:-}
+  # The tempting alternative -- listing it here with a shell-substituted empty default
+  # -- is a trap: `environment:` outranks `env_file:`, so the moment anyone runs `docker compose
+  # up` or `restart` from a shell that has not exported the variable, the empty default
+  # overwrites the real licence and a working deployment silently drops to read-only.
+  # A licence that lives only in a shell variable is not configuration -- it survives
+  # exactly one terminal session.
 
 services:
   mongo:
