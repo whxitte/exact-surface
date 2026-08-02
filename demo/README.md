@@ -41,6 +41,30 @@ and we add one — rather than the demo silently becoming a museum piece.
 * `tests/unit/test_wiring.py` asserts no product Dockerfile references `demo/`, and
   that none uses `COPY . .` (which would sweep it in).
 
+## Deploy to Vercel
+
+Docker (above) works anywhere. To deploy without a container, on Vercel:
+
+1. [vercel.com/new](https://vercel.com/new) → import this repo.
+2. **Root Directory**: `frontend` — Vercel's Next.js auto-detection needs
+   `package.json` and `next.config.mjs` at the project root it's given, and those live
+   in `frontend/`, not `demo/`.
+3. **Build Command**, override to perform the same swap the Dockerfile does before
+   building:
+   ```
+   cp ../demo/lib/fixtures.ts ../demo/lib/transport.ts lib/ && npm run build
+   ```
+   (Paths are relative to Root Directory, so `../demo/lib/` reaches this folder — the
+   full repo is checked out regardless of Root Directory, only the build's working
+   directory changes.)
+4. **Install Command**: leave as default (`npm ci`).
+5. No environment variables needed — there is no backend to point at.
+6. Deploy, then point `demo.exactsurface.com` at the project.
+
+This is dashboard configuration, not a checked-in `vercel.json` — deliberately, so
+`frontend/` (which *does* ship inside the real product image) stays free of any
+Vercel-specific file. Re-apply these settings if the Vercel project is ever recreated.
+
 ## Refreshing the data
 
 `demo/lib/fixtures.ts` is a plain TypeScript module — edit it directly, or regenerate
