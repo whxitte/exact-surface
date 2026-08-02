@@ -124,11 +124,18 @@ async def run_cloud_buckets(
     res = await FindingRepo.from_mongo(mongo).upsert_all(models)
     new = sum(1 for x in res if x.inserted)
 
+    # `found` is candidates CONFIRMED TO EXIST (public or private) -- every one of the
+    # `len(candidates)` derived names was already probed above ("probing N URL(s)"),
+    # so this line must not say "checked" again: read cold, "0 candidate(s) checked"
+    # after "probing 45 URL(s)" sounds like the probing never happened, when the real
+    # (and completely normal) outcome is that none of the 45 guessed names resolved to
+    # an actual bucket anywhere.
     logger.info(
-        "cloud-buckets {}: {} candidate(s) checked, {} public → findings ({} new),"
+        "cloud-buckets {}: {}/{} candidate name(s) exist — {} public ({} new finding(s)),"
         " {} exist-but-private (not persisted — unattributable)",
         apex,
         len(found),
+        len(candidates),
         len(public),
         new,
         len(private),

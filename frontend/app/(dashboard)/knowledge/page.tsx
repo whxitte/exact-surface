@@ -74,7 +74,7 @@ const SECTIONS: Section[] = [
             an API key). Off by default.
           </li>
           <li><Term>Probe</Term> — which hosts are alive over HTTP/S, their status, title, tech (httpx).</li>
-          <li><Term>TLS</Term> — certificate chain, expiry, SANs (tlsx).</li>
+          <li><Term>TLS inspection</Term> — certificate chain, expiry, SANs (tlsx).</li>
           <li><Term>Takeover</Term> — dangling DNS / claimable cloud services (see below).</li>
           <li><Term>Crawl</Term> — walk each live site for links and endpoints (katana, gau, wayback).</li>
           <li><Term>Content discovery</Term> — brute-force hidden paths/files (feroxbuster).</li>
@@ -327,7 +327,8 @@ const SECTIONS: Section[] = [
     body: (
       <>
         <p>
-          Targets hand over more than they realise. <Term>robots.txt</Term> is a public list of
+          Unintentional <Term>disclosure</Term> — targets hand over more than they realise.{" "}
+          <Term>robots.txt</Term> is a public list of
           the paths an administrator wanted kept out of search results — which is exactly where
           an attacker looks first. <Term>sitemap.xml</Term> is the site&apos;s own inventory,
           often including pages nothing links to any more.
@@ -373,6 +374,30 @@ const SECTIONS: Section[] = [
           <Term>WAF detection</Term> is context rather than a finding. Knowing a host sits behind
           Cloudflare explains why it returned less than its neighbour — and knowing which hosts
           have no WAF tells you where your unprotected surface actually is.
+        </p>
+      </>
+    ),
+  },
+  {
+    id: "hidden-params",
+    title: "Hidden parameters",
+    icon: Boxes,
+    keywords: "hidden parameters arjun param discovery undocumented query string",
+    body: (
+      <>
+        <p>
+          Two very different costs, reported separately. The <Term>observed inventory</Term>{" "}
+          is free — parameters already visible in URLs we already crawled, usually most of
+          the real surface. The <Term>candidate probe</Term> costs requests: a bounded binary
+          search over a curated wordlist (via <Term>arjun</Term>, with a built-in prober as a
+          fallback if it is not installed) that finds parameters a page silently accepts but
+          never links to anywhere.
+        </p>
+        <p>
+          The probe only ever compares how a response changes when a parameter is added — it
+          never submits a hostile value, so this is detection, not testing for injection. A
+          parameter this finds is worth a look precisely because nobody documented it: an
+          undocumented switch is the kind of thing that changes behaviour and gets forgotten.
         </p>
       </>
     ),
@@ -456,6 +481,39 @@ const SECTIONS: Section[] = [
           and verify the relevant domain to bring it into monitoring.
         </p>
       </>
+    ),
+  },
+  {
+    id: "cloud-buckets",
+    title: "Exposed cloud storage",
+    icon: Boxes,
+    keywords: "cloud buckets s3 gcs azure blob storage public listable exposure",
+    body: (
+      <p>
+        Derives likely S3/GCS/Azure bucket names from your domain (common naming patterns —
+        the bare name, with environment suffixes, with the company name) and checks whether
+        each one exists and, if so, whether it is <Term>publicly listable</Term>. A bucket
+        that exists but is not public is not reported at all — it is not attributable to you
+        without owning it, and listing it would just be noise. Only a bucket that actually
+        lists its contents to anyone becomes a High finding.
+      </p>
+    ),
+  },
+  {
+    id: "reverse-dns",
+    title: "Reverse-DNS sweep",
+    icon: Boxes,
+    keywords: "reverse dns ptr sweep asn dedicated ip range hosts",
+    body: (
+      <p>
+        PTR-sweeps the IP ranges <Term>confirmed to be yours</Term> — never a name you have
+        not verified — for hosts that exist in that address space but were never published in
+        any DNS record. It only runs on ranges that have already earned{" "}
+        <Term>dedicated</Term> status (your domain&apos;s real announced ASN, not a
+        self-declared claim), and is capped at 8192 addresses per range so one very large
+        allocation cannot turn into an unbounded sweep. Off by default for exactly that
+        reason — it is the most request-heavy discovery module in the product.
+      </p>
     ),
   },
   {
@@ -587,6 +645,22 @@ const SECTIONS: Section[] = [
         the CISA <Term>Known-Exploited-Vulnerabilities (KEV)</Term> catalogue. Each match shows a
         confidence (how sure the tech/version fingerprint is), CVSS, and a KEV badge when it&apos;s
         actively exploited in the wild. Matches link out to the NVD detail page.
+      </p>
+    ),
+  },
+  {
+    id: "template-watch",
+    title: "New-template watch",
+    icon: Bug,
+    keywords: "nuclei watch new template baseline rescan detection updates",
+    body: (
+      <p>
+        Nuclei&apos;s template library grows constantly — a new CVE or misconfiguration check
+        ships and suddenly applies to hosts that were already scanned and looked clean at the
+        time. This module <Term>baselines</Term> which templates are relevant to your
+        fingerprinted tech stack, and when a newly published template joins that relevant set,
+        it triggers a targeted re-scan instead of waiting for the next full scan — so a fresh
+        detection reaches you as soon as it exists, not on the next scheduled cadence.
       </p>
     ),
   },

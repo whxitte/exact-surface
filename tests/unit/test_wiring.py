@@ -479,6 +479,42 @@ def test_every_module_has_an_activity_stepper_label():
     assert not missing, f"pipelines.ts PIPELINE_INFO has no entry for: {missing}"
 
 
+def test_every_module_is_mentioned_in_the_knowledge_page():
+    """The in-app Knowledge wiki has to explain what a module does, or a customer has
+    no way to learn about a capability except by noticing it produced a finding.
+
+    Four modules -- reverse_dns, param_discovery, cloud_buckets, nuclei_watch -- had
+    zero mentions anywhere in this file despite being fully shipped, because the page
+    is hand-written prose with no structural link back to core.modules (unlike
+    PIPELINE_INFO, there isn't even a dict to keep in sync -- it just has to be
+    remembered). This can't catch "explained well" vs "explained badly", only
+    "mentioned at all": for each module's ModuleSpec.label, every significant word
+    (stemmed, so 'inspection' matches 'inspect', 'alerting' matches 'alert') must
+    appear somewhere on the page. A label reword is expected to occasionally trip
+    this -- fix it by extending the relevant section's prose, not by weakening the
+    check.
+    """
+    import re as _re
+
+    text = (
+        (REPO / "frontend" / "app" / "(dashboard)" / "knowledge" / "page.tsx").read_text().lower()
+    )
+    stop = {"a", "an", "the", "of", "and", "or", "on", "in", "to", "for"}
+
+    def stem(w: str) -> str:
+        return w[:5] if len(w) > 6 else w
+
+    gaps: dict[str, list[str]] = {}
+    for spec in registry.MODULES:
+        words = [
+            w for w in _re.findall(r"[a-z]+", spec.label.lower()) if w not in stop and len(w) > 2
+        ]
+        missing = [w for w in words if stem(w) not in text]
+        if missing:
+            gaps[spec.name] = missing
+    assert not gaps, f"modules with no mention in the Knowledge page: {gaps}"
+
+
 def test_the_bundled_scope_feed_is_committed():
     """The scope engine's CDN/cloud ranges must be IN GIT, not just on disk.
 

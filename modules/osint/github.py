@@ -88,7 +88,12 @@ async def search_leaks(
         # Show the EXACT query, so the user can reproduce the search themselves — the
         # same transparency rule the dork module follows.
         results = await search(query)
-        logger.info("github-osint: searching {} → {} result(s)", query, len(results))
+        # This is GitHub's raw text-match count -- a file that merely MENTIONS the
+        # domain (a README, a CORS allow-list, a changelog entry). Each one still gets
+        # run through find_secrets() below; only a real credential-shaped string in
+        # the content becomes a hit. Logged as "match(es)", never "result(s)"/"hit(s)",
+        # so this reads as what it is instead of implying secrets were found here.
+        logger.info("github-osint: searching {} → {} code match(es)", query, len(results))
         for item in results:
             url = item.get("html_url", "")
             if url in seen_urls:
