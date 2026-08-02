@@ -182,3 +182,45 @@ def test_issuing_a_zero_cap_licence_is_refused(tmp_path, capsys):
         sys.argv = old
     # The human summary goes to stderr so stdout stays pipeable when --out is omitted.
     assert "unlimited domains" in capsys.readouterr().err
+
+
+def test_the_documented_licence_env_var_is_the_one_the_app_reads(monkeypatch):
+    """Every doc tells customers to set EXACTSURFACE_LICENSE. It must be read.
+
+    The settings prefix derives EXACTSURFACE_LICENSE_TOKEN from the field name, so the
+    documented short name was read by nothing: the operator sets it correctly, the
+    instance stays read-only reporting "no license configured", and there is no way to
+    tell from the outside which of the two names is real.
+    """
+    from core.config import Settings
+
+    for name in ("EXACTSURFACE_LICENSE", "EXACTSURFACE_LICENSE_TOKEN"):
+        monkeypatch.delenv("EXACTSURFACE_LICENSE", raising=False)
+        monkeypatch.delenv("EXACTSURFACE_LICENSE_TOKEN", raising=False)
+        monkeypatch.setenv(name, "tok-from-" + name)
+        assert Settings().license_token == "tok-from-" + name, f"{name} was ignored"
+
+
+def test_compose_passes_the_licence_into_the_containers():
+    """A licence the containers never receive is a licence that does not exist.
+
+    `EXACTSURFACE_LICENSE=… docker compose up` sets the variable for the compose CLI
+    process only. Unless the service declares it, nothing reaches the app -- and compose
+    reports the services as unchanged and still "Running", so it looks like it worked.
+    """
+    from pathlib import Path
+
+    compose = Path("docker/docker-compose.yml").read_text()
+    assert "EXACTSURFACE_LICENSE: ${EXACTSURFACE_LICENSE" in compose, (
+        "docker-compose.yml must pass EXACTSURFACE_LICENSE through to the backend "
+        "services, or no self-hosted customer can ever activate their licence"
+    )
+    # The public key is baked into the image; a ${...:-} default would blank it out for
+    # anyone who has not exported it, turning a licensed deployment read-only.
+    assert "EXACTSURFACE_LICENSE_PUBLIC_KEY: ${" not in compose
+
+    # ...but a locally built image must still be able to BAKE the verify key, or it
+    # verifies every licence against an empty key and is read-only whatever you set.
+    assert compose.count("LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY") == 2, (
+        "both locally built images (api, pipeline) need the LICENSE_PUBLIC_KEY build arg"
+    )
