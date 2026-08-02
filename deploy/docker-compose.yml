@@ -1,0 +1,174 @@
+# ExactSurface — the customer stack.
+#
+# This is the file you run. It pulls published images and builds nothing, so it needs
+# no source code: the three lines below are the whole product.
+#
+#   docker compose up -d
+#
+# Everything it needs sits beside it in this directory (.env, Caddyfile, prometheus.yml,
+# alerts.yml, grafana/). Keep them together.
+#
+# Security posture, unchanged from how we run it ourselves:
+#   * Mongo and Redis are on the internal network only — no host ports. An exposed,
+#     unauthenticated datastore is the classic breach; here it is neither reachable
+#     nor unauthenticated.
+#   * EXACTSURFACE_ENV=prod makes the app refuse insecure secrets at startup rather
+#     than running with them.
+#   * Caddy is the single public ingress and terminates TLS for you.
+#   * Grafana binds to loopback — reach it over an SSH tunnel, not the internet.
+name: exactsurface
+
+# Image tags come from EXACTSURFACE_VERSION in .env and default to a pinned version,
+# never `latest`: an image that moves under a running scan is not something you want to
+# be debugging. Change the version in .env when you choose to upgrade.
+x-backend-env: &backend-env
+  EXACTSURFACE_ENV: prod
+  EXACTSURFACE_MONGO_URI: mongodb://${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}:${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}@mongo:27017/?authSource=admin
+  EXACTSURFACE_REDIS_URI: redis://:${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}@redis:6379/0
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:?set MONGO_ROOT_USER in .env}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?set MONGO_ROOT_PASSWORD in .env}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}",
+       "--save", "60", "1", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Runs once with --dry-run and exits healthy only if the configuration and the
+  # bundled scope feeds load. It gates everything below it, so a broken setup fails
+  # here rather than halfway through your first scan.
+  pipeline:
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.0.0}
+    command: ["python", "-m", "daemon.main", "--dry-run"]
+    env_file: .env
+    environment: *backend-env
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  scheduler:
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.0.0}
+    command: ["python", "-m", "daemon.main"]
+    env_file: .env
+    environment: *backend-env
+    restart: unless-stopped
+    depends_on:
+      pipeline: { condition: service_started }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker:
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.0.0}
+    command: ["arq", "taskqueue.worker.WorkerSettings"]
+    env_file: .env
+    environment:
+      <<: *backend-env
+      # MUST equal `replicas` below. If Redis is unreachable each worker falls back to
+      # enforcing 1/this of the per-target rate cap on its own; set it lower than the
+      # real replica count and a degraded fleet scans over the cap (ADR-0012).
+      EXACTSURFACE_WORKER_FLEET_SIZE: "3"
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+    depends_on:
+      pipeline: { condition: service_started }
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  api:
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/api:${EXACTSURFACE_VERSION:-1.0.0}
+    env_file: .env
+    environment: *backend-env
+    restart: unless-stopped
+    # No host port: reachable only through Caddy and on the internal network.
+    depends_on:
+      mongo: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  frontend:
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/frontend:${EXACTSURFACE_VERSION:-1.0.0}
+    environment:
+      - API_PROXY_TARGET=http://api:8000
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_started }
+
+  # The only service with public ports. Gets a Let's Encrypt certificate for $DOMAIN
+  # automatically; point an A record at this host first or issuance will fail.
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      frontend: { condition: service_started }
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      api: { condition: service_started }
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?set GRAFANA_ADMIN_PASSWORD in .env}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=false
+      - GF_SERVER_ROOT_URL=https://${DOMAIN}/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    # Loopback only — reach it through an SSH tunnel:
+    #   ssh -L 3001:127.0.0.1:3001 you@your-server   then http://localhost:3001
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      prometheus: { condition: service_started }
+
+volumes:
+  mongo_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  caddy_data:
+  caddy_config:

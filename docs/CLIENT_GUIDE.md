@@ -49,9 +49,32 @@ or Discord webhook if you want alerting.
 
 ## 3. Install
 
+Download `exactsurface-<version>.tar.gz` from the release you were given. That archive
+is the entire deployment — a compose file and its configuration. There is **no source
+code to clone and nothing to build**; the images are published and pre-built.
+
 ```bash
-git clone <the repository you were given> exactsurface && cd exactsurface
+tar xzf exactsurface-1.0.0.tar.gz && cd exactsurface-1.0.0
 cp .env.example .env
+```
+
+You should have these files:
+
+| File | What it is |
+|---|---|
+| `docker-compose.yml` | The stack. Pinned to the exact image versions you were shipped. |
+| `.env.example` | Every setting, commented. Copy to `.env` and fill it in. |
+| `Caddyfile` | TLS + ingress. Gets a Let's Encrypt certificate automatically. |
+| `prometheus.yml`, `alerts.yml` | Metrics and alerting rules. |
+| `grafana/` | Pre-built operations dashboard. |
+| `INSTALL.md` | This guide. |
+
+If you also want to pull the images ahead of time (optional — compose does it for you):
+
+```bash
+docker pull ghcr.io/whxitte/api:1.0.0
+docker pull ghcr.io/whxitte/frontend:1.0.0
+docker pull ghcr.io/whxitte/pipeline:1.0.0
 ```
 
 ### 3.1 Fill in `.env`
@@ -66,16 +89,12 @@ python3 -c "import secrets; print('EXACTSURFACE_SECRET_HASH_KEY=' + secrets.toke
 Minimum you must set:
 
 ```ini
-EXACTSURFACE_ENV=prod
+# your subscription — paste the token we sent you, on one line
+EXACTSURFACE_LICENSE=vlic1.…
+
 EXACTSURFACE_JWT_SECRET=<generated above>
 EXACTSURFACE_SECRET_HASH_KEY=<generated above>
 EXACTSURFACE_APP_BASE_URL=https://easm.yourcompany.com
-
-# your subscription
-EXACTSURFACE_LICENSE_ENFORCED=true
-EXACTSURFACE_LICENSE_FILE=/run/secrets/license      # or paste the token into EXACTSURFACE_LICENSE=
-EXACTSURFACE_LICENSE_REFRESH_URL=<given to you>
-EXACTSURFACE_UPDATE_FEED_URL=<given to you>
 
 # read by docker compose itself (no prefix)
 DOMAIN=easm.yourcompany.com
@@ -84,12 +103,19 @@ MONGO_ROOT_PASSWORD=<strong random>
 REDIS_PASSWORD=<strong random>
 GRAFANA_ADMIN_PASSWORD=<strong random>
 
-# must equal the worker replica count in the compose file (see §6.3)
+# must equal the worker replica count in docker-compose.yml (see §6.3)
 EXACTSURFACE_WORKER_FLEET_SIZE=3
 ```
 
-Place your licence token where the file path points, or set `EXACTSURFACE_LICENSE`
-directly.
+> **Put the licence in `.env`, not in a shell variable.** `export EXACTSURFACE_LICENSE=…`
+> lasts one terminal session; the next `docker compose up` or `restart` without it drops
+> the instance to read-only with nothing in the logs explaining why.
+
+Two things you do **not** need to set: `EXACTSURFACE_ENV`, which the compose file already
+pins to `prod`, and any "enforce licensing" flag — a released image always enforces, and
+no environment variable changes that. If you prefer to mount the token as a file rather
+than put it in `.env`, set `EXACTSURFACE_LICENSE_FILE` to the path inside the container
+and mount it in a compose override.
 
 > **`.env` holds every secret for this deployment.** It's gitignored — keep it that way,
 > restrict it to `chmod 600`, and back it up somewhere safe but private.
@@ -99,12 +125,23 @@ directly.
 Create the A-record for `DOMAIN` **before** starting, so TLS can be issued:
 
 ```bash
-docker compose -f docker/docker-compose.prod.yml up -d --build
-docker compose -f docker/docker-compose.prod.yml ps          # all healthy?
-docker compose -f docker/docker-compose.prod.yml logs -f api  # watch for errors
+docker compose up -d
+docker compose ps            # all healthy?
+docker compose logs -f api   # watch for errors
 ```
 
-First build takes a while (the scanning image compiles a full recon toolchain).
+The first start pulls a few GB (the scanning image carries a full recon toolchain and
+the template corpus), so give it a few minutes on a slow connection.
+
+**Confirm your licence activated.** This is the one check worth doing before anything
+else — a licensed instance says so explicitly:
+
+```bash
+docker compose logs api | grep "license active"
+```
+
+You want a line naming your organisation, plan and expiry. If instead the UI shows a red
+**read-only mode** banner, the licence did not load; see §9 before going further.
 
 Open `https://your-domain` and create the first account — **that account becomes the
 owner** of your organisation.
@@ -112,9 +149,10 @@ owner** of your organisation.
 ### 3.3 Verify the install
 
 - [ ] `https://your-domain` loads and you can sign up / log in
-- [ ] `docker compose -f docker/docker-compose.prod.yml ps` shows all services healthy
+- [ ] `docker compose ps` shows all services healthy
+- [ ] `docker compose logs api | grep "license active"` prints your subscription
 - [ ] Settings shows your subscription as **active** (no red banner)
-- [ ] `docker compose ... logs worker` shows the worker connected to Redis
+- [ ] `docker compose logs worker` shows the worker connected to Redis
 
 ---
 
@@ -314,7 +352,7 @@ age-keygen -o age-identity.txt          # keep this SAFE and ELSEWHERE
 #   EXACTSURFACE_BACKUP_AGE_RECIPIENT=age1...
 
 # take a backup
-docker compose -f docker/docker-compose.prod.yml exec api python -m scripts.backup
+docker compose exec api python -m scripts.backup
 ```
 
 Backups are **encrypted to a key this server cannot read** — so compromising the scanner
@@ -334,15 +372,15 @@ Also back up: `.env`, and your licence token.
 
 ```bash
 git pull                       # or fetch the new release
-docker compose -f docker/docker-compose.prod.yml pull
-docker compose -f docker/docker-compose.prod.yml up -d
+docker compose pull
+docker compose up -d
 ```
 
 Take a backup first. Read the release notes for anything flagged as breaking.
 
 ### 6.3 Scaling
 
-Busy surface? Raise worker replicas in `docker/docker-compose.prod.yml`
+Busy surface? Raise worker replicas in `docker-compose.yml`
 (`worker.deploy.replicas`) **and set `EXACTSURFACE_WORKER_FLEET_SIZE` to the same
 number.** They must match: the fleet-size value is what keeps the politeness rate limit
 correct if Redis becomes unavailable. Setting it too low lets a degraded fleet scan
@@ -362,9 +400,9 @@ The operations dashboard and Prometheus datasource are pre-provisioned.
 ### 6.5 Logs
 
 ```bash
-docker compose -f docker/docker-compose.prod.yml logs -f api
-docker compose -f docker/docker-compose.prod.yml logs -f worker
-docker compose -f docker/docker-compose.prod.yml logs -f scheduler
+docker compose logs -f api
+docker compose logs -f worker
+docker compose logs -f scheduler
 ```
 
 ---

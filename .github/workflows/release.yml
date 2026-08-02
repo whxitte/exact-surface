@@ -179,8 +179,91 @@ jobs:
           name: digest-${{ matrix.name }}
           path: digests/*.txt
 
-  release:
+  # Pull what we just published and use it. Every release-path defect we have shipped
+  # was invisible to the unit suite and obvious the moment a published image was run:
+  # a scope-data file that was never committed, and a verify key truncated to its first
+  # line by the build-arg channel — which meant no customer could license the product at
+  # all. Local builds passed in both cases, because a local build is not the artifact.
+  #
+  # This asserts, against the real image, the things that were broken:
+  #   * the build stamp is the version we think we released;
+  #   * the baked verify key is the FULL secret, not a fragment of it;
+  #   * the scope engine loads real ranges (an empty feed is worse than a missing one —
+  #     it would silently classify every CDN address as ordinary scannable space);
+  #   * every module still resolves to a pipeline route.
+  #
+  # It cannot sign a licence: the private key is offline and must never reach CI. So it
+  # compares the shipped key to the intended key, which is exactly the check that would
+  # have caught the truncation.
+  verify-published:
     needs: [verify, images]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull and interrogate the published api image
+        env:
+          EXPECTED_KEY: ${{ secrets.LICENSE_PUBLIC_KEY }}
+          VERSION: ${{ needs.verify.outputs.version }}
+        run: |
+          set -euo pipefail
+          NS=$(echo "ghcr.io/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="$NS/api:$VERSION"
+          docker pull -q "$IMAGE"
+
+          echo "$EXPECTED_KEY" > expected.pem
+          docker run --rm -v "$PWD/expected.pem:/tmp/expected.pem:ro" -e "VERSION=$VERSION" "$IMAGE" python - <<'PY'
+          import os, sys, asyncio
+          from pathlib import Path
+          from core.build_info import VERSION, RELEASE_BUILD
+          from core.config import get_settings
+          from core.scope import ScopeEngine
+          from pipelines.dispatch import ROUTES
+          from core.modules import MODULE_NAMES
+
+          fail = []
+          if not RELEASE_BUILD:
+              fail.append("image is not stamped as a release build")
+          if VERSION != os.environ["VERSION"]:
+              fail.append(f"build stamp is {VERSION!r}, expected {os.environ['VERSION']!r}")
+
+          baked = (get_settings().license_public_key or "").strip()
+          expected = Path("/tmp/expected.pem").read_text().strip()
+          if not baked:
+              fail.append("no verify key baked in — every licence would fail to verify")
+          elif baked != expected:
+              # The v1.0.0 failure: the PEM truncated to its first line in transit.
+              fail.append(
+                  f"baked verify key does not match the secret "
+                  f"(baked {len(baked.splitlines())} line(s), expected {len(expected.splitlines())})"
+              )
+
+          ranges = ScopeEngine.from_data_file()._ranges
+          total = sum(len(v) for v in ranges.values())
+          if total < 20:
+              fail.append(f"scope feed has only {total} range(s) — a near-empty feed "
+                          "would let CDN addresses be treated as scannable")
+
+          missing = [m for m in MODULE_NAMES if m not in ROUTES]
+          if missing:
+              fail.append(f"modules with no pipeline route: {missing}")
+
+          if fail:
+              print("PUBLISHED IMAGE IS NOT SHIPPABLE:")
+              for f in fail:
+                  print("  -", f)
+              sys.exit(1)
+          print(f"published image OK: {VERSION}, verify key matches the secret, "
+                f"{total} scope ranges, {len(ROUTES)} module routes")
+          PY
+
+  release:
+    needs: [verify, images, verify-published]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -210,8 +293,54 @@ jobs:
             cat digests/*.txt
             echo '```'
             echo
-            echo "Customer install: see \`docs/CLIENT_GUIDE.md\`."
+            echo "### Install"
+            echo
+            echo "Download \`exactsurface-$VERSION.tar.gz\` below — it is the whole"
+            echo "deployment. No source code and no build step."
+            echo
+            echo '```bash'
+            echo "tar xzf exactsurface-$VERSION.tar.gz && cd exactsurface-$VERSION"
+            echo "cp .env.example .env      # paste your licence, set DOMAIN + passwords"
+            echo "docker compose up -d"
+            echo "docker compose logs api | grep 'license active'"
+            echo '```'
+            echo
+            echo "Full instructions: \`docs/CLIENT_GUIDE.md\`."
           } > notes.md
+
+      # What the customer actually receives. Assembled from the same files we run
+      # ourselves rather than a second copy, so the shipped stack cannot drift from the
+      # tested one.
+      - name: Assemble the customer bundle
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.verify.outputs.version }}"
+          NS=$(echo "ghcr.io/${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          DIR="exactsurface-$VERSION"
+          mkdir -p "$DIR/grafana"
+
+          cp deploy/docker-compose.yml "$DIR/docker-compose.yml"
+          cp deploy/.env.example       "$DIR/.env.example"
+          cp docker/Caddyfile          "$DIR/Caddyfile"
+          cp docker/prometheus.yml     "$DIR/prometheus.yml"
+          cp docker/alerts.yml         "$DIR/alerts.yml"
+          cp -r docker/grafana/provisioning docker/grafana/dashboards "$DIR/grafana/"
+          cp docs/CLIENT_GUIDE.md      "$DIR/INSTALL.md"
+
+          # Pin the bundle to the version it was cut for. A bundle whose .env.example
+          # names an older release would quietly install the wrong images.
+          sed -i "s|^EXACTSURFACE_VERSION=.*|EXACTSURFACE_VERSION=$VERSION|" "$DIR/.env.example"
+          sed -i "s|^EXACTSURFACE_REGISTRY=.*|EXACTSURFACE_REGISTRY=$NS|"    "$DIR/.env.example"
+
+          # Prove the bundle is self-contained before shipping it: no build: sections
+          # (the customer has no source) and no image left un-pinned.
+          if grep -qE '^\s*build:' "$DIR/docker-compose.yml"; then
+            echo "::error::customer bundle contains a build: section — it requires source code"; exit 1
+          fi
+          grep -q "EXACTSURFACE_VERSION=$VERSION" "$DIR/.env.example"
+
+          tar czf "$DIR.tar.gz" "$DIR"
+          echo "bundle: $(du -h "$DIR.tar.gz" | cut -f1)"
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -219,3 +348,4 @@ jobs:
           name: ExactSurface ${{ needs.verify.outputs.version }}
           tag_name: v${{ needs.verify.outputs.version }}
           body_path: notes.md
+          files: exactsurface-${{ needs.verify.outputs.version }}.tar.gz

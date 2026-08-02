@@ -320,9 +320,13 @@ Send these five things — nothing more, nothing less:
 
 1. **The licence token** (`acme.vlic`) — treat as a credential; send over something
    better than plain email if you can.
-2. **[`CLIENT_GUIDE.md`](CLIENT_GUIDE.md)** — their complete deploy + operate manual.
-3. **Image access** — the GHCR image names, plus (for private packages) an invite to
-   the packages for their GitHub account.
+2. **The deployment bundle** — `exactsurface-<version>.tar.gz`, attached to the GitHub
+   release. This is the product as far as the customer is concerned: compose file,
+   config, dashboards and the guide, pinned to the images of that release. It contains
+   no source and needs no build. `CLIENT_GUIDE.md` ships inside it as `INSTALL.md`, so
+   sending the bundle covers the manual too.
+3. **Image access** — for private packages, an invite to the packages for their GitHub
+   account. The bundle already names the images, so there is nothing to copy out.
 4. **Their control-plane URLs** to put in `.env`:
    `EXACTSURFACE_LICENSE_REFRESH_URL=https://cp.exactsurface.com/v1/license/refresh`
    and `EXACTSURFACE_UPDATE_FEED_URL=https://cp.exactsurface.com`

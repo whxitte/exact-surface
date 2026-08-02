@@ -473,3 +473,78 @@ def test_the_scope_feed_actually_loads_and_is_not_empty():
     engine = ScopeEngine.from_data_file()
     total = sum(len(v) for v in engine._ranges.values())
     assert total > 20, f"the bundled scope feed has only {total} ranges — it looks empty"
+
+
+def test_the_customer_bundle_is_installable_without_source():
+    """What a buyer receives must run with no repo, no build step and no guesswork.
+
+    docker-compose.prod.yml -- what CLIENT_GUIDE used to point customers at -- names
+    local build tags (`exactsurface/api:latest`) and carries `build:` sections. A
+    customer who ran the documented `docker pull ghcr.io/...` commands got images that
+    file does not reference, and compose would have gone looking for something else
+    entirely on Docker Hub. There was no install path at all.
+    """
+    from pathlib import Path
+
+    import yaml
+
+    text = Path("deploy/docker-compose.yml").read_text()
+    spec = yaml.safe_load(text)
+    services = spec["services"]
+
+    # No build: anywhere. The customer has no source tree to build from.
+    for name, svc in services.items():
+        assert "build" not in svc, f"{name} has a build: section; customers have no source"
+
+    # Our own images come from the published registry, pinned, never `latest`.
+    ours = ("api", "frontend", "pipeline", "scheduler", "worker")
+    for name in ours:
+        image = services[name]["image"]
+        assert "EXACTSURFACE_REGISTRY" in image, f"{name} does not use the published registry"
+        assert ":${EXACTSURFACE_VERSION" in image, f"{name} is not version-pinned"
+        assert ":latest}" not in image, (
+            f"{name} defaults to `latest`; an image that moves under a running scan is "
+            "not something a customer should have to debug"
+        )
+
+    # env_file must be beside the compose file, not up a directory into a repo layout.
+    for name in ("api", "pipeline", "scheduler", "worker"):
+        assert services[name].get("env_file") == ".env", (
+            f"{name} must read ./.env — `../.env` assumes the repo directory structure"
+        )
+
+    # Datastores must not publish host ports; that is the whole point of the prod shape.
+    for name in ("mongo", "redis"):
+        assert "ports" not in services[name], f"{name} must not be reachable from the host"
+
+    # Every file the compose mounts has to exist to be copied into the bundle.
+    for relative in ("Caddyfile", "prometheus.yml", "alerts.yml"):
+        assert Path("docker") / relative, f"docker/{relative} is missing"
+        assert (Path("docker") / relative).exists(), f"docker/{relative} is missing"
+    assert (Path("docker/grafana/provisioning")).is_dir()
+    assert (Path("docker/grafana/dashboards")).is_dir()
+
+
+def test_the_bundle_env_template_names_every_required_variable():
+    """A value compose declares required must appear in the template the customer edits.
+
+    Compose fails with `variable is not set` and no further explanation. Anything
+    marked `:?` has to be in .env.example or the customer's first run dies on a
+    message that does not say what to do about it.
+    """
+    import re
+    from pathlib import Path
+
+    compose = Path("deploy/docker-compose.yml").read_text()
+    template = Path("deploy/.env.example").read_text()
+
+    required = set(re.findall(r"\$\{([A-Z_]+):\?", compose))
+    assert required, "expected some required variables"
+    for var in sorted(required):
+        assert re.search(rf"^{var}=", template, re.M), (
+            f"{var} is required by docker-compose.yml but absent from .env.example"
+        )
+
+    # The licence itself is the one value with no compose-level guard (an empty licence
+    # is a legitimate state -- it just means read-only), so assert it explicitly.
+    assert re.search(r"^EXACTSURFACE_LICENSE=", template, re.M)
