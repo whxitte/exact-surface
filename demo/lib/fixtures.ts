@@ -4912,16 +4912,47 @@ export const TIMEOUT_DEFAULTS = {
 } as const;
 
 export const ALERT_POLICY_DEFAULTS = {
-  "min_severity": "medium",
-  "only_new": true,
-  "quiet_hours": null
+  alert_policy: {},
+  defaults: {
+    finding_min_severity: "medium",
+    alert_findings: true,
+    alert_secrets: true,
+    alert_leaks: true,
+    alert_cves: true,
+    cve_min_cvss: 0,
+    alert_new_assets: true,
+    alert_new_ports: true,
+    port_filter: "",
+  },
+  severities: ["critical", "high", "medium", "low", "info"],
 } as const;
 
 export const ALERT_POLICY = {
-  "min_severity": "medium",
-  "only_new": true,
-  "quiet_hours": null,
-  "source": "default"
+  alert_policy: {},
+  effective: {
+    finding_min_severity: "medium",
+    alert_findings: true,
+    alert_secrets: true,
+    alert_leaks: true,
+    alert_cves: true,
+    cve_min_cvss: 0,
+    alert_new_assets: true,
+    alert_new_ports: true,
+    port_filter: "",
+  },
+  defaults: {
+    finding_min_severity: "medium",
+    alert_findings: true,
+    alert_secrets: true,
+    alert_leaks: true,
+    alert_cves: true,
+    cve_min_cvss: 0,
+    alert_new_assets: true,
+    alert_new_ports: true,
+    port_filter: "",
+  },
+  tenant_defaults: {},
+  severities: ["critical", "high", "medium", "low", "info"],
 } as const;
 
 export const TIMEOUTS = {

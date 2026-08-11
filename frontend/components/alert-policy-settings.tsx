@@ -22,7 +22,7 @@ export function AlertPolicySettings({ programId }: { programId?: string }) {
 
   function seed(d: AlertPolicy) {
     // program: start from what notify actually enforces; account: defaults + overrides
-    const base = d.effective ?? { ...d.defaults, ...d.alert_policy };
+    const base = d?.effective ?? { ...(d?.defaults ?? {}), ...(d?.alert_policy ?? {}) };
     setV(base as AlertPolicyValues);
   }
 
@@ -150,11 +150,11 @@ export function AlertPolicySettings({ programId }: { programId?: string }) {
                   </div>
                 </div>
                 <Select
-                  value={v.finding_min_severity}
+                  value={v.finding_min_severity ?? "medium"}
                   onChange={(e) => set("finding_min_severity", e.target.value)}
                   className="h-8 w-32 capitalize"
                 >
-                  {data.severities.map((s) => (
+                  {(data.severities ?? ["critical", "high", "medium", "low", "info"]).map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
