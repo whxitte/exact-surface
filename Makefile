@@ -55,15 +55,4 @@ up: ## Start the full local stack
 down: ## Stop the local stack
 	docker compose -f docker/docker-compose.yml down
 
-# -- vendor-only (control plane + licensing). Never run on a customer host. --
-cp-up: ## Start the vendor control plane
-	docker compose -f docker/docker-compose.control-plane.yml up -d --build
 
-cp-down: ## Stop the vendor control plane
-	docker compose -f docker/docker-compose.control-plane.yml down
-
-cp-logs: ## Tail the control-plane logs
-	docker compose -f docker/docker-compose.control-plane.yml logs -f control-plane
-
-bundle: ## Build an update bundle + manifest (TEMPLATES=~/nuclei-templates BASE_URL=https://cp.../bundles)
-	$(PY) -m scripts.build_bundle --templates $(TEMPLATES) --out ./cp-data --base-url $(BASE_URL)

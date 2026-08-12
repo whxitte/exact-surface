@@ -683,9 +683,7 @@ def test_the_bundle_env_template_names_every_required_variable():
             f"{var} is required by docker-compose.yml but absent from .env.example"
         )
 
-    # The licence itself is the one value with no compose-level guard (an empty licence
-    # is a legitimate state -- it just means read-only), so assert it explicitly.
-    assert re.search(r"^EXACTSURFACE_LICENSE=", template, re.M)
+
 
 
 def test_dev_and_customer_compose_projects_cannot_collide():
@@ -712,9 +710,6 @@ def test_dev_and_customer_compose_projects_cannot_collide():
     names = {
         "docker/docker-compose.yml": project_name("docker/docker-compose.yml"),
         "deploy/docker-compose.yml": project_name("deploy/docker-compose.yml"),
-        "docker/docker-compose.control-plane.yml": project_name(
-            "docker/docker-compose.control-plane.yml"
-        ),
     }
     assert len(set(names.values())) == len(names), (
         f"compose project names must all be distinct, got {names}"

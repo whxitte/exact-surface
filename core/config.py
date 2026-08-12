@@ -182,38 +182,15 @@ class Settings(BaseSettings):
     email_verification_ttl_seconds: int = Field(default=86400)  # 24h
     email_resend_cooloff_seconds: int = Field(default=60)
 
-    # -- self-hosted subscription licensing (§ commercial) --------------
-    # Enforce the signed subscription license. OFF in dev/tests so local work isn't
-    # gated; ON in every customer deployment. When on and the license is missing,
-    # invalid, or expired-past-grace, the instance runs READ-ONLY (fail closed).
     license_enforced: bool = Field(default=False)
-    # Ed25519 PUBLIC key (PEM) that licenses are verified against. Baked into the image
-    # you build; public by design (it can only verify, never mint). No default — an
-    # enforced instance with no key configured fails closed to read-only.
     license_public_key: str | None = Field(default=None)
-    # The signed license token itself, or a path to a file containing it. The token
-    # (env) wins if both are set; the file lets ops mount a license without an env var.
-    #
-    # Accepts EXACTSURFACE_LICENSE as well as the prefix-derived
-    # EXACTSURFACE_LICENSE_TOKEN. Every document we ship tells customers to set
-    # EXACTSURFACE_LICENSE, and without this alias that variable was read by nothing:
-    # the instance stayed read-only with "no license configured" while the operator
-    # stared at a correctly-set environment variable. The short name is the documented
-    # one, so it is the one that must work.
     license_token: str | None = Field(
         default=None,
         validation_alias=AliasChoices("EXACTSURFACE_LICENSE", "EXACTSURFACE_LICENSE_TOKEN"),
     )
     license_file: str | None = Field(default=None)
-    # How often the instance re-evaluates the clock and (if configured) refreshes the
-    # license from the license server. Also the clock high-water-mark cadence.
     license_check_interval_seconds: int = Field(default=3600, ge=60)
-    # Optional online-refresh endpoint (hybrid model). When set, the instance periodically
-    # asks it for a fresh signed license extending the paid period; empty = pure offline.
     license_refresh_url: str | None = Field(default=None)
-    # License-gated update feed (vendor control plane). When set, the instance periodically
-    # pulls the latest signed template/tool bundle; a lapsed subscription is refused fresh
-    # detections (freshness enforcement). Empty = no auto-updates.
     update_feed_url: str | None = Field(default=None)
     # Where verified template bundles are extracted (point the scanner's templates here).
     update_templates_dir: str = Field(default="./data/nuclei-templates")

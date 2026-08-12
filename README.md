@@ -17,10 +17,10 @@ re-scan), multi-tenant from line one, and **never exploits — only detects**.
 | [`docs/API.md`](docs/API.md) | endpoint reference + the rules a schema can't show (why cross-tenant is 404, why `ip_scope` is strings) |
 | [`docs/ADRs/`](docs/ADRs/) | why things are the way they are — read before changing a control |
 | [`docs/TESTING.md`](docs/TESTING.md) | run it end-to-end against a target you own (quick) |
-| [`docs/PRICING_AND_LIMITS.md`](docs/PRICING_AND_LIMITS.md) | **the commercial model** — tiers, what each limit is, where it is enforced, and why the signed licence is the only authority |
-| [`deploy/README.md`](deploy/README.md) | **what a customer receives** — the self-contained deployment folder: what comes up, how the licence is installed, troubleshooting. Copied verbatim into the release archive |
-| [`docs/LICENSING.md`](docs/LICENSING.md) | how the signed licence actually works, minting/renewal, and the honest limits of self-hosted enforcement |
-| [`docs/OWNER_RUNBOOK.md`](docs/OWNER_RUNBOOK.md) | **for you, the owner** — keypair setup, cutting a release, selling to a customer, the four-step flow, doing a dry run before you ever sell |
+| [`docs/PRICING_AND_LIMITS.md`](docs/PRICING_AND_LIMITS.md) | **capabilities & limits** — full free self-hosted edition details (unlimited domains, users, scans, and modules) |
+| [`deploy/README.md`](deploy/README.md) | **what a customer receives** — the self-contained deployment folder: what comes up, configuration, troubleshooting. Copied verbatim into the release archive |
+| [`docs/LICENSING.md`](docs/LICENSING.md) | details of the free, unrestricted self-hosted deployment architecture |
+| [`docs/OWNER_RUNBOOK.md`](docs/OWNER_RUNBOOK.md) | **for you, the owner** — cutting a release, customer delivery, doing a dry run |
 | [`demo/README.md`](demo/README.md) | **the public demo site** — a separate, static, backend-free build of the real frontend; how it is deployed (Docker or Vercel) and how it stays out of product images |
 | [`website/README.md`](website/README.md) | **the marketing site** — static HTML, zero build step, deploy-to-Vercel instructions |
 | [`docs/DEVTOOLS.md`](docs/DEVTOOLS.md) | **the Workbench** — the internal module test bench: why it is a separate app, how it is contained, how to use it |
@@ -36,14 +36,13 @@ that shape everything else.
 
 ## What lives in this repo
 
-Five applications. Only the first is shipped to customers.
+Four applications. Only the first is shipped to customers.
 
 | | What | Who runs it | Built from |
 |---|---|---|---|
 | **The product** | api + frontend + pipeline images, run from `deploy/` | **the customer**, self-hosted | `docker/Dockerfile.{api,frontend,pipeline}` |
 | **The demo** | a static, backend-free build of the real frontend | you, at `demo.exactsurface.com` | `demo/Dockerfile` (or Vercel, see `demo/README.md`) |
 | **The marketing site** | static HTML, no build step | you, at `exactsurface.com` | `website/` (Vercel, see `website/README.md`) |
-| **The control plane** | licence refresh + update feed | you, one small VPS | `control_plane/` |
 | **The workbench** | internal module test bench | you, on your laptop only | `devtools/`, never containerised |
 
 **They cannot mix.** The product Dockerfiles copy named directories only — never
@@ -65,11 +64,11 @@ run — by the owner, not yet by an outside customer.**
 | Politeness limiter — fleet-shared (Redis) + degrading, wired into every scan | ✅ (ADR-0012); every scanner subprocess rate-capped (ADR-0013) |
 | Modules + pipelines (recon → probe → crawl → scan → secrets → CVE → notify) | ✅ 28 modules, all reachable, all mentioned in the in-app Knowledge page |
 | Scheduler + worker execution (arq), cascade, cadence, fairness cap | ✅ run unattended against a real domain (see below) |
-| API — auth, tenant isolation, plan quotas, licence enforcement; Next.js dashboard | ✅ (security suite in `tests/security/`) |
+| API — auth, tenant isolation, RBAC; Next.js dashboard | ✅ (security suite in `tests/security/`) |
 | Observability — Prometheus/Grafana, Sentry, per-process `/metrics` | ✅ (ADR-0011) |
 | Encrypted Mongo backups, scope-feed auto-update, prod compose | ✅ (ADR-0014) |
-| Customer install (`deploy/` bundle, licence lifecycle) | ✅ built, documented, run end to end by the owner |
-| Unit + integration + security tests | ✅ 1009 passing, ruff + tsc clean |
+| Customer install (`deploy/` bundle) | ✅ built, documented, run end to end by the owner |
+| Unit + integration + security tests | ✅ 929 passing, ruff + tsc clean |
 
 **What has actually been run, not just tested against fakes:**
 
@@ -77,12 +76,9 @@ run — by the owner, not yet by an outside customer.**
   discover → probe → crawl → content-discovery → vuln scan → secrets → CVE watch →
   correlate → notify, all 28 modules, reading the real logs line by line afterward
   rather than trusting a green summary.
-- The full licence lifecycle on a real running instance: mint → activate → verify
-  `license active` in the logs → simulate expiry/renewal reasoning against the actual
-  code path (env-var vs mounted-file delivery genuinely differ on whether a restart
-  is needed — see `docs/LICENSING.md`).
+- Verified continuous 28-module pipeline execution and unrestricted self-hosted deployment flow.
 - A release built, published to GHCR, pulled fresh, and verified from the published
-  artifact alone (build stamp, baked verify key, scope feed) — not a local build.
+  artifact alone — not a local build.
 - The `deploy/` bundle, unpacked and started on a clean project directory the way a
   customer's first `docker compose up -d` would go.
 
@@ -100,7 +96,7 @@ run — by the owner, not yet by an outside customer.**
 > A recurring lesson from the engineering log, still true: the failures worth
 > worrying about are not the ones a green test suite catches. Every serious bug this
 > project has shipped — a dispatch route missing, a scope-feed file never committed,
-> five separate licence-activation failures, a compose project-name collision that
+> a compose project-name collision that
 > could silently destroy a running deployment — was found by *using* the product on
 > real infrastructure, never by reading the code or running the unit suite. Treat
 > "tests pass" as necessary, not sufficient.

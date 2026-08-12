@@ -32,25 +32,14 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--version", default="dev")
     ap.add_argument("--commit", default="unknown")
-    ap.add_argument("--licensed-to", default="")
-    ap.add_argument(
-        "--release",
-        action="store_true",
-        help="mark this as a release build — licence enforcement becomes unconditional",
-    )
     args = ap.parse_args()
 
     text = TARGET.read_text()
-    text = _set(text, "RELEASE_BUILD", bool(args.release))
     text = _set(text, "VERSION", args.version)
     text = _set(text, "COMMIT", args.commit)
     text = _set(text, "BUILT_AT", datetime.now(UTC).isoformat(timespec="seconds"))
-    text = _set(text, "LICENSED_TO", args.licensed_to)
     TARGET.write_text(text)
-    print(
-        f"stamped build_info: version={args.version} commit={args.commit} "
-        f"release={bool(args.release)} licensed_to={args.licensed_to or '-'}"
-    )
+    print(f"stamped build_info: version={args.version} commit={args.commit}")
 
 
 if __name__ == "__main__":

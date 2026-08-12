@@ -43,7 +43,7 @@ is the boundary.
 
 - **core/** — pure logic, no I/O. Unit-testable with zero mocks.
   - `scope` — **the safety control** (§9b). Classify IP → decide actions.
-  - `plans` — §13 tier limits. Fails closed to FREE.
+  - `plans` — plan models and limit definitions.
   - `signal` — actionable-vs-informational + the §15 false-positive rate.
   - `tech_tags` — detected-tech → Nuclei product tags (ADR-0013 companion).
   - `endpoint_risk` — tags a crawled URL's path/params (idor/ssrf/admin/…).

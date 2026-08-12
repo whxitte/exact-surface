@@ -16,7 +16,7 @@ Grounding references (already in the codebase):
 
 ---
 
-## 1. SSO / SAML + SCIM  — *effort: M · gate: Enterprise tier*
+## 1. SSO / SAML + SCIM  — *effort: M · Enterprise feature*
 
 **Why it blocks deals:** every mid-market+ security team mandates SSO before they'll
 put staff in a tool. Today ExactSurface is email+password only.

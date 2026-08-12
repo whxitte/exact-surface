@@ -119,20 +119,8 @@ async def tenant_plan(mongo: Any, tenant_id: str) -> Any:
 
 
 async def tenant_limits(mongo: Any, tenant_id: str) -> PlanLimits:
-    """**The authoritative limits for a tenant**: the signed license, tightened by the
-    stored plan if that is stricter.
-
-    Everything that enforces a quota must go through here rather than reading the
-    stored plan directly, because the stored plan lives in a database the customer
-    controls. The license does not.
-    """
-    from core import entitlements as licensing
-
-    state = licensing.current()
-    return effective_limits(
-        entitlements=state.entitlements,
-        stored_plan=await tenant_plan(mongo, tenant_id),
-    )
+    """The effective limits for a tenant."""
+    return effective_limits()
 
 
 async def tenant_can_add_domain(mongo: Any, tenant_id: str) -> bool:

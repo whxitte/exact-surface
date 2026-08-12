@@ -1,28 +1,4 @@
-"""Retention purge — delete discovered data past its plan's retention window.
-
-Two reasons this exists, and the second is the one people forget:
-
-1. **It is a plan limit.** `retention_days` is sold, so it has to be enforced. A limit
-   in a pricing table that nothing implements reads as enforced when it is not.
-2. **It is a security control.** This database holds a live map of a company's weakest
-   points, plus masked secrets and the exact requests that reach them. Keeping that
-   forever is a liability, not a feature — the safest record is the one that no longer
-   exists.
-
-What is purged and what is not
-------------------------------
-Purged: findings, endpoints, ports, secrets, leaks, CVE matches, JS files, deltas and
-scan-run history older than the window.
-
-**Never purged: assets, programs, authorizations.** An asset is the inventory itself —
-deleting a subdomain because it was found 400 days ago would make the product forget
-what the customer owns and re-report it as new tomorrow. Authorizations are the legal
-record that a scan was permitted; those are kept regardless of tier.
-
-Anything still live is also kept regardless of age: a finding re-confirmed by last
-night's scan is current information, whatever its `first_seen` says. The window applies
-to `last_seen` — when we last had evidence it was real.
-"""
+"""Retention purge — delete discovered data past its configured retention window."""
 
 from __future__ import annotations
 
@@ -60,7 +36,6 @@ PROTECTED: frozenset[str] = frozenset(
         "api_keys",
         "integrations",
         "notifications",
-        "license_state",
         "schedule",
         "domain_intel",
         "scope_feed",
@@ -134,7 +109,7 @@ async def purge_tenant(
 async def purge_all(
     mongo: Any, *, now: datetime | None = None, dry_run: bool = False
 ) -> list[PurgeResult]:
-    """Purge every tenant, each at its own licensed retention window."""
+    """Purge every tenant at its retention window."""
     from db.programs import tenant_limits
 
     tenants = await mongo.collection("tenants").find({}).to_list(None)

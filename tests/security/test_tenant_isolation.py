@@ -205,10 +205,7 @@ _UNSCOPED_BY_DESIGN: dict[str, str] = {
     "apikeys.py:get_by_hash": "the key hash is the credential being presented",
     "apikeys.py:create": "creates the row that will carry the tenant_id",
     # Instance-wide state, not tenant data.
-    "license_state.py:get": "instance-wide licence state",
-    "license_state.py:bump_clock": "instance-wide clock high-water mark",
-    "license_state.py:save_token": "instance-wide licence token",
-    "license_state.py:set_applied_update_version": "instance-wide update version",
+
     "scope_feed.py:get": "shared CDN/cloud ranges, identical for every tenant",
     "scope_feed.py:set": "shared CDN/cloud ranges, identical for every tenant",
     # The scheduler iterates every tenant by definition; it scopes per program after.

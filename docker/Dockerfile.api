@@ -24,19 +24,16 @@ COPY daemon/ daemon/
 COPY api/ api/
 COPY scripts/ scripts/
 
-# Stamp the build identity. RELEASE_BUILD=True makes licence enforcement
-# unconditional — it can no longer be switched off with an environment variable,
-# because a release image is enforced by virtue of what it is (core/build_info.py).
+# Stamp the build identity.
 ARG BUILD_ID=dev
 ARG GIT_COMMIT=unknown
-ARG LICENSED_TO=""
-RUN python scripts/stamp_build.py --release \
-        --version "${BUILD_ID}" --commit "${GIT_COMMIT}" --licensed-to "${LICENSED_TO}"
+RUN python scripts/stamp_build.py \
+        --version "${BUILD_ID}" --commit "${GIT_COMMIT}"
 
 RUN useradd -m -u 10002 exactsurface && chown -R exactsurface:exactsurface /app
 USER exactsurface
 
-# Vendor build stamps (§ commercial). BUILD_ID watermarks responses + exported
+# Vendor build stamps. BUILD_ID watermarks responses + exported
 # reports; LICENSE_PUBLIC_KEY is the Ed25519 verify-only key licenses are checked
 # against — safe to ship (it cannot mint). Both are injected by the release
 # workflow; a local build leaves them at the dev defaults.

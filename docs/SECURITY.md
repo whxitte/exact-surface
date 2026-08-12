@@ -71,12 +71,7 @@ So be precise about what each control buys:
 | A pipeline stage forgets a check | **Yes** — enforcement is centralised, not per-module |
 | **The deployment owner deliberately forges an authorization record** | **No** — they own the database |
 
-The last row is the same trust boundary as licence enforcement (§10), and the same
-answer applies: what stops it is not code but the **licence agreement**, which makes
-unauthorised scanning a contractual breach as well as, in most jurisdictions, an
-offence. The authorization record's real value in that scenario is *evidentiary* — it
-records who authorised what, when, and under which ToS version, which is exactly what
-matters if a scan is ever disputed.
+The last row is an explicit trust boundary: what stops it is the **legal authorization agreement**, which makes unauthorised scanning a breach as well as, in most jurisdictions, an offence. The authorization record's real value in that scenario is *evidentiary* — it records who authorised what, when, and under which ToS version, which is exactly what matters if a scan is ever disputed.
 
 **Do not market this as "it cannot be pointed at someone else."** It cannot be pointed
 at someone else *by its users*. Its operator is inside the trust boundary, and saying

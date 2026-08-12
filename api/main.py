@@ -60,42 +60,7 @@ async def lifespan(app: FastAPI):
         set_bus(RedisActivityBus.connect(settings.redis_uri))
     except Exception as exc:  # noqa: BLE001
         logger.warning("activity bus unavailable: {}", exc)
-    # Evaluate the subscription license now, then keep it fresh on an interval so an
-    # expiry (or a renewal) takes effect without a restart. Enforcement is server-side
-    # in the value routes; this just keeps the cached state current.
-    license_task: asyncio.Task | None = None
-    # Must be the SAME predicate the routes enforce with (api/deps.py ->
-    # enforcement_active()). Guarding the *loader* on the raw settings flag while the
-    # *gate* used enforcement_active() meant a release image enforced without ever
-    # loading a licence: RELEASE_BUILD makes enforcement_active() true, the flag stays
-    # false, so this block was skipped and the cached state remained MISSING. Every
-    # customer would have been permanently read-only with a perfectly valid licence
-    # installed, and nothing in the logs would say why.
-    from core.entitlements import enforcement_active
-
-    if enforcement_active():
-        try:
-            from core.entitlements import refresh as refresh_license
-            from db.mongo import get_mongo
-
-            await refresh_license(get_mongo())
-
-            async def _license_loop() -> None:
-                from core.entitlements import refresh as _refresh
-
-                while True:
-                    await asyncio.sleep(settings.license_check_interval_seconds)
-                    try:
-                        await _refresh(get_mongo())
-                    except Exception as exc:  # noqa: BLE001 - never crash on a check
-                        logger.warning("license refresh failed: {}", exc)
-
-            license_task = asyncio.create_task(_license_loop())
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("initial license evaluation failed (fail-closed): {}", exc)
     yield
-    if license_task is not None:
-        license_task.cancel()
     try:
         from core.activity_bus import get_bus, set_bus
 
@@ -159,8 +124,7 @@ def create_app() -> FastAPI:
                 return Response(status_code=400, content="invalid Content-Length")
         return await call_next(request)
 
-    # Deployment watermark on every response — traceability for a leaked instance
-    # (§ commercial). Cheap; the value is the licensee's customer id + build id.
+    # Deployment watermark on every response.
     @app.middleware("http")
     async def _watermark(request, call_next):
         response = await call_next(request)

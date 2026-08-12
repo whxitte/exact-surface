@@ -373,7 +373,7 @@ export interface Integration {
   configured: boolean;
   masked: string;
 }
-// -- subscription license ----------------------------------------------------
+// -- status & info ----------------------------------------------------
 export interface LicenseInfo {
   status: string; // active | grace | expired | invalid | missing | tampered | unlicensed
   read_only: boolean;

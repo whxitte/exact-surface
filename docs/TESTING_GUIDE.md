@@ -257,7 +257,7 @@ multi-tenant launch.)
 
 Walk every page and tick each item. This is what "the dashboard is complete" means
 concretely — surface each control, confirm it does what it says, and note anything
-missing. (Reflects the app as of 2026-08-01 — 28 modules, licence-gated plans.)
+missing. (Reflects the app as of 2026-08-12 — 28 modules, unlimited self-hosted edition.)
 
 **Auth**
 - [ ] Sign up creates a tenant + owner; login works; wrong password rejected.
@@ -269,12 +269,12 @@ missing. (Reflects the app as of 2026-08-01 — 28 modules, licence-gated plans.
 - [ ] "Findings by severity" + the **false-positive rate** (`—` until you triage one).
 
 **Programs → detail**
-- [ ] Add domain (blocked with a 402 past the licence limit — see Settings › Plan).
+- [ ] Add domain (unrestricted unlimited domains).
 - [ ] Verify + Authorize buttons; "Run scan"; **Stop** on a running scan (confirm dialog
       explains what stops); **Scan my cloud infra** toggle (§9b).
 - [ ] **Scan modules** panel: every module listed, essential ones locked, opt-in ones
       labelled, and turning one off shows *"Turning this off also stops: …"* before you
-      save. A module outside your tier shows as not included rather than as a switch.
+      save.
 - [ ] Tabs: surface, priorities, findings, cves, assets, endpoints, ports, secrets,
       leaks, **JS mine**.
 - [ ] **Surface** tab shows the **Domain intelligence** card (SPF/DMARC verdict with the
@@ -298,7 +298,7 @@ missing. (Reflects the app as of 2026-08-01 — 28 modules, licence-gated plans.
 - [ ] Activity: live scan-run log (2s poll).
 
 **Settings**
-- [ ] Account (tenant, role) and **Plan** (tier + `used / limit` bar) — added 2026-07-18.
+- [ ] Account (tenant, role) and **Plan** status.
 - [ ] API-key generation (shown once); notification channels; alert-policy;
       schedule/timeout defaults.
 
@@ -364,9 +364,5 @@ python -m devtools     # open the printed URL; the token is required
 - [ ] Running a pure function returns its result including dataclass properties.
 - [ ] A wrong/absent token returns 404 on every path.
 
-**Known UI gaps to log (not yet built):**
-- No billing/plan-upgrade flow (the plan is a display; there's no Stripe). Upgrades are
-  done by minting a new licence — see `docs/PRICING_AND_LIMITS.md` §4.
-- No in-UI way to change a tenant's plan, and there deliberately never will be: the
-  signed licence is the sole authority, so a UI control could only ever *lower* it.
-- No self-serve DNS-verification status poller beyond the check button.
+**Self-Hosted Capability:**
+- All features, domain creation, scans, and 28+ detection modules are fully unlocked with unlimited access. No license key or billing integration is required.

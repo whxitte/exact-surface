@@ -411,9 +411,7 @@ def test_schedule_endpoints_program_and_tenant_defaults():
     client, fake, _ = build()
     signed = _signup(client)
     token = signed["access_token"]
-    # Cadence floors are a plan limit. A fresh signup lands on Free (24h floor), so a
-    # 12h cadence would correctly be clamped; this test is about override precedence,
-    # not the commercial floor, so put the tenant on a tier that allows it.
+    # Test schedule overrides precedence.
     _set_plan(fake, signed["tenant_id"], "business")
     pid = client.post("/programs", headers=_auth(token), json={"apex_domain": "acme.com"}).json()[
         "program_id"

@@ -77,9 +77,7 @@ async def startup(ctx: dict) -> None:  # arq lifecycle hook
         install_scan_log_capture(min_level=settings.log_level)
     except Exception as exc:  # noqa: BLE001
         logger.warning("activity bus unavailable in worker: {}", exc)
-    # License-gated update feed: pull the latest signed template/tool bundle on start
-    # (a worker restarts often enough that this stays current). Best-effort; a lapsed
-    # subscription is refused fresh detections by the feed.
+    # Update feed: pull the latest template/tool bundle on start if configured.
     if settings.update_feed_url:
         try:
             from core.updates import check_for_updates
