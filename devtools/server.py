@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import secrets
 import time
 import traceback
@@ -54,8 +55,8 @@ from devtools import introspect
 
 STATIC = Path(__file__).parent / "static"
 
-#: Bind address. Loopback only, deliberately not configurable — see README.
-HOST = "127.0.0.1"
+#: Bind address. Loopback by default; DEVTOOLS_HOST=0.0.0.0 allowed inside dev containers.
+HOST = os.environ.get("DEVTOOLS_HOST", "127.0.0.1")
 PORT = 8765
 
 #: Regenerated on every start and never persisted. Restarting invalidates old links,
