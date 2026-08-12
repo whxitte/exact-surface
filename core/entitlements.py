@@ -44,7 +44,10 @@ def summary() -> dict:
     return {
         "status": "unlimited",
         "read_only": False,
-        "reason": "Self-hosted edition — completely free for life with unlimited domains, modules, users and scans",
+        "reason": (
+            "Self-hosted edition — completely free for life with unlimited domains, "
+            "modules, users and scans"
+        ),
         "enforced": False,
         "customer_name": None,
         "plan": "free",

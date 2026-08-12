@@ -11,6 +11,7 @@ COMMIT: str = "unknown"
 #: Build timestamp, ISO-8601.
 BUILT_AT: str = ""
 
+
 def summary() -> dict:
     """What /health and the footer report."""
     return {

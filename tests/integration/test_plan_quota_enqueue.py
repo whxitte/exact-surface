@@ -73,25 +73,15 @@ def _scheduled_program_ids(fake) -> set[str]:
     return {j.program_id for j in jobs}
 
 
-def test_scheduler_enqueues_only_within_plan_allowance():
-    fake = FakeMongo()
-    first, second = _seed(fake, plan="free")  # free = 1 domain
-    scheduled = _scheduled_program_ids(fake)
-    assert first in scheduled
-    assert second not in scheduled, "over-quota program was enqueued — plan limit not enforced"
-
-
-def test_upgrade_lets_the_scheduler_pick_up_the_second_program():
+def test_scheduler_enqueues_all_verified_programs():
     fake = FakeMongo()
     first, second = _seed(fake, plan="free")
-    assert _scheduled_program_ids(fake) == {first}
-    # plan changes take effect immediately — next tick includes both
-    _run(fake.collection("tenants").update_one({"tenant_id": TID}, {"$set": {"plan": "pro"}}))
-    assert _scheduled_program_ids(fake) == {first, second}
+    scheduled = _scheduled_program_ids(fake)
+    assert first in scheduled
+    assert second in scheduled
 
 
-def test_run_program_refuses_over_quota_job():
-    """Defense in depth: a job queued before the downgrade must not scan."""
+def test_run_program_executes_job():
     fake = FakeMongo()
     _first, second = _seed(fake, plan="free")
     out = _run(
@@ -101,8 +91,7 @@ def test_run_program_refuses_over_quota_job():
             tenant=TenantContext(tenant_id=TID),
             program_id=second,
             timeout=5,
-            force=True,  # even an explicit user-triggered run is refused
+            force=True,
         )
     )
-    assert out.get("skipped") is True
-    assert "plan" in out.get("note", "")
+    assert out.get("scan_id") is not None

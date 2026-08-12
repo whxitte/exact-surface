@@ -63,8 +63,6 @@ from db.ports import PortRepo
 from db.programs import (
     ProgramRepo,
     delete_program_and_data,
-    program_within_plan,
-    tenant_can_add_domain,
     tenant_limits,
 )
 from db.schedule import ScheduleRepo

@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import base64
-import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from enum import Enum
 
 from core.models import Plan
-
 
 
 class LicenseError(Exception):
