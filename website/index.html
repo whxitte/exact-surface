@@ -28,21 +28,21 @@
     
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #0c1215;
-        --surface: #121a1e;
-        --surface-2: #182228;
-        --text: #e6edef;
-        --muted: #93a4ab;
-        --border: #243137;
-        --teal: #2dd4bf;
-        --teal-soft: #2dd4bf1a;
+        --bg: #09090b;
+        --surface: #131316;
+        --surface-2: #212124;
+        --text: #fafafa;
+        --muted: #9c9ca3;
+        --border: #27272a;
+        --teal: #24b47e;
+        --teal-soft: rgba(36, 180, 126, 0.1);
         --amber: #e0a45b;
         --crit: #e86a5b;
         --high: #e08a4b;
         --med: #e0b040;
         --low: #45c485;
         --shadow: 0 1px 2px rgba(0,0,0,.2), 0 10px 30px rgba(0,0,0,.28);
-        --nav-bg: rgba(18, 26, 30, 0.45);
+        --nav-bg: rgba(9, 9, 11, 0.45);
       }
     }
     
@@ -54,10 +54,10 @@
     }
     
     :root[data-theme="dark"] {
-      --bg: #0c1215; --surface: #121a1e; --surface-2: #182228; --text: #e6edef; --muted: #93a4ab;
-      --border: #243137; --teal: #2dd4bf; --teal-soft: #2dd4bf1a; --amber: #e0a45b;
+      --bg: #09090b; --surface: #131316; --surface-2: #212124; --text: #fafafa; --muted: #9c9ca3;
+      --border: #27272a; --teal: #24b47e; --teal-soft: rgba(36, 180, 126, 0.1); --amber: #e0a45b;
       --crit: #e86a5b; --high: #e08a4b; --med: #e0b040; --low: #45c485;
-      --nav-bg: rgba(18, 26, 30, 0.45);
+      --nav-bg: rgba(9, 9, 11, 0.45);
     }
 
     * { box-sizing: border-box; }
@@ -262,11 +262,37 @@
       transform: rotate(-45deg);
     }
     
-    nav .mobile-btn {
-      display: none;
+    .theme-toggle {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      padding: 8px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s, border-color 0.2s;
     }
-    nav .desktop-btn {
-      display: inline-flex;
+    .theme-toggle:hover {
+      background: var(--surface-2);
+      border-color: var(--teal);
+    }
+    .theme-toggle svg {
+      width: 18px;
+      height: 18px;
+      color: var(--text);
+    }
+    
+    .sun-icon { display: none; }
+    .moon-icon { display: block; }
+    
+    :root[data-theme="dark"] .sun-icon { display: block; }
+    :root[data-theme="dark"] .moon-icon { display: none; }
+    
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .sun-icon { display: block; }
+      :root:not([data-theme="light"]) .moon-icon { display: none; }
     }
 
     @media (max-width: 860px) {
@@ -274,9 +300,7 @@
         display: block;
         margin-left: auto;
       }
-      nav .desktop-btn {
-        display: none;
-      }
+
       .navlinks {
         display: flex;
         position: absolute;
@@ -310,11 +334,7 @@
       .navlinks a:last-child {
         border-bottom: none;
       }
-      nav .mobile-btn {
-        display: inline-flex;
-        margin-top: 16px;
-        justify-content: center;
-      }
+
       .nav-backdrop {
         display: block;
         position: fixed;
@@ -843,9 +863,16 @@
       <a href="#safety" onclick="document.querySelector('nav').classList.remove('nav-open')">Safety</a>
       <a href="#pricing" onclick="document.querySelector('nav').classList.remove('nav-open')">Edition</a>
       <a href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Live demo</a>
-      <a class="btn p mobile-btn" href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Try the demo</a>
     </div>
-    <a class="btn p desktop-btn" href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Try the demo</a>
+    <button class="theme-toggle" aria-label="Toggle theme" onclick="toggleTheme()">
+      <svg class="sun-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"></circle>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+      </svg>
+      <svg class="moon-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+      </svg>
+    </button>
     <button class="nav-toggle" aria-label="Toggle menu" onclick="document.querySelector('nav').classList.toggle('nav-open')">
       <span class="hamburger"></span>
     </button>
@@ -1219,12 +1246,33 @@ docker compose up -d
 </div>
 
 <script>
-  // Add dark/light mode toggle based on system preference (if desired)
+  // Theme Toggle & Initialisation
+  const savedTheme = localStorage.getItem("theme");
   const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)");
-  if (prefersDarkScheme.matches) {
+  
+  if (savedTheme) {
+    document.documentElement.setAttribute("data-theme", savedTheme);
+  } else if (prefersDarkScheme.matches) {
     document.documentElement.setAttribute("data-theme", "dark");
   } else {
     document.documentElement.setAttribute("data-theme", "light");
+  }
+
+  function toggleTheme() {
+    const currentTheme = document.documentElement.getAttribute("data-theme");
+    let targetTheme = "light";
+    
+    if (currentTheme === "light") {
+      targetTheme = "dark";
+    } else if (currentTheme === "dark") {
+      targetTheme = "light";
+    } else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      targetTheme = prefersDark ? "light" : "dark";
+    }
+    
+    document.documentElement.setAttribute("data-theme", targetTheme);
+    localStorage.setItem("theme", targetTheme);
   }
 
   // Automatic Slideshow logic
