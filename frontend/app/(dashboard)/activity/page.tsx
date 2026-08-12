@@ -56,15 +56,16 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
   // stages that need an explicit explanation (skipped reason / failure)
   const explain = stages.filter((s) => s.status === "skipped" || s.status === "failed");
   return (
-    <div className="mt-3 space-y-2 overflow-x-auto">
+    <div className="mt-3 space-y-2">
       {/* Fixed-width, non-shrinking nodes with a fixed-width connector between them.
           A `flex-1` connector against a fixed container min-width used to compress
           every node as stage count grew (some scans carry 28), squeezing labels like
           "param_discovery" and "http_misconfig" into each other. Each node now
           reserves its own slot regardless of how many stages there are; the row's
-          natural width grows instead, and overflow-x-auto (above) scrolls it. */}
-      <div className="flex items-start pb-1">
-        {stages.map((st, i) => {
+          natural width grows instead, and only this rail scrolls horizontally. */}
+      <div className="overflow-x-auto">
+        <div className="flex items-start pb-1">
+          {stages.map((st, i) => {
           const dot = STAGE_DOT[st.status] || STAGE_DOT.queued;
           const done = st.status === "success";
           const tip = `${pipelineLabel(st.name)} — ${pipelineDesc(st.name)}${
@@ -114,14 +115,15 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
               </div>
             </Fragment>
           );
-        })}
+          })}
+        </div>
       </div>
 
       {/* Spell out why any stage was skipped or failed — no silent "success". */}
       {explain.length > 0 && (
-        <div className="space-y-0.5 pt-1">
+        <div className="space-y-1 border-t border-border/60 pt-2">
           {explain.map((st) => (
-            <div key={st.name} className="flex items-start gap-1.5 text-[11px]">
+            <div key={st.name} className="text-[11px] leading-relaxed sm:flex sm:items-start sm:gap-1.5">
               <span
                 className={cn(
                   "shrink-0 uppercase tracking-wide",
@@ -131,7 +133,7 @@ function StageStepper({ stages }: { stages: ScanStage[] }) {
                 {pipelineLabel(st.name)} {isDisabled(st) ? "disabled" : st.status}
               </span>
               {st.note && !isDisabled(st) && (
-                <span className="text-muted-foreground">— {st.note}</span>
+                <span className="block text-muted-foreground sm:inline">— {st.note}</span>
               )}
             </div>
           ))}

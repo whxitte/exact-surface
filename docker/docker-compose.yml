@@ -53,8 +53,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.pipeline
-      args:
-        LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
     command: ["python", "-m", "daemon.main", "--dry-run"]
     env_file: ../.env
     environment: *backend-env
@@ -95,10 +93,6 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.api
-      # Without this a locally built image bakes an EMPTY verify key, so every licence
-      # fails verification and the instance is read-only no matter what token you set.
-      args:
-        LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
     env_file: ../.env
     environment: *backend-env
     restart: unless-stopped

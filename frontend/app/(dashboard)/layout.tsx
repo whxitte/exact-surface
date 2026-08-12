@@ -48,7 +48,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <span className="font-semibold tracking-tight">ExactSurface</span>
           </div>
         </header>
-        <main className="min-w-0 flex-1 overflow-y-auto">
+        <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
           <LicenseBanner />
           <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</div>
         </main>

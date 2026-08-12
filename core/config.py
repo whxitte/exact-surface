@@ -13,7 +13,7 @@ from __future__ import annotations
 import hashlib
 from functools import lru_cache
 
-from pydantic import AliasChoices, Field, SecretStr, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -184,10 +184,7 @@ class Settings(BaseSettings):
 
     license_enforced: bool = Field(default=False)
     license_public_key: str | None = Field(default=None)
-    license_token: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("EXACTSURFACE_LICENSE", "EXACTSURFACE_LICENSE_TOKEN"),
-    )
+    license_token: str | None = Field(default=None)
     license_file: str | None = Field(default=None)
     license_check_interval_seconds: int = Field(default=3600, ge=60)
     license_refresh_url: str | None = Field(default=None)
