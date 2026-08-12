@@ -1,233 +1,1057 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>ExactSurface — Continuous attack-surface intelligence, self-hosted</title>
-<meta name="description" content="ExactSurface finds what an attacker sees on your internet-facing surface — subdomains, exposed secrets, misconfigurations, dangling DNS — and runs entirely on your own infrastructure. Your data never leaves your servers." />
-<link rel="icon" href="/favicon.png" type="image/png" />
-<style>
-  :root {
-    --background: 240 10% 4%;
-    --foreground: 0 0% 98%;
-    --card: 240 6% 8%;
-    --primary: 158 64% 42%;
-    --muted: 240 5% 14%;
-    --muted-foreground: 240 5% 60%;
-    --border: 240 5% 16%;
-    --radius: 0.6rem;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: hsl(var(--background));
-    color: hsl(var(--foreground));
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    line-height: 1.5;
-  }
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
-  a { color: inherit; }
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ExactSurface — Attack surface monitoring that shows its work</title>
+  <style>
+    /* ExactSurface Theme & Variables */
+    :root {
+      --bg: #f5f7f7; 
+      --surface: #fff; 
+      --surface-2: #eceff1; 
+      --text: #141b1e; 
+      --muted: #5a6a70;
+      --border: #dde4e6; 
+      --teal: #0c8a79; 
+      --teal-soft: #0c8a7914; 
+      --amber: #b06a1f;
+      --crit: #ca493a; 
+      --high: #d4762c; 
+      --med: #c58a1a; 
+      --low: #2c9463;
+      --shadow: 0 1px 2px rgba(20,27,30,.04), 0 8px 24px rgba(20,27,30,.05);
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
+      --nav-bg: rgba(255, 255, 255, 0.45);
+    }
+    
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0c1215;
+        --surface: #121a1e;
+        --surface-2: #182228;
+        --text: #e6edef;
+        --muted: #93a4ab;
+        --border: #243137;
+        --teal: #2dd4bf;
+        --teal-soft: #2dd4bf1a;
+        --amber: #e0a45b;
+        --crit: #e86a5b;
+        --high: #e08a4b;
+        --med: #e0b040;
+        --low: #45c485;
+        --shadow: 0 1px 2px rgba(0,0,0,.2), 0 10px 30px rgba(0,0,0,.28);
+        --nav-bg: rgba(18, 26, 30, 0.45);
+      }
+    }
+    
+    :root[data-theme="light"] {
+      --bg: #f5f7f7; --surface: #fff; --surface-2: #eceff1; --text: #141b1e; --muted: #5a6a70;
+      --border: #dde4e6; --teal: #0c8a79; --teal-soft: #0c8a7914; --amber: #b06a1f;
+      --crit: #ca493a; --high: #d4762c; --med: #c58a1a; --low: #2c9463;
+      --nav-bg: rgba(255, 255, 255, 0.45);
+    }
+    
+    :root[data-theme="dark"] {
+      --bg: #0c1215; --surface: #121a1e; --surface-2: #182228; --text: #e6edef; --muted: #93a4ab;
+      --border: #243137; --teal: #2dd4bf; --teal-soft: #2dd4bf1a; --amber: #e0a45b;
+      --crit: #e86a5b; --high: #e08a4b; --med: #e0b040; --low: #45c485;
+      --nav-bg: rgba(18, 26, 30, 0.45);
+    }
 
-  /* nav */
-  nav { border-bottom: 1px solid hsl(var(--border)); position: sticky; top: 0; background: hsl(var(--background) / 0.85); backdrop-filter: blur(8px); z-index: 10; }
-  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 600; font-size: 16px; text-decoration: none; }
-  .brand img { width: 28px; height: 28px; border-radius: 6px; }
-  .navlinks { display: flex; align-items: center; gap: 28px; font-size: 14px; color: hsl(var(--muted-foreground)); }
-  .navlinks a { text-decoration: none; }
-  .navlinks a:hover { color: hsl(var(--foreground)); }
-  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 9px 18px; border-radius: var(--radius); font-size: 14px; font-weight: 600; text-decoration: none; border: 1px solid transparent; white-space: nowrap; }
-  .btn-primary { background: hsl(var(--primary)); color: #06120c; }
-  .btn-primary:hover { opacity: 0.9; }
-  .btn-ghost { border-color: hsl(var(--border)); color: hsl(var(--foreground)); }
-  .btn-ghost:hover { border-color: hsl(var(--primary)); }
+    * { box-sizing: border-box; }
+    ::selection {
+      background: var(--teal);
+      color: #fff;
+    }
+    :root[data-theme="dark"] ::selection {
+      color: #0c1215;
+    }
+    @media (prefers-color-scheme: dark) {
+      ::selection {
+        color: #0c1215;
+      }
+    }
+    html {
+      scroll-behavior: smooth;
+    }
+    
+    /* Glassmorphism System */
+    .card, .step, .cap, .tablewrap, .finding, .chain {
+      background: color-mix(in srgb, var(--surface) 60%, transparent) !important;
+      backdrop-filter: blur(16px) saturate(120%);
+      -webkit-backdrop-filter: blur(16px) saturate(120%);
+      border: 1px solid color-mix(in srgb, var(--border) 60%, transparent) !important;
+    }
+    .repro, pre.sh {
+      background: color-mix(in srgb, var(--bg) 65%, transparent) !important;
+      backdrop-filter: blur(12px) saturate(110%);
+      -webkit-backdrop-filter: blur(12px) saturate(110%);
+      border: 1px solid color-mix(in srgb, var(--border) 60%, transparent) !important;
+    }
+    .callout {
+      background: color-mix(in srgb, var(--teal-soft) 40%, transparent) !important;
+      backdrop-filter: blur(16px) saturate(130%);
+      -webkit-backdrop-filter: blur(16px) saturate(130%);
+      border: 1px solid color-mix(in srgb, var(--teal) 20%, transparent) !important;
+    }
+    .finding .top {
+      background: color-mix(in srgb, var(--surface-2) 65%, transparent) !important;
+      border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent) !important;
+    }
+    thead th {
+      background: color-mix(in srgb, var(--surface-2) 75%, transparent) !important;
+    }
 
-  /* hero */
-  header.hero { padding: 96px 0 72px; text-align: center; }
-  .eyebrow { display: inline-block; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: hsl(var(--primary)); background: hsl(var(--primary) / 0.1); border: 1px solid hsl(var(--primary) / 0.3); padding: 5px 12px; border-radius: 999px; margin-bottom: 24px; }
-  h1 { font-size: clamp(32px, 5vw, 52px); font-weight: 700; letter-spacing: -0.02em; line-height: 1.08; max-width: 760px; margin: 0 auto 20px; }
-  .lede { font-size: 18px; color: hsl(var(--muted-foreground)); max-width: 620px; margin: 0 auto 36px; }
-  .hero-ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
-  .btn-lg { padding: 12px 24px; font-size: 15px; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 16px;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+    img { max-width: 100%; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+    
+    section { padding: 52px 0; border-top: 1px solid var(--border); }
+    section:first-of-type { border-top: none; }
+    
+    .kicker {
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .kicker::before {
+      content: "";
+      width: 22px;
+      height: 2px;
+      background: var(--teal);
+    }
+    
+    h1, h2, h3 { text-wrap: balance; line-height: 1.13; margin: 0; }
+    h1 { font-size: clamp(34px, 6vw, 58px); font-weight: 800; letter-spacing: -.03em; }
+    h2 { font-size: clamp(23px, 3.4vw, 32px); font-weight: 750; letter-spacing: -.018em; }
+    h3 { font-size: 16.5px; font-weight: 700; }
+    p { margin: 0 0 15px; max-width: 68ch; }
+    .lede { font-size: clamp(17px, 2.1vw, 20px); }
+    .muted { color: var(--muted); }
+    
+    /* Sticky Navigation */
+    nav {
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      background: var(--nav-bg);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      z-index: 100;
+    }
+    nav .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+    }
+    nav .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: var(--text);
+      margin-bottom: 0;
+    }
+    nav .brand img {
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      flex-shrink: 0;
+    }
+    nav .brand .nm {
+      font-weight: 750;
+      letter-spacing: -.02em;
+      font-size: 16px;
+    }
+    nav .brand .tag {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-left: 1px solid var(--border);
+      padding-left: 10px;
+      margin-left: 2px;
+    }
+    .navlinks {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      font-size: 14px;
+    }
+    .navlinks a {
+      text-decoration: none;
+      color: var(--muted);
+      font-weight: 550;
+      transition: color 0.2s ease;
+    }
+    .navlinks a:hover {
+      color: var(--text);
+    }
+    nav .btn {
+      padding: 8px 16px;
+      font-size: 13.5px;
+    }
+    
+    /* Toggle Button */
+    .nav-toggle {
+      display: none;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 8px;
+      z-index: 101;
+    }
+    .hamburger {
+      display: block;
+      width: 18px;
+      height: 2px;
+      background: var(--text);
+      position: relative;
+      transition: background 0.2s;
+    }
+    .hamburger::before, .hamburger::after {
+      content: '';
+      position: absolute;
+      height: 2px;
+      background: var(--text);
+      transition: transform 0.2s, top 0.2s, width 0.2s, left 0.2s;
+    }
+    .hamburger::before {
+      top: -6px;
+      width: 12px;
+      left: 6px;
+    }
+    .hamburger::after {
+      top: 6px;
+      width: 15px;
+      left: 3px;
+    }
+    
+    /* Active Toggle State */
+    .nav-open .hamburger {
+      background: transparent;
+    }
+    .nav-open .hamburger::before {
+      top: 0;
+      width: 18px;
+      left: 0;
+      transform: rotate(45deg);
+    }
+    .nav-open .hamburger::after {
+      top: 0;
+      width: 18px;
+      left: 0;
+      transform: rotate(-45deg);
+    }
+    
+    nav .mobile-btn {
+      display: none;
+    }
+    nav .desktop-btn {
+      display: inline-flex;
+    }
 
-  section { padding: 64px 0; border-top: 1px solid hsl(var(--border)); }
-  h2 { font-size: clamp(24px, 3.5vw, 32px); font-weight: 700; letter-spacing: -0.01em; margin-bottom: 12px; }
-  .section-lede { color: hsl(var(--muted-foreground)); font-size: 15px; max-width: 640px; margin-bottom: 40px; }
+    @media (max-width: 860px) {
+      .nav-toggle {
+        display: block;
+        margin-left: auto;
+      }
+      nav .desktop-btn {
+        display: none;
+      }
+      .navlinks {
+        display: flex;
+        position: absolute;
+        top: 64px;
+        left: 0;
+        right: 0;
+        background: var(--surface);
+        border-bottom: 1px solid var(--border);
+        z-index: 101;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0;
+        padding: 12px 24px 24px;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        
+        opacity: 0;
+        transform: translateY(-8px);
+        pointer-events: none;
+        transition: opacity 0.22s ease-out, transform 0.22s ease-out;
+      }
+      .nav-open .navlinks {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+      }
+      .navlinks a {
+        padding: 14px 0;
+        border-bottom: 1px solid var(--border);
+        font-size: 15px;
+      }
+      .navlinks a:last-child {
+        border-bottom: none;
+      }
+      nav .mobile-btn {
+        display: inline-flex;
+        margin-top: 16px;
+        justify-content: center;
+      }
+      .nav-backdrop {
+        display: block;
+        position: fixed;
+        top: 64px;
+        left: 0;
+        width: 100vw;
+        height: calc(100vh - 64px);
+        background: rgba(0, 0, 0, 0.4);
+        z-index: 99;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.22s ease-out;
+      }
+      .nav-open ~ .nav-backdrop {
+        opacity: 1;
+        pointer-events: auto;
+      }
+    }
 
-  /* trust card */
-  .trust-card { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 32px; }
-  .trust-card h3 { font-size: 19px; margin-bottom: 10px; }
-  .trust-card p { color: hsl(var(--muted-foreground)); font-size: 14.5px; margin-bottom: 14px; }
-  .trust-card p:last-child { margin-bottom: 0; }
-  .trust-card .label { font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: hsl(var(--primary)); margin-bottom: 6px; display: block; }
+    .nav-backdrop {
+      display: none;
+    }
 
-  /* steps */
-  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
-  .step { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 22px; }
-  .step .num { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 999px; background: hsl(var(--primary) / 0.15); color: hsl(var(--primary)); font-size: 13px; font-weight: 700; margin-bottom: 14px; }
-  .step h4 { font-size: 15px; margin-bottom: 6px; }
-  .step p { font-size: 13.5px; color: hsl(var(--muted-foreground)); }
+    .hero {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 48px;
+      align-items: center;
+      padding: 72px 0 44px;
+    }
+    @media (max-width: 860px) {
+      .hero {
+        grid-template-columns: 1fr;
+        gap: 36px;
+        text-align: center;
+      }
+      .hero .cta, .hero .trust {
+        justify-content: center;
+      }
+    }
+    
+    /* Showcase Window */
+    .hero-showcase {
+      width: 100%;
+      perspective: 1000px;
+    }
+    .showcase-window {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow), 0 20px 40px rgba(0,0,0,0.12);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transform: rotateY(-6deg) rotateX(4deg);
+      transition: transform 0.5s ease;
+    }
+    .showcase-window:hover {
+      transform: rotateY(0deg) rotateX(0deg);
+    }
+    .window-header {
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .window-header .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+    .window-header .dot.red { background: #ff5f56; }
+    .window-header .dot.yellow { background: #ffbd2e; }
+    .window-header .dot.green { background: #27c93f; }
+    .window-title {
+      margin-left: 12px;
+      font-size: 11px;
+      font-family: var(--mono);
+      color: var(--muted);
+    }
+    .slideshow {
+      position: relative;
+      width: 100%;
+      padding-top: 56.25%; /* 16:9 aspect ratio */
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .slideshow img.slide {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      opacity: 0;
+      transition: opacity 0.6s ease-in-out;
+    }
+    .slideshow img.slide.active {
+      opacity: 1;
+    }
+    .showcase-dots {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      padding: 12px;
+      background: var(--surface-2);
+      border-top: 1px solid var(--border);
+    }
+    .showcase-dots .s-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--border);
+      cursor: pointer;
+      transition: background 0.3s, transform 0.3s;
+    }
+    .showcase-dots .s-dot.active {
+      background: var(--teal);
+      transform: scale(1.2);
+    }
+    .brand { display: flex; align-items: center; gap: 11px; margin-bottom: 30px; }
+    .mark { width: 30px; height: 30px; flex: none; }
+    .brand .nm { font-weight: 750; letter-spacing: -.02em; font-size: 17px; }
+    .brand .tag {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-left: 1px solid var(--border);
+      padding-left: 11px;
+      margin-left: 3px;
+    }
+    
+    .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+    .btn {
+      display: inline-block;
+      padding: 11px 22px;
+      border-radius: 9px;
+      font-weight: 640;
+      font-size: 14.5px;
+      text-decoration: none;
+      border: 1px solid transparent;
+    }
+    .btn.p { background: var(--teal); color: #fff; }
+    :root[data-theme="dark"] .btn.p { color: #08201d; }
+    @media(prefers-color-scheme:dark) {
+      .btn.p { color: #08201d; }
+    }
+    .btn.s { border-color: var(--border); color: var(--text); background: var(--surface); }
+    
+    .trust { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 26px; font-size: 13px; color: var(--muted); }
+    .trust span { display: inline-flex; align-items: center; gap: 7px; }
+    .trust b { color: var(--teal); }
+    
+    .finding {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+      margin-top: 26px;
+      overflow: hidden;
+    }
+    .finding .top {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-2);
+    }
+    .sev {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      padding: 3px 8px;
+      border-radius: 5px;
+      color: #fff;
+      background: var(--high);
+    }
+    :root[data-theme="dark"] .sev { color: #0c1215; }
+    @media(prefers-color-scheme:dark) { .sev { color: #0c1215; } }
+    .finding .ttl { font-weight: 660; font-size: 15px; }
+    .finding .host { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-left: auto; }
+    .finding .body { padding: 16px 18px; }
+    .finding .body p { font-size: 14px; margin: 0 0 12px; }
+    
+    .repro {
+      font-family: var(--mono);
+      font-size: 12.5px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 11px 13px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .repro .c { color: var(--muted); }
+    .lbl {
+      font-family: var(--mono);
+      font-size: 10px;
+      letter-spacing: .1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 0 0 6px;
+    }
+    
+    .grid { display: grid; gap: 16px; margin-top: 22px; }
+    .g4 { grid-template-columns: repeat(4, 1fr); }
+    .g3 { grid-template-columns: repeat(3, 1fr); }
+    .g2 { grid-template-columns: repeat(2, 1fr); }
+    @media(max-width:860px) {
+      .g4 { grid-template-columns: repeat(2, 1fr); }
+      .g3 { grid-template-columns: 1fr; }
+      .g2 { grid-template-columns: 1fr; }
+    }
+    @media(max-width:560px) {
+      .g4 { grid-template-columns: 1fr; }
+    }
+    
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .step .num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--teal-soft);
+      color: var(--teal);
+      font-family: var(--mono);
+      font-size: 13px;
+      font-weight: 700;
+      margin-bottom: 12px;
+    }
+    .step h3 {
+      font-size: 15.5px;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+    .step p {
+      font-size: 13.5px;
+      color: var(--muted);
+      margin: 0;
+    }
+    
+    /* Capability Grid */
+    .cap-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 860px) {
+      .cap-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 560px) {
+      .cap-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .cap {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .cap h3 {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .cap .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--teal);
+      flex-shrink: 0;
+    }
+    .cap p {
+      font-size: 13.5px;
+      color: var(--muted);
+      margin: 0;
+    }
+    .cap-group-label {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin: 32px 0 14px;
+    }
+    .cap-group-label:first-of-type {
+      margin-top: 24px;
+    }
 
-  /* capability grid */
-  .cap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-  .cap { background: hsl(var(--card)); border: 1px solid hsl(var(--border)); border-radius: 12px; padding: 20px; }
-  .cap h4 { font-size: 14.5px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
-  .cap .dot { width: 7px; height: 7px; border-radius: 999px; background: hsl(var(--primary)); flex-shrink: 0; }
-  .cap p { font-size: 13px; color: hsl(var(--muted-foreground)); }
-  .cap-group-label { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: hsl(var(--muted-foreground)); margin: 32px 0 14px; }
-  .cap-group-label:first-child { margin-top: 0; }
+    /* Band Layout */
+    .band {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 40px;
+      align-items: center;
+      box-shadow: var(--shadow);
+    }
+    @media (max-width: 860px) {
+      .band {
+        grid-template-columns: 1fr;
+        padding: 24px;
+      }
+    }
+    .band h2 {
+      margin-bottom: 14px;
+    }
+    .band p {
+      color: var(--muted);
+      font-size: 15px;
+      margin-bottom: 14px;
+    }
+    .band pre.sh {
+      margin: 0;
+    }
+    
+    .checklist {
+      list-style: none;
+      padding: 0;
+      margin: 16px 0 0;
+    }
+    .checklist li {
+      font-size: 14.5px;
+      color: var(--muted);
+      padding-left: 24px;
+      position: relative;
+      margin-bottom: 12px;
+    }
+    .checklist li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--teal);
+      font-weight: 700;
+    }
 
-  /* self-hosted band */
-  .band { background: hsl(var(--card)); border-radius: 16px; padding: 48px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 40px; align-items: center; }
-  .band h2 { margin-bottom: 14px; }
-  .band p { color: hsl(var(--muted-foreground)); font-size: 15px; margin-bottom: 14px; }
-  .band code { display: block; background: hsl(var(--background)); border: 1px solid hsl(var(--border)); border-radius: 8px; padding: 16px; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 13px; color: hsl(var(--primary)); overflow-x: auto; white-space: pre; }
-  .checklist { list-style: none; }
-  .checklist li { font-size: 14px; color: hsl(var(--muted-foreground)); padding-left: 24px; position: relative; margin-bottom: 12px; }
-  .checklist li::before { content: "✓"; position: absolute; left: 0; color: hsl(var(--primary)); font-weight: 700; }
-
-  /* pricing */
-  table.pricing { width: 100%; border-collapse: collapse; font-size: 14px; }
-  table.pricing th, table.pricing td { padding: 14px 16px; text-align: left; border-bottom: 1px solid hsl(var(--border)); }
-  table.pricing th { color: hsl(var(--muted-foreground)); font-weight: 600; font-size: 13px; }
-  table.pricing th:not(:first-child), table.pricing td:not(:first-child) { text-align: center; }
-  table.pricing tr td:first-child { color: hsl(var(--muted-foreground)); }
-  table.pricing thead th span.tier { display: block; color: hsl(var(--foreground)); font-size: 15px; font-weight: 700; margin-top: 2px; }
-  .pricing-note { font-size: 13px; color: hsl(var(--muted-foreground)); margin-top: 18px; }
-
-  /* cta band */
-  .cta-band { text-align: center; padding: 80px 0; }
-  .cta-band h2 { margin-bottom: 12px; }
-  .cta-band p { color: hsl(var(--muted-foreground)); margin-bottom: 28px; }
-
-  footer { border-top: 1px solid hsl(var(--border)); padding: 36px 0; }
-  footer .wrap { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
-  footer .flinks { display: flex; gap: 22px; font-size: 13px; color: hsl(var(--muted-foreground)); }
-  footer .flinks a { text-decoration: none; }
-  footer .flinks a:hover { color: hsl(var(--foreground)); }
-  footer .fnote { font-size: 12.5px; color: hsl(var(--muted-foreground)); }
-
-  @media (max-width: 860px) {
-    .steps, .cap-grid { grid-template-columns: 1fr 1fr; }
-    .band { grid-template-columns: 1fr; padding: 32px; }
-    .navlinks { display: none; }
-  }
-  @media (max-width: 560px) {
-    .steps, .cap-grid { grid-template-columns: 1fr; }
-    table.pricing { display: block; overflow-x: auto; }
-  }
-</style>
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .card h3 { margin-bottom: 7px; }
+    .card p { font-size: 14px; color: var(--muted); margin: 0 0 11px; }
+    .card p:last-child { margin-bottom: 0; }
+    
+    .chain {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      margin-top: 20px;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 2.05;
+      overflow-x: auto;
+    }
+    .chain .s { color: var(--teal); font-weight: 700; }
+    .chain .a { color: var(--muted); }
+    
+    .cols { columns: 2; column-gap: 26px; margin-top: 18px; }
+    @media(max-width:720px) { .cols { columns: 1; } }
+    .cols li {
+      break-inside: avoid;
+      list-style: none;
+      font-size: 14px;
+      padding: 5px 0 5px 19px;
+      position: relative;
+      color: var(--muted);
+    }
+    .cols li::before {
+      content: "";
+      position: absolute;
+      left: 2px;
+      top: 12.5px;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--teal);
+    }
+    .cols li b { color: var(--text); font-weight: 620; }
+    
+    .tablewrap {
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      background: var(--surface);
+      margin-top: 20px;
+    }
+    table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 14.5px; }
+    th, td { text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    thead th {
+      font-family: var(--mono);
+      font-size: 11px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      background: var(--surface-2);
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    td.y { color: var(--teal); font-weight: 640; }
+    
+    .callout {
+      background: var(--teal-soft);
+      border: 1px solid color-mix(in srgb, var(--teal) 28%, transparent);
+      border-radius: 12px;
+      padding: 22px 24px;
+      margin-top: 22px;
+    }
+    .callout h3 { color: var(--teal); margin-bottom: 8px; }
+    .callout p { margin: 0 0 11px; max-width: 84ch; }
+    .callout p:last-child { margin: 0; }
+    
+    pre.sh {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 15px 17px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 12.5px;
+      line-height: 1.75;
+      box-shadow: var(--shadow);
+    }
+    pre.sh .c { color: var(--muted); }
+    
+    footer {
+      padding: 36px 0 64px;
+      color: var(--muted);
+      font-size: 13.5px;
+      border-top: 1px solid var(--border);
+    }
+    footer .wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 20px;
+    }
+    footer .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--text);
+      font-weight: 750;
+      font-size: 15px;
+    }
+    footer .brand img {
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+    }
+    footer .flinks {
+      display: flex;
+      gap: 24px;
+    }
+    footer .flinks a {
+      text-decoration: none;
+      color: var(--muted);
+      font-weight: 550;
+      transition: color 0.2s ease;
+    }
+    footer .flinks a:hover {
+      color: var(--text);
+    }
+    footer .fnote {
+      font-size: 12.5px;
+    }
+    @media (max-width: 768px) {
+      footer .wrap {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      footer .flinks {
+        flex-direction: column;
+        gap: 12px;
+      }
+    }
+    :focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; border-radius: 4px; }
+  </style>
 </head>
 <body>
 
 <nav>
   <div class="wrap">
-    <a class="brand" href="#top"><img src="/logo.png" alt="" /> ExactSurface</a>
+    <a class="brand" href="#">
+      <img src="/favicon.png" alt="" />
+      <span class="nm">ExactSurface</span>
+    </a>
     <div class="navlinks">
-      <a href="#how-it-works">How it works</a>
-      <a href="#capabilities">Capabilities</a>
-      <a href="#pricing">Edition</a>
-      <a href="https://demo.exactsurface.com" target="_blank" rel="noopener">Live demo</a>
+      <a href="#how" onclick="document.querySelector('nav').classList.remove('nav-open')">How it works</a>
+      <a href="#capabilities" onclick="document.querySelector('nav').classList.remove('nav-open')">Capabilities</a>
+      <a href="#safety" onclick="document.querySelector('nav').classList.remove('nav-open')">Safety</a>
+      <a href="#pricing" onclick="document.querySelector('nav').classList.remove('nav-open')">Edition</a>
+      <a href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Live demo</a>
+      <a class="btn p mobile-btn" href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Try the demo</a>
     </div>
-    <a class="btn btn-primary" href="https://demo.exactsurface.com" target="_blank" rel="noopener">Try the demo</a>
+    <a class="btn p desktop-btn" href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Try the demo</a>
+    <button class="nav-toggle" aria-label="Toggle menu" onclick="document.querySelector('nav').classList.toggle('nav-open')">
+      <span class="hamburger"></span>
+    </button>
   </div>
 </nav>
+<div class="nav-backdrop" onclick="document.querySelector('nav').classList.remove('nav-open')"></div>
 
-<header class="hero" id="top">
-  <div class="wrap">
-    <span class="eyebrow">Self-hosted · Detection-only</span>
-    <h1>See your attack surface the way an attacker does — on your own infrastructure.</h1>
-    <p class="lede">ExactSurface continuously discovers what's internet-facing, watches it for change, and reports exposures with the exact request behind every finding. You run it. Your data never leaves your servers.</p>
-    <div class="hero-ctas">
-      <a class="btn btn-primary btn-lg" href="https://demo.exactsurface.com" target="_blank" rel="noopener">Try the live demo</a>
-      <a class="btn btn-ghost btn-lg" href="#pricing">See capabilities</a>
+<div class="wrap">
+  <header class="hero">
+    <div class="hero-text">
+      <h1>See your attack surface the way an attacker does.<br></h1>
+      <p class="lede muted" style="margin-top:20px">
+        Give it your domain. It continuously discovers everything you have exposed to the internet, tests it
+        the way a bug hunter or an attacker would, and hands you every finding. It runs on <strong>your</strong> infrastructure — your attack surface never leaves your servers.
+      </p>
+      <div class="cta">
+        <a class="btn p" href="https://exactsurface-demo.vercel.app" target="_blank">Try the demo</a>
+        <a class="btn s" href="#capabilities">See capabilities</a>
+      </div>
+      <div class="trust">
+        <span><b>◆</b> Self-hosted, your data never leaves</span>
+        <span><b>◆</b> Detection only, never exploitation</span>
+        <span><b>◆</b> Scans only domains you have proven you own</span>
+      </div>
     </div>
-  </div>
-</header>
-
-<section id="trust">
-  <div class="wrap">
-    <h2>Nobody can point it at a domain they have not verified</h2>
-    <p class="section-lede">Every scan starts with proof of control — a DNS TXT record or an HTTP file only the domain's owner could place. That gate cannot be skipped in the UI or the API, for any user of the product.</p>
-    <div class="trust-card">
-      <span class="label">What we do not claim</span>
-      <p>Because you host it, whoever administers your deployment also owns its database and could write a verification record by hand. No self-hosted software can prevent that, and we would rather say so than imply a guarantee we cannot keep.</p>
-      <p>What the verification gate does guarantee: no user of the product — including one with an API key — can get the scanner to touch a domain nobody on that instance has proven they control. That protection is centralized in one scope engine, not scattered per-module, so a bug in one detector can't quietly open a hole in it.</p>
+    
+    <div class="hero-showcase">
+      <div class="showcase-window">
+        <div class="window-header">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+          <span class="window-title">ExactSurface Console</span>
+        </div>
+        <div class="slideshow">
+          <img class="slide active" src="surface-page.png" alt="Showcase 1" />
+          <img class="slide" src="assets-page.png" alt="Showcase 2" />
+          <img class="slide" src="endpoints-page.png" alt="Showcase 3" />
+          <img class="slide" src="ports-page.png" alt="Showcase 4" />
+          <img class="slide" src="findings-page.png" alt="Showcase 5" />
+        </div>
+        <div class="showcase-dots">
+          <span class="s-dot active"></span>
+          <span class="s-dot"></span>
+          <span class="s-dot"></span>
+          <span class="s-dot"></span>
+          <span class="s-dot"></span>
+        </div>
+      </div>
     </div>
-  </div>
-</section>
+  </header>
 
-<section id="how-it-works">
-  <div class="wrap">
+  <!-- SHOWS ITS WORK -->
+  <section id="evidence">
+    <p class="kicker">What makes it different</p>
+    <h2>Every finding shows its work</h2>
+    <p style="margin-top:14px">
+      Most scanners tell you something is wrong and ask you to trust a score. This one
+      hands you the evidence and the exact command, so verifying a finding takes ten
+      seconds instead of an afternoon.
+    </p>
+    <div class="finding">
+      <div class="top">
+        <span class="sev">High</span>
+        <span class="ttl">CORS policy accepts an arbitrary origin</span>
+        <span class="host">api.acme.com</span>
+      </div>
+      <div class="body">
+        <p>
+          The server echoed our arbitrary <code>Origin</code> back in
+          <code>Access-Control-Allow-Origin</code> and set
+          <code>Access-Control-Allow-Credentials: true</code>. Any website a logged-in user
+          visits can therefore read authenticated responses from this host.
+        </p>
+        <p class="lbl">Reproduce it yourself</p>
+        <div class="repro"><span class="c">$</span> curl -sI https://api.acme.com \
+    -H 'Origin: https://exactsurface-cors-probe.example.com' | grep -i access-control</div>
+      </div>
+    </div>
+    <div class="grid g3">
+      <div class="card">
+        <h3>Calibrated, not maximised</h3>
+        <p>
+          A reflected origin <em>without</em> credentials is Low, not High. A bare
+          <code>*</code> is not reported at all — it is how every public API works, and
+          flagging it would bury the real ones. Alert fatigue is a security failure too.
+        </p>
+      </div>
+      <div class="card">
+        <h3>It says what it did not find</h3>
+        <p>
+          Skipped a module? It tells you which one and why. Nothing quietly returns zero
+          and lets you assume you are clean.
+        </p>
+      </div>
+      <div class="card">
+        <h3>No invented urgency</h3>
+        <p>
+          A single finding is never dressed up as an "attack chain". A chain needs two or
+          more stages of a real attack on the same host, and every step links to its
+          evidence.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section id="how">
+    <p class="kicker">The workflow</p>
     <h2>How it works</h2>
-    <p class="section-lede">The same flow every time — no domain is ever touched without going through all four steps.</p>
-    <div class="steps">
+    <p style="margin-top:14px">
+      The same flow every time, no domain is ever touched without going through all four steps.
+    </p>
+    <div class="grid g4">
       <div class="step">
         <span class="num">1</span>
-        <h4>Add a domain</h4>
+        <h3>Add a domain</h3>
         <p>Point ExactSurface at a domain you own or are contractually authorized to test.</p>
       </div>
       <div class="step">
         <span class="num">2</span>
-        <h4>Verify ownership</h4>
-        <p>A DNS TXT record or an HTTP file — proof only the real owner could place.</p>
+        <h3>Verify ownership</h3>
+        <p>A DNS TXT record or an HTTP file, proof only the real owner could place.</p>
       </div>
       <div class="step">
         <span class="num">3</span>
-        <h4>Authorize scanning</h4>
+        <h3>Authorize scanning</h3>
         <p>Confirm the authorization record. Dedicated IP ranges are checked against your domain's real announced ASN before anything aggressive runs.</p>
       </div>
       <div class="step">
         <span class="num">4</span>
-        <h4>Watch continuously</h4>
-        <p>Subdomains, then live hosts, then exposures — findings arrive progressively and re-scan on your schedule.</p>
+        <h3>Watch continuously</h3>
+        <p>Subdomains, then live hosts, then exposures, findings arrive progressively and re-scan on your schedule.</p>
       </div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="capabilities">
-  <div class="wrap">
+  <!-- WHAT IT FINDS (CAPABILITIES) -->
+  <section id="capabilities">
+    <p class="kicker">The modules</p>
     <h2>What it actually finds</h2>
-    <p class="section-lede">Every module below runs in the product today. Detection only — nothing here ever attempts exploitation.</p>
+    <p style="margin-top:14px">
+      Every module below runs in the product today. Detection only, nothing here ever attempts exploitation.
+    </p>
 
     <div class="cap-group-label">Discovery</div>
     <div class="cap-grid">
-      <div class="cap"><h4><span class="dot"></span>Subdomain discovery</h4><p>subfinder + certificate transparency, resolved and probed for what's actually alive.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Cloud asset inventory</h4><p>Asks your own AWS/GCP/Azure/DigitalOcean accounts what they're running — the load balancer nobody named.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Reverse-DNS sweep</h4><p>PTR-sweeps ASN-confirmed ranges for hosts that exist but were never published in DNS.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Hidden parameters</h4><p>Finds undocumented parameters a URL silently accepts, without submitting a hostile value.</p></div>
-      <div class="cap"><h4><span class="dot"></span>JavaScript mining</h4><p>Extracts endpoints, internal paths and secrets referenced in shipped JS bundles.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Content discovery</h4><p>Finds hidden paths and files on hosts confirmed to be dedicated to you.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Subdomain discovery</h3><p>subfinder + certificate transparency, resolved and probed for what's actually alive.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Cloud asset inventory</h3><p>Asks your own AWS/GCP/Azure/DigitalOcean accounts what they're running, the load balancer nobody named.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Reverse-DNS sweep</h3><p>PTR-sweeps ASN-confirmed ranges for hosts that exist but were never published in DNS.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Hidden parameters</h3><p>Finds undocumented parameters a URL silently accepts, without submitting a hostile value.</p></div>
+      <div class="cap"><h3><span class="dot"></span>JavaScript mining</h3><p>Extracts endpoints, internal paths and secrets referenced in shipped JS bundles.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Content discovery</h3><p>Finds hidden paths and files on hosts confirmed to be dedicated to you.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Crawling &amp; archives</h3><p>Live crawler and Wayback Machine history sweeps to recover historical and hidden assets.</p></div>
+      <div class="cap"><h3><span class="dot"></span>API &amp; path disclosure</h3><p>Discovers robots.txt, sitemaps, Swagger/OpenAPI schemas, and GraphQL introspection endpoints.</p></div>
     </div>
 
     <div class="cap-group-label">Exposure & misconfiguration</div>
     <div class="cap-grid">
-      <div class="cap"><h4><span class="dot"></span>Vulnerability scanning</h4><p>Nuclei detection templates, with a safe policy that always excludes DoS, intrusive and fuzzing tags.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Exposed secrets</h4><p>Scans endpoint responses for leaked credentials — stored masked, never in the clear.</p></div>
-      <div class="cap"><h4><span class="dot"></span>CORS, redirects & WAF</h4><p>Misconfigured cross-origin policy, open redirects, and which CDN/WAF actually fronts each host.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Subdomain takeover</h4><p>Dangling CNAMEs and dangling A-records pointed at infrastructure nobody controls anymore.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Cloud storage exposure</h4><p>Checks S3/GCS/Azure bucket names derived from your domain for public access.</p></div>
-      <div class="cap"><h4><span class="dot"></span>TLS inspection</h4><p>Certificate chain and expiry across every alive host.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Vulnerability scanning</h3><p>Nuclei detection templates, with a safe policy that always excludes DoS, intrusive and fuzzing tags.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Exposed secrets</h3><p>Scans endpoint responses for leaked credentials, stored masked, never in the clear.</p></div>
+      <div class="cap"><h3><span class="dot"></span>CORS, redirects & WAF</h3><p>Misconfigured cross-origin policy, open redirects, and which CDN/WAF actually fronts each host.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Subdomain takeover</h3><p>Dangling CNAMEs and dangling A-records pointed at infrastructure nobody controls anymore.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Cloud storage exposure</h3><p>Checks S3/GCS/Azure bucket names derived from your domain for public access.</p></div>
+      <div class="cap"><h3><span class="dot"></span>TLS inspection</h3><p>Certificate chain and expiry across every alive host.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Broken-link hijacking</h3><p>Finds dead outbound links and unclaimed social handles that an attacker could hijack.</p></div>
     </div>
 
     <div class="cap-group-label">Intelligence & supply chain</div>
     <div class="cap-grid">
-      <div class="cap"><h4><span class="dot"></span>Domain intelligence</h4><p>Email spoofability (SPF/DMARC/DKIM) and registration risk — fully passive.</p></div>
-      <div class="cap"><h4><span class="dot"></span>CVE watch</h4><p>Matches fingerprinted technology against new CVE and CISA-KEV feeds.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Dependency confusion</h4><p>Internal package names referenced in your code that nobody has claimed on the public registry.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Lookalike domains</h4><p>Registered typosquats set up to phish your staff and customers, checked for live mail.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Public code leaks</h4><p>Searches public repositories for secrets referencing your domain.</p></div>
-      <div class="cap"><h4><span class="dot"></span>Risk correlation</h4><p>Chains related findings across modules into a prioritized attack path, not a flat list.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Domain intelligence</h3><p>Email spoofability (SPF/DMARC/DKIM) and registration risk, fully passive.</p></div>
+      <div class="cap"><h3><span class="dot"></span>CVE watch</h3><p>Matches fingerprinted technology against new CVE and CISA-KEV feeds.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Dependency confusion</h3><p>Internal package names referenced in your code that nobody has claimed on the public registry.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Lookalike domains</h3><p>Registered typosquats set up to phish your staff and customers, checked for live mail.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Public code leaks</h3><p>Searches public repositories for secrets referencing your domain.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Risk correlation</h3><p>Chains related findings across modules into a prioritized attack path, not a flat list.</p></div>
+      <div class="cap"><h3><span class="dot"></span>Continuous change alerts</h3><p>Alerts you immediately to new subdomains, ports, and exposures as your surface shifts.</p></div>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="self-hosted">
-  <div class="wrap">
+  <!-- THE RUN -->
+  <section id="methodology">
+    <p class="kicker">The methodology</p>
+    <h2>A run a bug hunter would recognise</h2>
+    <p style="margin-top:14px">
+      Not a checklist. The actual sequence of a black-box engagement, automated and run
+      continuously — each stage feeding the next, so the surface it tests keeps growing
+      from what it learns.
+    </p>
+    <div class="chain">
+      <span class="s">your domain</span> <span class="a">→</span> certificate transparency + passive enumeration <span class="a">→</span> <span class="s">147 subdomains</span><br>
+      <span class="a">↳</span> permutation guessing, DNS-confirmed only <span class="a">→</span> <span class="s">+12 (staging-api.*)</span><br>
+      <span class="a">↳</span> live probe + technology fingerprint <span class="a">→</span> <span class="s">36 alive · Next.js + nginx</span><br>
+      <span class="a">↳</span> crawl + web archives <span class="a">→</span> <span class="s">mine the JavaScript bundles</span> <span class="a">→</span> <span class="s">/api/internal/v2/users</span><br>
+      <span class="a">↳</span> robots.txt, sitemap, OpenAPI schema, GraphQL introspection <span class="a">→</span> <span class="s">the whole documented API</span><br>
+      <span class="a">↳</span> hidden parameters, content discovery, ports, Nuclei, secrets <span class="a">→</span> <span class="s">leaked API key in a bundle</span><br>
+      <span class="a">↳</span> CORS, open redirect, 403 bypass <span class="a">→</span> <span class="s">admin panel reachable</span><br>
+      <span class="a">↳</span> <span class="s">"one exposed staging host leads to admin"</span>
+    </div>
+  </section>
+
+  <!-- RUNS ON YOUR INFRASTRUCTURE -->
+  <section id="infrastructure">
     <div class="band">
       <div>
+        <p class="kicker">Deployment</p>
         <h2>Runs on your infrastructure. Full stop.</h2>
         <p>There is no vendor cloud holding your attack surface data. Every finding, every scan log, every credential you configure stays inside your own deployment.</p>
         <p>Three pre-built images, no source code required. Install is a single compose file.</p>
@@ -235,59 +1059,207 @@
           <li>MongoDB and Redis never publish a port to the host</li>
           <li>TLS terminated automatically via Let's Encrypt</li>
           <li>Politeness rate cap on every scan, so it never looks like an attack to your own monitoring</li>
-          <li>Images pinned to a version — nothing changes under a running scan</li>
+          <li>Images pinned to a version, nothing changes under a running scan</li>
         </ul>
       </div>
-      <code>tar xzf exactsurface-1.0.0.tar.gz
-cd exactsurface-1.0.0
-cp .env.example .env
-docker compose up -d</code>
+      <pre class="sh"><span class="c"># three containers, one compose file</span>
+curl -O https://exactsurface.com/docker-compose.yml
+cp .env.example .env        <span class="c"># set passwords & domain</span>
+docker compose up -d
+
+<span class="c"># open http://localhost:3000, done</span></pre>
     </div>
-  </div>
-</section>
+  </section>
 
-<section id="pricing">
-  <div class="wrap">
-    <h2>Self-Hosted Full Version</h2>
-    <p class="section-lede">Buy once, deploy in your infrastructure, and run completely free forever. No domain caps, no per-seat fees, no subscription checks, and all 28+ detection modules fully unlocked.</p>
-    <table class="pricing">
-      <thead>
-        <tr>
-          <th>Metric / Feature</th>
-          <th><span class="tier">Self-Hosted Edition</span></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td>Domains</td><td>Unlimited</td></tr>
-        <tr><td>Users & Members</td><td>Unlimited</td></tr>
-        <tr><td>API Keys</td><td>Unlimited</td></tr>
-        <tr><td>Re-scan cadence</td><td>Unlimited (customizable schedules)</td></tr>
-        <tr><td>On-demand 403 bypass & Reports</td><td>Included</td></tr>
-        <tr><td>Detection Modules</td><td>All 28+ modules included and togglable</td></tr>
-      </tbody>
-    </table>
-    <p class="pricing-note">Includes TLS inspection, service fingerprinting, hidden parameter discovery, lookalike domain tracking, cloud bucket exposure, cloud asset inventory, new template watch, dorking, internet-index search, and all future modules.</p>
-  </div>
-</section>
-
-<section class="cta-band">
-  <div class="wrap">
-    <h2>See what's already on your surface.</h2>
-    <p>The live demo is read-only, seeded with real output, and needs no signup.</p>
-    <a class="btn btn-primary btn-lg" href="https://demo.exactsurface.com" target="_blank" rel="noopener">Open the demo</a>
-  </div>
-</section>
-
-<footer>
-  <div class="wrap">
-    <a class="brand" href="#top"><img src="/logo.png" alt="" /> ExactSurface</a>
-    <div class="flinks">
-      <a href="#pricing">Pricing</a>
-      <a href="https://demo.exactsurface.com" target="_blank" rel="noopener">Demo</a>
+  <!-- SAFETY -->
+  <section id="safety">
+    <p class="kicker">The guardrails</p>
+    <h2>Aggressive at finding. Conservative at everything else.</h2>
+    <div class="grid g2">
+      <div class="card">
+        <h3>Nobody can point it at a domain they have not verified</h3>
+        <p>
+          Nothing is scanned until the domain is proven, a DNS record or a file only its
+          owner could place, and IP-level scanning is restricted to ranges confirmed
+          yours. That applies to every user of the product, including your own team and
+          anything holding an API key. It is enforced centrally rather than per-module,
+          because one module missing the check would be a scan of somebody else's network.
+        </p>
+        <p>
+          <strong>What we do not claim:</strong> because you host it, whoever administers
+          your deployment also owns its database and could write a verification record by
+          hand. No self-hosted software can prevent that, and we would rather say so than
+          imply a guarantee we cannot keep. What the authorisation record gives you there
+          is evidence, who authorised what, when, and under which terms.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Detection only, never exploitation</h3>
+        <p>
+          It reads a header, compares a response, resolves a name. It never exploits,
+          never writes, never claims a resource. Probe payloads use reserved example
+          domains, so a probe that escapes lands on a host nobody controls.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Polite by construction</h3>
+        <p>
+          Every request passes a rate limiter with a per-host ceiling. A security tool
+          that takes a customer's site down has caused the outage it was bought to
+          prevent.
+        </p>
+      </div>
+      <div class="card">
+        <h3>Secrets are never stored in the clear</h3>
+        <p>
+          A leaked key is shown masked, hashed for deduplication, and purged on a
+          retention clock. Finding a secret must not create a second copy of it.
+        </p>
+      </div>
     </div>
-    <div class="fnote">Detection only. Never exploitation. © ExactSurface.</div>
-  </div>
-</footer>
+  </section>
+
+  <!-- SELF HOSTED -->
+  <section id="pricing">
+    <p class="kicker">Where it runs</p>
+    <h2>On your infrastructure. Not ours.</h2>
+    <p style="margin-top:14px">
+      Every hosted attack-surface vendor asks a security team to hand over a live map of
+      their weakest points, the single most valuable document an attacker could steal,
+      and keep it in someone else's cloud. ExactSurface removes the question, and removes
+      the vendor breach from your threat model.
+    </p>
+    <pre class="sh"><span class="c"># three containers, one compose file</span>
+curl -O https://exactsurface.com/docker-compose.yml
+cp .env.example .env        <span class="c"># set passwords & domain</span>
+docker compose up -d
+
+<span class="c"># open http://localhost:3000, add your domain, prove you own it, done</span></pre>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th></th><th>ExactSurface</th><th>Hosted EASM</th></tr></thead>
+        <tbody>
+          <tr><td>Where your attack surface lives</td><td class="y">Your infrastructure</td><td>Their cloud</td></tr>
+          <tr><td>Air-gapped deployment</td><td class="y">Supported</td><td>No</td></tr>
+          <tr><td>Priced by</td><td class="y">One-time software purchase</td><td>Assets they discover, or scan credits</td></tr>
+          <tr><td>Bill grows as your surface grows</td><td class="y">No</td><td>Yes</td></tr>
+          <tr><td>Evidence behind a finding</td><td class="y">Full request + reproduction</td><td>A severity score</td></tr>
+          <tr><td>If the vendor is breached</td><td class="y">Your data is not there</td><td>Your surface map is</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="callout">
+      <h3>100% Free Self-Hosted Edition</h3>
+      <p>
+        Once purchased directly, your deployment runs 100% free forever on your infrastructure.
+        You are never charged more for discovering more of your own surface, and never
+        metered per scan.
+      </p>
+      <p>
+        Includes unlimited domains, unlimited members, unlimited API keys, and all 28+ detection modules fully unlocked out of the box.
+      </p>
+    </div>
+    
+    <div class="tablewrap" style="margin-top: 24px;">
+      <table>
+        <thead>
+          <tr>
+            <th>Metric / Feature</th>
+            <th class="y">Self-Hosted Edition</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td>Domains</td><td class="y">Unlimited</td></tr>
+          <tr><td>Users & Members</td><td class="y">Unlimited</td></tr>
+          <tr><td>API Keys</td><td class="y">Unlimited</td></tr>
+          <tr><td>Re-scan cadence</td><td class="y">Unlimited (customizable schedules)</td></tr>
+          <tr><td>On-demand 403 bypass & Reports</td><td class="y">Included</td></tr>
+          <tr><td>Detection Modules</td><td class="y">All 28+ modules included and togglable</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="muted" style="margin-top: 14px; font-size: 13.5px;">
+      Includes TLS inspection, service fingerprinting, hidden parameter discovery, lookalike domain tracking, cloud bucket exposure, cloud asset inventory, new template watch, dorking, internet-index search, and all future modules.
+    </p>
+  </section>
+
+  <!-- START -->
+  <section id="start">
+    <p class="kicker">Getting started</p>
+    <h2>Your own attack surface, in about an hour</h2>
+    <div class="grid g3">
+      <div class="card"><h3>1 · Deploy</h3><p>Three containers via Docker Compose on a small VM. No agents, nothing to install on the assets themselves.</p></div>
+      <div class="card"><h3>2 · Prove the domain</h3><p>A DNS TXT record or a file at a known path. Nothing is scanned before this, including by you.</p></div>
+      <div class="card"><h3>3 · Watch it work</h3><p>The first full run streams live. You will see hosts you had forgotten. Everyone does.</p></div>
+    </div>
+    <div class="cta">
+      <a class="btn p" href="https://exactsurface-demo.vercel.app" target="_blank">Try the demo</a>
+      <a class="btn s" href="#how">See how it works</a>
+    </div>
+    <p class="muted" style="margin-top:18px;font-size:14px">
+      Self-hosted, continuous attack surface management with zero recurring subscription enforcement.
+    </p>
+  </section>
+
+  <footer>
+    <div class="wrap">
+      <a class="brand" href="#">
+        <img src="/favicon.png" alt="" />
+        <span class="nm">ExactSurface</span>
+      </a>
+      <div class="flinks">
+        <a href="#how">How it works</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#safety">Safety</a>
+        <a href="https://exactsurface-demo.vercel.app" target="_blank" rel="noopener">Demo</a>
+      </div>
+      <div class="fnote">Detection only. Never exploitation. © ExactSurface.</div>
+    </div>
+  </footer>
+</div>
+
+<script>
+  // Add dark/light mode toggle based on system preference (if desired)
+  const prefersDarkScheme = window.matchMedia("(prefers-color-scheme: dark)");
+  if (prefersDarkScheme.matches) {
+    document.documentElement.setAttribute("data-theme", "dark");
+  } else {
+    document.documentElement.setAttribute("data-theme", "light");
+  }
+
+  // Automatic Slideshow logic
+  let currentSlide = 0;
+  const slides = document.querySelectorAll('.slideshow img.slide');
+  const dots = document.querySelectorAll('.showcase-dots .s-dot');
+  
+  function setSlide(index) {
+    if (slides.length === 0) return;
+    slides[currentSlide].classList.remove('active');
+    dots[currentSlide].classList.remove('active');
+    currentSlide = index;
+    slides[currentSlide].classList.add('active');
+    dots[currentSlide].classList.add('active');
+  }
+  
+  function nextSlide() {
+    let next = (currentSlide + 1) % slides.length;
+    setSlide(next);
+  }
+  
+  // Auto loop every 4.5 seconds
+  if (slides.length > 0) {
+    let slideInterval = setInterval(nextSlide, 4500);
+    
+    // Pause auto-loop on manual click and reset interval
+    dots.forEach((dot, index) => {
+      dot.addEventListener('click', () => {
+        clearInterval(slideInterval);
+        setSlide(index);
+        slideInterval = setInterval(nextSlide, 4500);
+      });
+    });
+  }
+</script>
 
 </body>
 </html>
