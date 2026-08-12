@@ -91,7 +91,6 @@ async def test_run_update_applies_then_skips_when_current(tmp_path):
     signed = _signed(manifest, priv)
 
     async def json_get(url, headers):
-        assert "X-License" in headers
         return signed
 
     async def bytes_get(url):
@@ -103,7 +102,7 @@ async def test_run_update_applies_then_skips_when_current(tmp_path):
     r1 = await run_update(
         mongo=mongo,
         feed_url="https://feed",
-        license_token="tok",
+        license_token=None,
         public_key_pem=pub,
         dest_dir=str(dest),
         json_get=json_get,
@@ -116,7 +115,7 @@ async def test_run_update_applies_then_skips_when_current(tmp_path):
     r2 = await run_update(
         mongo=mongo,
         feed_url="https://feed",
-        license_token="tok",
+        license_token=None,
         public_key_pem=pub,
         dest_dir=str(dest),
         json_get=json_get,
@@ -137,7 +136,7 @@ async def test_run_update_ignores_unsigned_manifest(tmp_path):
     r = await run_update(
         mongo=FakeMongo(),
         feed_url="https://feed",
-        license_token="t",
+        license_token=None,
         public_key_pem=pub,
         dest_dir=str(tmp_path),
         json_get=json_get,

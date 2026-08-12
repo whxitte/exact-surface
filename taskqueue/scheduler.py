@@ -116,13 +116,7 @@ class Scheduler:
         return out
 
     async def _plan_allowed(self, programs: list[dict]) -> set[str]:
-        """Program ids inside each tenant's allowance (§13 — enforced at enqueue, so a
-        downgrade takes effect on the next tick without deleting anything).
-
-        The allowance comes from the signed license tightened by the stored plan, never
-        the stored plan alone: this database belongs to the customer, so a `plan` field
-        reading "enterprise" is a claim, not a fact.
-        """
+        """Return program IDs inside the tenant's allowance."""
         from core import entitlements as licensing
 
         by_tenant: dict[str, list[dict]] = {}
@@ -174,7 +168,6 @@ class Scheduler:
         schedule = ScheduleRepo.from_mongo(self._mongo)
         audit = ScanRunRepo.from_mongo(self._mongo)
         tenant_defaults = await self._tenant_defaults()
-        # Licence + stored plan, resolved once per tick rather than per program.
         licensing_state = licensing.current()
         stored_plans = {
             t["tenant_id"]: t.get("plan", "free")
@@ -232,14 +225,7 @@ class Scheduler:
             cadence = self._cadence_override or effective_cadence(
                 prog.get("cadence_overrides"),
                 tenant_defaults.get(tid),
-                # Commercial floor only on a licensed deployment. Unlicensed (dev,
-                # tests) has no subscription to restrict, and silently throttling a
-                # developer's instance to a tier they never bought would be wrong.
-                floor=(
-                    limits.min_scan_interval_seconds
-                    if licensing_state.entitlements is not None
-                    else None
-                ),
+                floor=limits.min_scan_interval_seconds,
             )
             # A module the user turned off (or whose dependency is off) must not be
             # scheduled either — otherwise the per-phase cadence would quietly keep
@@ -247,7 +233,6 @@ class Scheduler:
             module_state = module_registry.resolve(
                 enabled_modules=prog.get("enabled_modules"),
                 disabled_modules=prog.get("disabled_modules"),
-                licensed_modules=limits.optional_modules,
             )
             for pipeline, interval in cadence.items():
                 if not module_state.is_enabled(pipeline):

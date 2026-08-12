@@ -9,153 +9,47 @@ the enforcement levers, and the support boundaries. The customer-facing document
 ## 0. The model in one picture
 
 ```
-YOU HOST (tiny, ~free)              THEY HOST (everything heavy)
+YOU DELIVER                          THEY HOST (everything)
 ┌────────────────────────┐          ┌──────────────────────────────────┐
-│ control plane          │          │ frontend · API · workers         │
-│  /v1/license/refresh   │◄─────────│ MongoDB · Redis · Caddy          │
-│  /v1/updates/manifest  │  outbound│ all scanning, all their data     │
-│  /bundles/*.tar.gz     │  calls   │ (never touches your infra)       │
-└────────────────────────┘          └──────────────────────────────────┘
-   + container images (GHCR)           + a signed licence token you issued
-   + the Ed25519 PRIVATE key
+│ Container images       │─────────►│ frontend · API · workers         │
+│ deploy/ bundle         │          │ MongoDB · Redis · Caddy          │
+│ software updates       │          │ all scanning, all their data     │
+└────────────────────────┘          │ (never touches your infra)       │
+                                    └──────────────────────────────────┘
 ```
-
-You control three things and nothing else: **whether their licence renews**, **whether
-they get fresh detections**, and **whether they can pull new images**. That is enough,
-because a security scanner running stale detections is worthless within weeks.
 
 **What you never have:** their attack-surface data, their findings, their traffic, their
 compute bill, or liability for their scanning.
 
-**The customer's instance works completely with the control plane never having existed.**
-Licence checks verify a signed token locally against a baked-in public key — no network
-call required. The control plane only adds automatic renewal and fresh detection content
-between releases, both best-effort; either can be absent and nothing about scanning,
-verification, or findings is affected. If a customer stands one up before you have a
-control plane running, or you take yours down for maintenance, their instance keeps
-working on whatever it already had. This is confirmed in a real deployment, not just by
-reading the code — a licensed instance ran a full scan to completion with no control
-plane configured at all during the pre-launch dry run (§3.2d).
-
-**If a customer or their counsel asks whether the deployment owner (them, or you if you
-manage it for them) can bypass domain-ownership verification:** yes, technically —
-whoever has direct database access can write a verified record by hand, the same as
-anyone with root on the box could. This is the same trust boundary as licence
-enforcement, stated in full in [`SECURITY.md`](SECURITY.md) §2b, including the exact
-command that would do it. Point them there rather than answering from memory — it is
-the one page written to be quoted back to a skeptical security team.
+**Self-Hosted Architecture:** The customer's instance runs completely self-contained on their own infrastructure. The software carries no domain limits, seat caps, scan quotas, or license key checks.
 
 ---
 
 ## 1. One-time setup (do this once, ever)
 
-### 1.1 Generate your signing keypair — the single most important asset
+### 1.1 Container registry — GHCR
 
-> **How many keypairs do I need? Exactly ONE — for the whole product, forever.**
->
-> Not one per customer. Not one per release. One keypair signs every licence you will
-> ever issue, and its public half is baked into the single image that every customer
-> runs. What is *per-customer* is the **licence token** you mint in §3.2 — that's the
-> thing you generate again for each client and each renewal.
->
-> You only ever generate a second keypair if the private key is compromised (§5.7),
-> and that forces a rebuild + re-issue for everyone.
-
-```bash
-python -m scripts.license keygen --out-dir ~/exactsurface-keys   # ONCE, ever
-```
-
-- `private.pem` — **this is your revenue.** Anyone holding it can mint free, unlimited,
-  never-expiring licences for your product.
-- `public.pem` — verify-only, safe to bake into every image and hand to anyone.
-
-**Back it up now, before you do anything else:**
-
-- Keep the primary copy **offline** (encrypted USB, or a password manager's secure file).
-- Keep one geographically separate copy (different building, or a sealed envelope).
-- Never commit it, never put it in CI, never email it, never paste it into a chat.
-- If you lose it: **every existing licence keeps working until it expires, but you can
-  never issue or renew another one.** You would have to generate a new keypair, rebuild
-  every image, and re-issue every customer. Treat losing it as a business-ending event
-  and back it up accordingly.
-
-> The control plane needs the private key to sign renewals, so it will live on that
-> server too. That is the only machine besides yours that should ever hold it.
-
-### 1.2 Container registry — use GHCR, not Docker Hub
-
-The release workflow publishes to **GHCR** (`ghcr.io/<your-github-account>/api`,
-`/frontend`, `/pipeline`). Nothing to set up: the three packages are created on the
-first release, Actions authenticates itself, and there is **no registry secret to
-manage**.
-
-Why not Docker Hub: its free tier allows only **one private repo**, and we publish
-three images. GHCR gives unlimited private packages on a free account.
+The release workflow publishes to **GHCR** (`ghcr.io/<your-github-account>/api`, `/frontend`, `/pipeline`).
 
 Choose one access model:
-- **Private packages** (recommended): invite each customer's GitHub account to the
-  package (Package → Settings → Manage Actions/collaborators). Revoking that invite is a
-  third enforcement lever alongside licence + updates.
-- **Public packages**: simpler, no per-customer admin. Anyone can pull the image but
-  **cannot run it without a licence**, so this is a reasonable choice too.
+- **Private packages** (recommended): invite each customer's GitHub account to the package.
+- **Public packages**: simpler, no per-customer invitation admin.
 
-### 1.3 GitHub secrets
+### 1.2 GitHub Actions secrets
 
-Repo → Settings → Secrets and variables → Actions — exactly one secret:
+Set in repo settings (**Settings → Secrets and variables → Actions**):
 
 | Secret | Value |
 |---|---|
-| `LICENSE_PUBLIC_KEY` | contents of `public.pem` (the **public** one — never the private) |
+| `DOCKER_HUB_TOKEN` | (optional if using Docker Hub) PAT with read/write access |
 
-### 1.4 Stand up the control plane
+--- | contents of `public.pem` (the **public** one — never the private) |
 
-Any small VPS ($5/mo is plenty — it serves a few KB per customer per hour).
+### 1.4 One-time setup checklist
 
-```bash
-# on the control-plane server
-git clone <your repo> exactsurface && cd exactsurface
-
-# put the keypair where compose expects it
-mkdir -p docker/cp-secrets
-# copy private.pem + public.pem into docker/cp-secrets/ (scp, then shred the source)
-chmod 600 docker/cp-secrets/private.pem
-
-# ingress config
-cat > docker/cp.env <<'EOF'
-CP_DOMAIN=cp.exactsurface.com
-ACME_EMAIL=you@exactsurface.com
-EOF
-
-# DNS: point cp.exactsurface.com A-record at this server FIRST (Caddy needs it for TLS)
-docker compose -f docker/docker-compose.control-plane.yml up -d --build
-curl -fsS https://cp.exactsurface.com/healthz     # → {"ok":true}
-```
-
-Firewall: allow 80/443 only. The control plane itself is never published directly.
-
-### 1.5 Publish your first update bundle
-
-```bash
-nuclei -update-templates -silent
-python -m scripts.build_bundle \
-    --templates ~/nuclei-templates \
-    --out ./cp-data \
-    --base-url https://cp.exactsurface.com/bundles
-
-# copy onto the control-plane volumes (names from `docker compose ps`)
-docker cp ./cp-data/bundle-*.tar.gz    exactsurface-control-plane-caddy-1:/srv/bundles/
-docker cp ./cp-data/bundle_manifest.json exactsurface-control-plane-control-plane-1:/data/
-```
-
-### 1.6 One-time setup checklist
-
-- [ ] Keypair generated
-- [ ] `private.pem` backed up **twice**, offline, verified readable
-- [ ] `LICENSE_PUBLIC_KEY` secret set in GitHub (the public key — never the private)
-- [ ] First release tagged, and the three GHCR packages exist + are pullable
-- [ ] Control-plane server up, DNS pointed, TLS working, `/healthz` returns ok
-- [ ] First bundle published and `GET /v1/updates/manifest` gated correctly
-- [ ] `.env`-style secrets for the control plane are **not** in git
+- [ ] `LICENSE_PUBLIC_KEY` secret set in GitHub (if needed for release signature verification)
+- [ ] First release tagged, and the product GHCR packages exist + are pullable
+- [ ] `.env`-style secrets for production are **not** in git
 
 ---
 
@@ -237,89 +131,11 @@ mismatch is how customers end up on a build you can't identify.
 - [ ] Confirm **they own or are authorised to scan** the domains they intend to add.
       Get that in writing. This is the single biggest legal risk in the whole business.
 
-### 3.2 Mint and register the licence
+### 3.2 Software Delivery
 
-> **Pricing, every tier's limits, and how each one is enforced:
-> [`PRICING_AND_LIMITS.md`](PRICING_AND_LIMITS.md).** Read it before you quote anyone.
-> The short version: **domains are the price metric**, the licence states the number,
-> and nothing on the customer's machine can raise it.
+Once the client pays directly, hand over the built container images or `deploy/` bundle. The software runs **100% free for life** on the client's infrastructure with unlimited domains, unlimited seats, unlimited scans, and all 28+ modules unlocked out of the box.
 
-`--domains` and `--users` override the tier, so "Business but they need 40 domains" is a
-licence you mint, not a code change or a new tier. `--features` adds individual optional
-modules on top of the tier's set.
-
-> **Unlimited is an omitted flag, never `0`.** A cap of zero allows *nothing* —
-> `can_add_domain()` reads it as "fewer than zero domains", so the customer can never add
-> one and only finds out after installing. Leave `--domains` off to get the tier's
-> default, which is unlimited on `enterprise`. The CLI now refuses `0` outright, and the
-> summary line it prints says either a number or the word `unlimited` — read it before
-> you send the file.
-
-```bash
-python -m scripts.license issue \
-    --private-key ~/exactsurface-keys/private.pem \
-    --customer "Acme Corp" \
-    --plan business \
-    --domains 25 \
-    --months 1 \
-    --grace 14 \
-    --store ./cp-data/licenses.json \
-    --out acme.vlic
-
-# always verify what you just minted before sending it
-python -m scripts.license inspect --public-key ~/exactsurface-keys/public.pem "$(cat acme.vlic)"
-```
-
-Then sync the store to the control plane so renewals work:
-
-```bash
-docker cp ./cp-data/licenses.json exactsurface-control-plane-control-plane-1:/data/
-```
-
-Record in your own ledger (a spreadsheet is fine): customer, `license_id`, plan, domains,
-paid-through date, contact email, invoice number.
-
-### 3.2b Your own licence, for testing release images
-
-A release image enforces licensing unconditionally — `RELEASE_BUILD` is stamped into
-`core/build_info.py` at build time and `licence_enforced()` ignores every environment
-variable once it is set. **That includes yours.** It has to: customers run the identical
-image, so an owner-only escape hatch would be a customer-usable one.
-
-So when you pull a published image to smoke-test it, you need a licence like anyone else.
-Mint yourself one and keep it:
-
-```bash
-python -m scripts.license issue --private-key ~/exactsurface-keys/private.pem --customer "ExactSurface (internal)" --plan enterprise --months 120 --out ~/exactsurface-keys/owner.jwt
-```
-
-The token goes in `.env`, **not** in a shell variable — it has to survive restarts:
-
-```bash
-echo "EXACTSURFACE_LICENSE=$(cat ~/exactsurface-keys/owner.jwt)" >> .env
-```
-
-The verify key is a **build** arg, needed only when you build locally (GHCR images
-already carry it, supplied by the release workflow):
-
-```bash
-LICENSE_PUBLIC_KEY="$(cat ~/exactsurface-keys/public.pem)" docker compose -f docker/docker-compose.yml up -d --build
-```
-
-Confirm it took — a licensed instance says so at startup:
-
-```bash
-docker compose -f docker/docker-compose.yml logs api | grep "license active"
-```
-
-> **Why `.env` and not `export EXACTSURFACE_LICENSE=…`?** Because the export lasts one
-> terminal session. Compose's `environment:` outranks `env_file:`, so listing the licence
-> there with a shell default means the next `docker compose up` or `restart` from a shell
-> without the export overwrites the real licence with an empty string and drops a working
-> deployment to read-only, with nothing in the logs to explain it. `.env` is read the same
-> way every time, by every service, whoever runs the command.
-
-If the banner persists, check what actually reached the container:
+Record in your own ledger (a spreadsheet is fine): customer name, contact email, invoice number, delivery date.
 `docker compose exec api printenv EXACTSURFACE_LICENSE` should print the token and
 `… printenv EXACTSURFACE_LICENSE_PUBLIC_KEY` a PEM block. A service compose reports as
 `Running` rather than `Started`/`Recreated` did not pick up new environment at all.
@@ -382,7 +198,7 @@ Then:
 
 ```bash
 docker compose up -d
-docker compose logs api | grep "license active"
+docker compose ps
 ```
 
 If you changed `MONGO_ROOT_PASSWORD` or `REDIS_PASSWORD` **after** a first attempt already
@@ -423,13 +239,9 @@ Send these five things — nothing more, nothing less:
    sending the bundle covers the manual too.
 3. **Image access** — for private packages, an invite to the packages for their GitHub
    account. The bundle already names the images, so there is nothing to copy out.
-4. **Their control-plane URLs** to put in `.env`:
-   `EXACTSURFACE_LICENSE_REFRESH_URL=https://cp.exactsurface.com/v1/license/refresh`
-   and `EXACTSURFACE_UPDATE_FEED_URL=https://cp.exactsurface.com`
-5. **Support contact + hours**, and what's in scope (§6).
+4. **Support contact + hours**, and what's in scope (§6).
 
-**Never send:** `private.pem`, your control-plane credentials, or another customer's
-anything.
+**Never send:** internal credentials or another customer's data.
 
 ### 3.3b Accounts & email — what to tell them
 
@@ -462,91 +274,24 @@ the call:
 
 ---
 
-## 4. Ongoing maintenance (you are the whole ops team)
+## 4. Ongoing maintenance
 
 | Cadence | Task | How |
 |---|---|---|
-| **Monthly** | Renew paying customers | §5.1 |
-| **Monthly** | Suspend non-payers | §5.2 |
-| **Weekly–monthly** | Publish a fresh template bundle | §1.5 (re-run) |
-| **Weekly** | Check control-plane health | `curl https://cp.../healthz` |
 | **On CVE/CVSS-high dep alerts** | Patch + release | §2 |
 | **Quarterly** | Test-restore a backup | §5.6 |
-| **Quarterly** | Verify your key backups are still readable | read `private.pem` from cold storage |
-| **Yearly** | Renew the domain + review the contract | — |
-
-### The one automation worth adding early
-
-Uptime monitoring on `https://cp.exactsurface.com/healthz` (UptimeRobot's free tier is
-fine). If the control plane is down for days, connected customers stop renewing and
-eventually drop to read-only through no fault of their own — that's a support fire and a
-refund conversation. **Grace periods exist to absorb this, but don't rely on them.**
-
-### Control-plane backups
-
-The only state is two small files:
-
-```bash
-docker cp exactsurface-control-plane-control-plane-1:/data/licenses.json ./backup-licenses-$(date +%F).json
-```
-
-Back that up wherever you keep business records. Losing it means renewals fail until you
-rebuild it (you can, from your ledger + the tokens you issued).
+| **Yearly** | Review contract and updates | — |
 
 ---
 
-## 5. Runbooks
+## 5. Operations & Customer Delivery
 
-### 5.0 Customer wants more domains (the most common upgrade)
+### 5.1 Customer Delivery Flow
 
-Re-issue with the higher `--domains`, same `--customer-id`, and push the store to the
-control plane. If they have `EXACTSURFACE_LICENSE_REFRESH_URL` set they pick it up on
-the next refresh with no restart and no maintenance window — prefer this. Programs that
-were over the old quota resume scanning on the next tick with their history intact.
-
-Full walkthrough in [`PRICING_AND_LIMITS.md`](PRICING_AND_LIMITS.md) §4.
-
-### 5.1 Customer paid — extend their subscription
-
-Edit the store record's `paid_until`, then sync:
-
-```bash
-python - <<'PY'
-from control_plane.store import LicenseStore
-from datetime import datetime, timedelta, UTC
-s = LicenseStore("./cp-data/licenses.json")
-r = s.get("lic_XXXXXXXX")
-r.paid_until = (datetime.now(UTC) + timedelta(days=31)).isoformat()
-r.status = "active"
-s.upsert(r)
-print(r)
-PY
-docker cp ./cp-data/licenses.json exactsurface-control-plane-control-plane-1:/data/
-```
-
-Their instance picks up the renewed token on its next check (default hourly). Nothing for
-them to do.
-
-### 5.2 Customer didn't pay — stop them
-
-```bash
-python -c "
-from control_plane.store import LicenseStore
-s = LicenseStore('./cp-data/licenses.json'); print(s.suspend('lic_XXXXXXXX'))"
-docker cp ./cp-data/licenses.json exactsurface-control-plane-control-plane-1:/data/
-```
-
-What happens: refresh returns 402, so their current token runs out its remaining days,
-then the 14-day grace, **then** the instance goes read-only. Their data stays visible and
-exportable — deliberately. Also stop serving updates (suspension does this automatically).
-
-If you need it faster, mint short tokens (e.g. `--months 1` with `--grace 3`).
-
-### 5.3 Offline / air-gapped customer
-
-They have no control-plane access by design. Renewal = you mint a new token each period
-and send it; they swap the file and it takes effect on the next check. They get no
-automatic updates — ship them a bundle out-of-band, or price that in.
+1. Receive payment directly from the client.
+2. Provide the container images or `deploy/` bundle.
+3. The client deploys the stack on their server (`docker compose up -d`).
+4. The client gains **100% free, unrestricted access** for life with unlimited domains, users, scans, and all 28+ modules unlocked.
 
 ### 5.4 "Scanning stopped working"
 
@@ -574,26 +319,6 @@ python -m scripts.backup restore ./backups/<file>.age --identity ~/age-identity.
 
 Do it against a throwaway Mongo, not production. If you've never run it, you don't have
 backups.
-
-### 5.7 Private key compromised (or you suspect it)
-
-This is the emergency. In order:
-
-1. Generate a new keypair.
-2. Update the `LICENSE_PUBLIC_KEY` GitHub secret; cut a new release so images carry the
-   new key.
-3. Re-issue every active customer a token signed by the new key.
-4. Have each customer upgrade to the new image + new token (coordinate — old tokens stop
-   verifying on the new build).
-5. Rotate the control-plane copy of the key.
-
-Every previously-issued licence becomes unverifiable on new builds, which is the point.
-
-### 5.8 Control plane down
-
-Customers keep working — that's what grace windows are for. Restore service, and if the
-outage was long, extend affected customers' `paid_until` by the outage duration as
-goodwill.
 
 ---
 
@@ -635,10 +360,7 @@ accidentally becoming a customer's sysadmin.
 
 - [ ] Contract signed, authorisation-to-scan attested in writing
 - [ ] Payment received / invoice issued
-- [ ] Licence minted with the **agreed** plan + domain count, and `inspect`-verified
-- [ ] Registered in `licenses.json` **and synced to the control plane**
 - [ ] Recorded in your ledger
 - [ ] Image access confirmed working (have them pull once before the call)
-- [ ] Sent: token, `CLIENT_GUIDE.md`, image access, control-plane URLs, support contact
+- [ ] Sent: `CLIENT_GUIDE.md`, image access, support contact
 - [ ] Onboarding call booked
-- [ ] Control plane healthy at handover time

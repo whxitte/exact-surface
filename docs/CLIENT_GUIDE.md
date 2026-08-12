@@ -13,10 +13,8 @@ surface.
 
 | Item | What it's for |
 |---|---|
-| **Licence token** (a `.vlic` file) | Activates your subscription. Treat it as a credential. |
-| **Image access** | The published container images (or a pull token for them). |
-| **Control-plane URLs** | Where your instance fetches licence renewals + detection updates. |
-| **This guide** | Everything below. |
+| **Image / Codebase access** | The container images or codebase to deploy on your server. |
+| **This guide** | Deployment & operational instructions. |
 
 ---
 
@@ -89,8 +87,6 @@ python3 -c "import secrets; print('EXACTSURFACE_SECRET_HASH_KEY=' + secrets.toke
 Minimum you must set:
 
 ```ini
-# your subscription — paste the token we sent you, on one line
-EXACTSURFACE_LICENSE=vlic1.…
 
 EXACTSURFACE_JWT_SECRET=<generated above>
 EXACTSURFACE_SECRET_HASH_KEY=<generated above>
@@ -133,16 +129,6 @@ docker compose logs -f api   # watch for errors
 The first start pulls a few GB (the scanning image carries a full recon toolchain and
 the template corpus), so give it a few minutes on a slow connection.
 
-**Confirm your licence activated.** This is the one check worth doing before anything
-else — a licensed instance says so explicitly:
-
-```bash
-docker compose logs api | grep "license active"
-```
-
-You want a line naming your organisation, plan and expiry. If instead the UI shows a red
-**read-only mode** banner, the licence did not load; see §9 before going further.
-
 Open `https://your-domain` and create the first account — **that account becomes the
 owner** of your organisation.
 
@@ -150,8 +136,6 @@ owner** of your organisation.
 
 - [ ] `https://your-domain` loads and you can sign up / log in
 - [ ] `docker compose ps` shows all services healthy
-- [ ] `docker compose logs api | grep "license active"` prints your subscription
-- [ ] Settings shows your subscription as **active** (no red banner)
 - [ ] `docker compose logs worker` shows the worker connected to Redis
 
 ---
@@ -212,7 +196,7 @@ Findings appear progressively — subdomains first, then live hosts, then exposu
 | **DNS / Ports / Secrets / CVEs** | Takeover risks, open services, leaked credentials (always masked), matched CVEs |
 | **Activity** | Live scan logs |
 | **Reports** | HTML / PDF / executive / HackerOne-style export |
-| **Settings** | Team access, alert channels, integrations, schedules, subscription status |
+| **Settings** | Team access, alert channels, integrations, schedules, system status |
 
 **Team access.** The owner creates *permission groups* (View / Manage programs / Manage
 settings) and adds teammates to them. **A new user has no access until you put them in a
@@ -337,7 +321,7 @@ monitoring, add the relevant domain and verify it; nothing is scanned until you 
 
 ### If it finds nothing
 
-* Check the module is enabled and your tier includes it (Business and above).
+* Check the module is enabled in Program Settings.
 * Watch the Activity tab during a run — the stage logs the providers it queried and
   says plainly when no config is set.
 * Test the credentials outside the product: `cloudlist -config cloudlist.yaml -json`.
@@ -412,43 +396,9 @@ docker compose logs -f scheduler
 
 ---
 
-## 7. Your subscription
+## 7. Licensing & Access
 
-Your instance carries a cryptographically signed licence and checks it periodically. It
-is verified **entirely locally** — the licence is a signed token checked against a public
-key baked into your images, and no network call is required to confirm it's valid.
-
-**The control plane is optional, and the product runs completely without one ever
-being reachable.** It exists for exactly two things, both best-effort:
-
-- **Automatic renewal.** If your instance can reach it, a paid renewal applies on the
-  next check with nothing for you to do. If it can't (air-gapped, or the control plane
-  is simply unreachable right now), the signed token you already have keeps working
-  until it expires — see the states below.
-- **Fresh detection content between releases** (new nuclei templates, updated tooling).
-  Without this, your instance keeps using whatever was baked into the image at build
-  time, which is a complete and current corpus as of that release — it does not stop
-  working, it just doesn't get newer detections until your next upgrade.
-
-Nothing about scanning, verification, or findings ever depends on the control plane
-being reachable.
-
-| State | What happens |
-|---|---|
-| **Active** | Everything works. |
-| **Grace** (just after expiry) | Everything still works. You'll see an amber banner — renew now. |
-| **Read-only** (past grace) | Scanning, adding domains, and the 403-bypass stop. **All your existing data stays fully visible and exportable.** Scheduled scans pause. |
-
-Renewing restores full function automatically on the next check (about an hour), or
-immediately if you restart the stack.
-
-**Air-gapped?** You'll receive a new token each period instead; replace the file and it
-applies on the next check.
-
-**Keeping detections current matters.** Your instance pulls new detection templates from
-the update feed while your subscription is active. An instance that can't reach the feed
-keeps working but its detections gradually go stale — and a scanner using old detections
-misses new CVEs. Don't firewall it off.
+Once delivered, your ExactSurface self-hosted deployment runs **100% unrestricted and free for life**. There are no recurring subscription fees, no domain limits, no seat limits, no feature paywalls, and no license key renewals required.
 
 ---
 
@@ -464,15 +414,14 @@ misses new CVEs. Don't firewall it off.
 
 **Security**
 - Restrict inbound access (VPN or IP allowlist beats public exposure).
-- `.env` and the licence token are secrets — `chmod 600`, never commit them.
+- `.env` file contains secrets — `chmod 600`, never commit them.
 - Rotate `EXACTSURFACE_JWT_SECRET` if you suspect compromise (this logs everyone out).
 - Keep the host patched; apply ExactSurface updates promptly.
 - Use permission groups — don't share the owner account.
 
 **Operational**
 - Backups configured **and a restore tested**.
-- Monitor disk (scan data grows) and keep the server's clock synced via NTP — a clock
-  that jumps backwards is treated as tampering and forces read-only.
+- Monitor disk space (scan data grows over time).
 
 ---
 
@@ -482,8 +431,6 @@ misses new CVEs. Don't firewall it off.
 |---|---|
 | Stack won't start, complains about secrets | Defaults left in `.env`. Generate real `JWT_SECRET` / `SECRET_HASH_KEY`. |
 | No TLS certificate | DNS A-record missing or not propagated; 80/443 blocked. Fix DNS, restart Caddy. |
-| Red "read-only" banner | Subscription lapsed → renew. Or licence env unset/wrong. |
-| Banner says clock tampering | Server clock moved backwards. Fix NTP, restart. |
 | Scans never start | Program not verified/authorised, or the worker isn't running (`ps`, `logs worker`). |
 | "No confirmed-dedicated hosts — ports withheld" | Expected. Your hosts are on shared/cloud infra, so intrusive checks are withheld. Enable "scan my cloud infra" only if you own it. |
 | Scan is slow | By design — requests are rate-limited per target so scanning never looks like abuse. |

@@ -56,26 +56,12 @@ CONFIGURABLE_PIPELINES: frozenset[str] = frozenset(DEFAULT_CADENCE_SECONDS)
 #: user enters (§3.8 continuous-scanning politeness).
 MIN_INTERVAL_SECONDS: int = 5 * MINUTE
 
-#: Cadences that contact nothing external, so neither the politeness floor nor the
-#: commercial scan-frequency floor applies to them. Delivering an alert late because
-#: of a pricing tier would be a strange product, and it protects no one.
+#: Cadences that contact nothing external.
 NON_SCANNING: frozenset[str] = frozenset({"notify"})
 
 
 def sanitize_overrides(overrides: dict | None, *, floor: int | None = None) -> dict[str, int]:
-    """Keep only known pipelines with a sane positive interval, floored.
-
-    Two floors apply and the stricter wins:
-
-    * ``MIN_INTERVAL_SECONDS`` — the politeness floor (§3.8b). Nobody may scan faster
-      than this, on any plan, ever.
-    * ``floor`` — the plan's ``min_scan_interval_seconds``. Scan frequency is the main
-      axis of cost in this product, so it is also an axis of the commercial model.
-
-    Applied here rather than at the API edge because this is the single function every
-    path (program overrides, tenant defaults, the settings screen) already goes through,
-    so a new caller cannot forget it.
-    """
+    """Keep only known pipelines with a sane positive interval, floored by MIN_INTERVAL_SECONDS."""
     out: dict[str, int] = {}
     for key, val in (overrides or {}).items():
         if key not in CONFIGURABLE_PIPELINES:
@@ -97,18 +83,7 @@ def effective_cadence(
     *,
     floor: int | None = None,
 ) -> dict[str, int]:
-    """Resolve the cadence a program actually runs on: built-in defaults, overlaid by
-    the tenant's account defaults, overlaid by the program's own overrides (most
-    specific wins), with every value held at or above the plan's floor.
-
-    The floor is applied to the built-in defaults too, not just the overrides — a plan
-    whose floor is 24h must not scan hourly simply because that is the shipped default
-    for a fast module.
-    """
-    # The plan floor applies to the shipped defaults too — a tier whose floor is 24h
-    # must not scan hourly just because that is the default for a fast module. The
-    # POLITENESS floor deliberately does not: the defaults are already chosen to be
-    # polite, and modules in NON_SCANNING touch nobody's infrastructure.
+    """Resolve the cadence a program actually runs on."""
     merged = {
         k: (v if k in NON_SCANNING else max(v, floor or 0))
         for k, v in DEFAULT_CADENCE_SECONDS.items()

@@ -17,7 +17,6 @@ from api.deps import (
     require_owner,
     require_program,
     require_verified_email,
-    require_write_license,
 )
 from api.schemas import (
     AuthorizationCreate,
@@ -94,14 +93,7 @@ async def create_program(
     body: ProgramCreate,
     principal: Principal = Depends(require_verified_email),
     mongo: Any = Depends(get_mongo_dep),
-    _lic: None = Depends(require_write_license),
 ) -> dict:
-    if not await tenant_can_add_domain(mongo, principal.tenant_id):
-        limits = await tenant_limits(mongo, principal.tenant_id)
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            f"your licence allows {limits.max_domains} domain(s) — contact your vendor to add more",
-        )
     program = Program(
         tenant_id=principal.tenant_id,
         program_id="prog_" + uuid.uuid4().hex[:12],
@@ -506,7 +498,6 @@ async def get_modules(
     return {
         "program_id": program["program_id"],
         "modules": catalogue(
-            licensed_modules=(await tenant_limits(mongo, principal.tenant_id)).optional_modules,
             enabled_modules=program.get("enabled_modules"),
             disabled_modules=program.get("disabled_modules"),
         ),
@@ -542,7 +533,6 @@ async def update_modules(
         "modules": catalogue(
             enabled_modules=enabled,
             disabled_modules=disabled,
-            licensed_modules=(await tenant_limits(mongo, principal.tenant_id)).optional_modules,
         ),
     }
 
@@ -553,20 +543,9 @@ async def trigger_scan(
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
-    _lic: None = Depends(require_write_license),
 ) -> dict:
     if not program.get("verified"):
         raise HTTPException(status.HTTP_409_CONFLICT, "verify the domain first")
-    # §13: plan limits are checked before a scan consumes resources. A program
-    # outside the allowance (e.g. after a downgrade) is refused explicitly rather
-    # than silently skipped, so the user sees why.
-    if not await program_within_plan(mongo, principal.tenant_id, program["program_id"]):
-        limits = await tenant_limits(mongo, principal.tenant_id)
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            f"your licence covers {limits.max_domains} domain(s); this one is outside "
-            "that allowance — remove another domain, or ask your vendor for more",
-        )
     auth = await AuthorizationRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
     if not (auth and auth.get("apex_verified") and not auth.get("revoked")):
         raise HTTPException(
@@ -692,7 +671,6 @@ async def trigger_bypass_403(
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
-    _lic: None = Depends(require_write_license),
 ) -> dict:
     """Run the 403/401-bypass module across this program's forbidden endpoints.
 
@@ -704,13 +682,6 @@ async def trigger_bypass_403(
     """
     from core.logging import logger
 
-    if not program.get("verified"):
-        raise HTTPException(status.HTTP_409_CONFLICT, "verify the domain first")
-    if not (await tenant_limits(mongo, principal.tenant_id)).on_demand_bypass:
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            "on-demand 403/401 bypass testing is not included in your subscription",
-        )
     auth = await AuthorizationRepo.from_mongo(mongo).get(principal.tenant_id, program["program_id"])
     if not (auth and auth.get("apex_verified") and not auth.get("revoked")):
         raise HTTPException(

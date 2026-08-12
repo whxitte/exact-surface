@@ -8,10 +8,8 @@ is configuration.
 ```bash
 cp .env.example .env      # then edit it — see "Filling in .env" below
 docker compose up -d
-docker compose logs api | grep "license active"
+docker compose ps
 ```
-
-If that last command prints a line naming your organisation, you are running.
 
 ---
 
@@ -112,17 +110,6 @@ Required, no defaults:
 > **`.env` holds every secret for this deployment.** `chmod 600` it, keep it out of
 > version control, and back it up somewhere private.
 
-### Put the licence in `.env`, not in a shell variable
-
-```ini
-EXACTSURFACE_LICENSE=vlic1.eyJjaWQiOiJjdXNf…
-```
-
-Not `export EXACTSURFACE_LICENSE=…`. An exported variable lasts one terminal session;
-the next `docker compose up` or `docker compose restart` from a shell without it drops
-the instance to read-only, and nothing in the logs explains why. Configuration that
-survives one terminal session is not configuration.
-
 ---
 
 ## Starting it
@@ -134,22 +121,7 @@ docker compose up -d
 First start pulls a few GB — the scanning image carries a full recon toolchain and the
 detection-template corpus. Give it a few minutes.
 
-### Confirm your licence activated
-
-Do this before anything else:
-
-```bash
-docker compose logs api | grep "license active"
-```
-
-```
-license active: Acme Corp (business), 25 domain(s), expires 2027-08-02
-```
-
-If you see nothing, or the UI shows a red **read-only mode** banner, jump to
-[Troubleshooting](#troubleshooting).
-
-### Then
+### Verification
 
 ```bash
 docker compose ps          # every service healthy? (pipeline Exited (0) is correct)
@@ -200,27 +172,6 @@ docker compose pull && docker compose up -d
 Images are pinned to a version rather than `latest` on purpose: an image that changes
 underneath a running scan is not something you should have to debug.
 
-**Renewing your licence.** You'll receive a new token before or shortly after the old
-one lapses. Update it, then **restart is required** — editing `.env` alone does nothing
-to an already-running container:
-
-```bash
-# edit EXACTSURFACE_LICENSE= in .env, then:
-docker compose up -d
-docker compose logs api | grep "license active"    # confirm the new expiry shows
-```
-
-This isn't optional busywork: the licence is read once when the `api` process starts
-and cached for its whole lifetime, so a container that's already running has no way to
-notice `.env` changed underneath it. If you edit the file and don't see anything
-different, that's why — you haven't recreated the container yet.
-
-You don't need to do this *before* the old licence expires — there's a grace period
-(shown in `docker compose logs api | grep -i licen`) that keeps scanning working for a
-few days past expiry so a slightly-late renewal doesn't interrupt anything. Past grace,
-the instance goes read-only: existing findings stay fully visible and exportable,
-scanning simply pauses until the new token is in and the container is restarted.
-
 ---
 
 ## Troubleshooting
@@ -232,25 +183,6 @@ URI — most often `+`, `/`, `=`, `@` or `%`, which is exactly what `openssl ran
 can produce. Both values are placed straight into a connection string with no encoding,
 so this fails authentication in a way that never mentions the password. Regenerate both
 with `openssl rand -hex 24` (hex only — always URI-safe) and `docker compose up -d`.
-
-### Red "read-only mode — no license configured" banner
-
-The licence did not reach the application. In order:
-
-```bash
-docker compose exec api printenv EXACTSURFACE_LICENSE     # is it there at all?
-docker compose logs api | grep -i licen                   # what did it decide?
-```
-
-- **Nothing printed by the first command** — `EXACTSURFACE_LICENSE` is not in `.env`, or
-  you exported it in a shell instead of writing it to the file.
-- **`license state: invalid`** — the token is corrupted. It must be one unbroken line;
-  a line break pasted into the middle is the usual cause.
-- **`license state: expired`** — your subscription lapsed. Findings stay viewable and
-  exportable; scanning resumes on renewal.
-- **The command printed a token but the banner persists** — restart the API
-  (`docker compose up -d api`). A container compose reports as `Running` rather than
-  `Started` did not pick up the new environment.
 
 ### Caddy will not start / no certificate
 

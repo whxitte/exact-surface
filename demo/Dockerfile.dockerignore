@@ -28,6 +28,5 @@ daemon
 scripts
 tests
 devtools
-control_plane
 docs
 docker

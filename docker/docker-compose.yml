@@ -17,15 +17,7 @@ name: exactsurface-dev
 x-backend-env: &backend-env
   EXACTSURFACE_MONGO_URI: mongodb://mongo:27017
   EXACTSURFACE_REDIS_URI: redis://redis:6379/0
-  # The LICENCE IS NOT LISTED HERE, deliberately. Put it in ../.env as
-  # `EXACTSURFACE_LICENSE=vlic1.…` -- every backend service loads that file.
-  #
-  # The tempting alternative -- listing it here with a shell-substituted empty default
-  # -- is a trap: `environment:` outranks `env_file:`, so the moment anyone runs `docker compose
-  # up` or `restart` from a shell that has not exported the variable, the empty default
-  # overwrites the real licence and a working deployment silently drops to read-only.
-  # A licence that lives only in a shell variable is not configuration -- it survives
-  # exactly one terminal session.
+
 
 services:
   mongo:

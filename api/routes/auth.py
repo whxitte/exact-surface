@@ -196,8 +196,7 @@ async def me(
             email_verified = bool(user.get("email_verified"))
             email = user.get("email")
 
-    # Plan + usage so the UI can show the tier, its domain limit, and how much of it
-    # is used — the same numbers the 402 on add-domain enforces (§13).
+    # Plan + usage status.
     from core.plans import coerce_plan, max_domains
     from db.programs import ProgramRepo, tenant_plan
 
@@ -218,15 +217,13 @@ async def me(
         # control). Authoritative enforcement is server-side; this is only for display.
         "is_owner": principal.is_owner,
         "permissions": sorted(principal.permissions),
-        # Subscription state so the UI can show a renew banner / read-only mode. The
-        # actual gate is server-side (require_write_license); this is display only.
         "license": _license_summary(),
     }
 
 
 @router.get("/license")
 async def license_status(_: Principal = Depends(get_principal)) -> dict:
-    """The instance's subscription/license state (for the settings page + banner)."""
+    """The instance's status (for the settings page)."""
     return _license_summary()
 
 
@@ -243,19 +240,6 @@ async def create_api_key(
     # higher role than the creator holds.
     if body.role == Role.OWNER and principal.role != Role.OWNER:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "cannot mint a key above your own role")
-    # Subscription limit. Integrations are a paid axis, and an unbounded key count is
-    # also a security smell — every live key is another credential to rotate.
-    from core.plans import can_add_api_key
-    from db.programs import tenant_limits
-
-    limits = await tenant_limits(mongo, principal.tenant_id)
-    existing = await ApiKeyRepo.from_mongo(mongo).list(principal.tenant_id, limit=1000)
-    if not can_add_api_key(limits, len(existing)):
-        raise HTTPException(
-            status.HTTP_402_PAYMENT_REQUIRED,
-            f"your licence allows {limits.max_api_keys} API key(s) — "
-            "delete an unused one, or contact your vendor",
-        )
     raw, key_hash, prefix = generate_api_key()
     key_id = "k_" + uuid.uuid4().hex[:12]
     await ApiKeyRepo.from_mongo(mongo).create(

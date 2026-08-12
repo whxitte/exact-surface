@@ -77,9 +77,7 @@ def _set_plan(client, tenant_id: str, plan: str) -> None:
 
 def _owner(client, email: str = "owner@rbac.com", name: str = "RBAC") -> tuple[str, str]:
     o = signup(client, email=email, name=name)
-    # RBAC is inherently multi-user, so the tenant needs a tier with seats. A fresh
-    # signup lands on FREE (one seat, the owner), and the seat limit is enforced —
-    # which is correct, and would otherwise make every test here a 402.
+    # Signup owner helper.
     _set_plan(client, o["tenant_id"], "business")
     return o["access_token"], o["tenant_id"]
 
