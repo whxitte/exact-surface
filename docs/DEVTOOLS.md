@@ -148,7 +148,12 @@ pip install -r requirements.txt
 ```bash
 python -m devtools
 ```
+Or via Docker with all binary tools:
 
+```bash
+docker run --rm -d --name exactsurface-workbench -p 8765:8765 -e DEVTOOLS_HOST=0.0.0.0 -e EXACTSURFACE_ENV=dev -v $(pwd):/app exactsurface/pipeline:latest python -m devtools
+
+```
 It prints the **only URL that works**:
 
 ```
