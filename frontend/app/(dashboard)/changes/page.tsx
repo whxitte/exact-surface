@@ -297,8 +297,8 @@ function DiffBlock({
   }, [events]);
 
   return (
-    <Card>
-      <CardContent className="p-5">
+    <Card className="min-w-0">
+      <CardContent className="min-w-0 p-4 sm:p-5">
         <div className="mb-3 text-sm font-semibold">{title}</div>
         {events.length === 0 ? (
           <p className="text-sm text-muted-foreground">{empty}</p>
@@ -317,16 +317,16 @@ function DiffBlock({
                       <div
                         key={i}
                         className={cn(
-                          "flex items-center gap-2 border-l-2 pl-2 font-mono text-xs",
+                          "flex min-w-0 items-center gap-2 border-l-2 pl-2 font-mono text-xs",
                           border,
                         )}
                       >
                         <span className={cn("font-bold", accent)}>{marker}</span>
-                        <span className="min-w-0 flex-1 truncate">{e.label}</span>
+                        <span className="min-w-0 flex-1 break-all sm:truncate">{e.label}</span>
                         {showApex && (
-                          <span className="shrink-0 text-[10px] text-muted-foreground">{e.apex}</span>
+                          <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">{e.apex}</span>
                         )}
-                        <span className="shrink-0 text-[10px] text-muted-foreground">
+                        <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">
                           {timeAgo(e.at)}
                         </span>
                       </div>
@@ -349,8 +349,8 @@ function DiffBlock({
 
 function ModifiedBlock({ mods, showApex }: { mods: Mod[]; showApex: boolean }) {
   return (
-    <Card>
-      <CardContent className="p-5">
+    <Card className="min-w-0">
+      <CardContent className="min-w-0 p-4 sm:p-5">
         <div className="mb-3 flex items-center gap-2 text-sm font-semibold">
           <Pencil className="h-4 w-4 text-primary" /> Modified — changed in place
         </div>
@@ -361,19 +361,19 @@ function ModifiedBlock({ mods, showApex }: { mods: Mod[]; showApex: boolean }) {
         ) : (
           <div className="space-y-1">
             {mods.slice(0, 60).map((m, i) => (
-              <div key={i} className="flex items-center gap-2 text-xs">
+              <div key={i} className="flex min-w-0 items-center gap-2 text-xs">
                 <span className="w-24 shrink-0 rounded bg-muted px-1.5 py-0.5 text-center text-[10px] text-muted-foreground">
                   {KIND_LABEL[m.kind] || m.kind}
                 </span>
-                <span className="min-w-0 flex-1 truncate font-mono">
+                <span className="min-w-0 flex-1 break-all font-mono sm:truncate">
                   <span className="text-muted-foreground line-through">{m.before || "—"}</span>
                   <ArrowRight className="mx-1 inline h-3 w-3 text-muted-foreground" />
                   <span className="text-foreground">{m.after || "—"}</span>
                 </span>
                 {showApex && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground">{m.apex}</span>
+                  <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">{m.apex}</span>
                 )}
-                <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo(m.at)}</span>
+                <span className="hidden shrink-0 text-[10px] text-muted-foreground sm:inline">{timeAgo(m.at)}</span>
               </div>
             ))}
           </div>

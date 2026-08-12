@@ -93,7 +93,6 @@ Required, no defaults:
 
 | Variable | Notes |
 |---|---|
-| `EXACTSURFACE_LICENSE` | The token we sent you, on **one line**. |
 | `DOMAIN` | The hostname this instance serves. Must already resolve to this server. |
 | `MONGO_ROOT_PASSWORD` | **Use `openssl rand -hex 24`, not base64.** This value goes into a Mongo connection URI unescaped; a `base64` password containing `+`, `/` or `=` breaks authentication with an error that never mentions the password. |
 | `REDIS_PASSWORD` | Same rule, same reason — it goes into a Redis URI the same way. |

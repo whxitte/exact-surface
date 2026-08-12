@@ -47,7 +47,6 @@ Set in repo settings (**Settings → Secrets and variables → Actions**):
 
 ### 1.4 One-time setup checklist
 
-- [ ] `LICENSE_PUBLIC_KEY` secret set in GitHub (if needed for release signature verification)
 - [ ] First release tagged, and the product GHCR packages exist + are pullable
 - [ ] `.env`-style secrets for production are **not** in git
 
@@ -58,57 +57,39 @@ Set in repo settings (**Settings → Secrets and variables → Actions**):
 The version lives in `pyproject.toml`, and CI refuses to release if the tag disagrees:
 
 ```bash
-# 1. bump pyproject.toml → version = "0.2.0"
+# 1. bump pyproject.toml → version = "1.1.0"
 # 2. commit, tag, push
-git commit -am "Release 0.2.0"
-git tag v0.2.0
+git commit -am "Release 1.1.0"
+git tag v1.1.0
 git push origin main --tags
 ```
 
 The `Release` workflow then: runs the full test suite + lint + frontend build → builds
-and pushes the `api`, `frontend` and `pipeline` images tagged `:0.2.0` and `:latest`
-with your public key and the build id baked in → publishes a GitHub Release with the image digests.
+and pushes the `api`, `frontend` and `pipeline` images tagged `:1.1.0` and `:latest`
+with the build id baked in → publishes a GitHub Release with the image digests.
 
 Images go to **GHCR** (`ghcr.io/<your-github-account>/…`), not Docker Hub: the free
 Docker Hub tier allows one private repo and we publish three images, while GHCR gives
 unlimited private packages and needs no registry secret (Actions authenticates itself).
-Give a customer access by inviting them to the package, or make the packages public —
-they still cannot run the product without a licence.
 
 ### 2.1 Smoke-test the build before you tag (5 minutes, do it every time)
 
-CI builds the images, but CI does not tell you whether the **licence stamp** actually
-took effect inside the image. That is the one thing worth proving by hand, because if it
-silently regressed every customer would get an unlicensed build:
-
 ```bash
 docker build -f docker/Dockerfile.api \
-    --build-arg BUILD_ID=1.0.0 \
+    --build-arg BUILD_ID=1.1.0 \
     --build-arg GIT_COMMIT=$(git rev-parse --short HEAD) \
-    --build-arg LICENSED_TO="Smoke Test" \
     -t es-smoke:api .
 
 # 1. the build identity is baked in
 docker run --rm es-smoke:api python -c "from core.build_info import summary; print(summary())"
-#    → {'version': '1.0.0', ..., 'release': True, 'licensed_to': 'Smoke Test'}
-
-# 2. THE IMPORTANT ONE — an env var must NOT be able to switch licensing off
-docker run --rm -e EXACTSURFACE_LICENSE_ENFORCED=false es-smoke:api python -c "
-from core.build_info import licence_enforced
-from core.config import get_settings
-assert licence_enforced(get_settings().license_enforced) is True, 'BYPASSED'
-print('enforcement holds')"
 
 docker rmi es-smoke:api
 ```
 
-If step 2 prints anything other than `enforcement holds`, **do not tag the release** —
-the subscription model is off for everyone who pulls it.
-
 For the pipeline image, also confirm the toolchain and that the workbench stayed out:
 
 ```bash
-docker build -f docker/Dockerfile.pipeline --build-arg BUILD_ID=1.0.0 -t es-smoke:pipe .
+docker build -f docker/Dockerfile.pipeline --build-arg BUILD_ID=1.1.0 -t es-smoke:pipe .
 docker run --rm es-smoke:pipe sh -c 'command -v cloudlist arjun nuclei subfinder >/dev/null && echo tools-ok'
 docker run --rm es-smoke:pipe sh -c 'test -d /app/devtools && echo LEAKED || echo devtools-absent-ok'
 docker rmi es-smoke:pipe
@@ -123,9 +104,7 @@ mismatch is how customers end up on a build you can't identify.
 
 ### 3.1 Before you take money
 
-- [ ] **Contract signed.** The technical licence enforces the *dates*; the contract is
-      what makes bypassing it actionable. Non-negotiable — see §7.
-- [ ] Agree the **plan and domain count** (that's what you'll mint).
+- [ ] **Contract signed.** Non-negotiable — see §7.
 - [ ] Confirm they can meet the requirements in `CLIENT_GUIDE.md` §2 (a VM with 4 vCPU /
       8 GB / 100 GB, Docker, a domain name, outbound internet).
 - [ ] Confirm **they own or are authorised to scan** the domains they intend to add.
@@ -136,32 +115,15 @@ mismatch is how customers end up on a build you can't identify.
 Once the client pays directly, hand over the built container images or `deploy/` bundle. The software runs **100% free for life** on the client's infrastructure with unlimited domains, unlimited seats, unlimited scans, and all 28+ modules unlocked out of the box.
 
 Record in your own ledger (a spreadsheet is fine): customer name, contact email, invoice number, delivery date.
-`docker compose exec api printenv EXACTSURFACE_LICENSE` should print the token and
-`… printenv EXACTSURFACE_LICENSE_PUBLIC_KEY` a PEM block. A service compose reports as
-`Running` rather than `Started`/`Recreated` did not pick up new environment at all.
 
-Do **not** register this one with `--store`: it is not a sale and should not appear in the
-control plane's ledger or your revenue count.
+### 3.2c The steps, plainly
 
-For day-to-day development, use the dev build instead — it is not stamped `--release`, so
-enforcement follows `EXACTSURFACE_LICENSE_ENFORCED` and defaults to off. Needing a licence
-locally is a sign you are running the customer image, which you only want when you are
-deliberately checking the customer's experience.
-
-### 3.2c The four steps, plainly
-
-This is the whole customer flow, once a licence exists. Everything else in §3.2–§3.3 is
-detail underneath these four steps:
-
-1. **You mint their licence** (§3.2) — `python -m scripts.license issue …`.
-2. **You give them the deployment bundle** — `exactsurface-<version>.tar.gz` from the
+1. **You give them the deployment bundle** — `exactsurface-<version>.tar.gz` from the
    GitHub release, or just the `deploy/` folder if you are handing it over directly. It
    is self-contained: compose file, `.env.example`, Caddy/Prometheus/Grafana config, and
    the guide. No source, no build step.
-3. **They copy `.env.example` to `.env` and fill in the required values** — the licence
-   token from step 1, `DOMAIN`, and the datastore/app secrets. `deploy/README.md` inside
-   the bundle walks through every field.
-4. **They run `docker compose up -d`.** That is the entire install.
+2. **They copy `.env.example` to `.env` and fill in the required values** — `DOMAIN` and the datastore/app secrets. `deploy/README.md` inside the bundle walks through every field.
+3. **They run `docker compose up -d`.** That is the entire install.
 
 Nothing else is required. If you find yourself telling a customer to run a fifth command,
 something in the bundle needs fixing rather than the customer needing more instructions.
@@ -228,18 +190,16 @@ hand out. There is nothing to "log in" with until you create it.
 
 ### 3.3 What you hand over
 
-Send these five things — nothing more, nothing less:
+Send these four things — nothing more, nothing less:
 
-1. **The licence token** (`acme.vlic`) — treat as a credential; send over something
-   better than plain email if you can.
-2. **The deployment bundle** — `exactsurface-<version>.tar.gz`, attached to the GitHub
+1. **The deployment bundle** — `exactsurface-<version>.tar.gz`, attached to the GitHub
    release. This is the product as far as the customer is concerned: compose file,
    config, dashboards and the guide, pinned to the images of that release. It contains
    no source and needs no build. `CLIENT_GUIDE.md` ships inside it as `INSTALL.md`, so
    sending the bundle covers the manual too.
-3. **Image access** — for private packages, an invite to the packages for their GitHub
+2. **Image access** — for private packages, an invite to the packages for their GitHub
    account. The bundle already names the images, so there is nothing to copy out.
-4. **Support contact + hours**, and what's in scope (§6).
+3. **Support contact + hours**, and what's in scope (§6).
 
 **Never send:** internal credentials or another customer's data.
 
@@ -293,16 +253,12 @@ the call:
 3. The client deploys the stack on their server (`docker compose up -d`).
 4. The client gains **100% free, unrestricted access** for life with unlimited domains, users, scans, and all 28+ modules unlocked.
 
-### 5.4 "Scanning stopped working"
+### 5.4 Troubleshooting scanning issues
 
 Ask them to check, in order:
 
-1. `GET /auth/license` (or the banner in the UI) → what does `status` say?
-   - `expired` → billing issue, see 5.1
-   - `missing`/`invalid` → their `EXACTSURFACE_LICENSE` env is wrong or unset
-   - `tampered` → their server clock jumped backwards; fix NTP
-2. Is the **worker** running? `docker compose ps`
-3. Is the program **verified + authorised**? Unauthorised programs never scan (by design).
+1. Is the **worker** running? `docker compose ps`
+2. Is the program **verified + authorised**? Unauthorised programs never scan (by design).
 
 ### 5.5 "We can't pull the images"
 

@@ -102,15 +102,15 @@ export default function ProgramsPage() {
 
       <Card>
         <CardContent className="p-5">
-          <form onSubmit={addProgram} className="flex items-end gap-3">
-            <div className="flex-1">
+          <form onSubmit={addProgram} className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <div className="min-w-0 flex-1">
               <label className="mb-1.5 block text-sm font-medium text-muted-foreground">
                 Add a domain
               </label>
               <Input value={apex} onChange={(e) => setApex(e.target.value)}
                 placeholder="your-company.com" required />
             </div>
-            <Button type="submit" disabled={adding}>
+            <Button type="submit" className="w-full sm:w-auto" disabled={adding}>
               <Plus className="h-4 w-4" />
               {adding ? "Adding…" : "Add domain"}
             </Button>
@@ -128,49 +128,51 @@ export default function ProgramsPage() {
         {programs.map((p) => (
           <Link key={p.program_id} href={`/programs/${p.program_id}`} className="block">
             <Card className="transition-colors hover:border-primary/40">
-              <CardContent className="flex items-center gap-4 p-4">
-                <div className="flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground">
+              <CardContent className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 p-4 sm:flex sm:gap-4">
+                <div className="row-span-2 flex h-9 w-9 items-center justify-center rounded-md bg-muted text-muted-foreground sm:row-auto">
                   <Globe className="h-4 w-4" />
                 </div>
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 sm:flex-1">
                   <div className="font-medium">{p.apex_domain}</div>
                   <div className="truncate text-xs text-muted-foreground">
                     {scanSummary(p) || p.program_id}
                   </div>
                 </div>
                 {p.enabled === false && (
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+                  <span className="col-start-2 w-fit rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground sm:col-auto">
                     Paused
                   </span>
                 )}
                 {p.verified ? (
-                  <span className="flex items-center gap-1.5 text-xs text-primary">
+                  <span className="col-start-2 flex min-w-0 items-center gap-1.5 text-xs text-primary sm:col-auto sm:shrink-0">
                     <CheckCircle2 className="h-4 w-4" /> Verified
                   </span>
                 ) : (
-                  <span className="flex items-center gap-1.5 text-xs text-severity-medium">
+                  <span className="col-start-2 flex min-w-0 items-center gap-1.5 text-xs text-severity-medium sm:col-auto sm:shrink-0">
                     <AlertCircle className="h-4 w-4" /> Unverified
                   </span>
                 )}
-                <button
-                  onClick={(e) => toggleMonitoring(e, p)}
-                  title={p.enabled === false ? "Resume monitoring" : "Pause monitoring"}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  {p.enabled === false ? (
-                    <Play className="h-4 w-4" />
-                  ) : (
-                    <Pause className="h-4 w-4" />
-                  )}
-                </button>
-                <button
-                  onClick={(e) => removeProgram(e, p)}
-                  title="Delete program"
-                  className="text-muted-foreground hover:text-severity-critical"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                <div className="col-start-3 row-span-2 row-start-1 flex items-center gap-3 self-center sm:col-auto sm:row-auto sm:gap-4">
+                  <button
+                    onClick={(e) => toggleMonitoring(e, p)}
+                    title={p.enabled === false ? "Resume monitoring" : "Pause monitoring"}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    {p.enabled === false ? (
+                      <Play className="h-4 w-4" />
+                    ) : (
+                      <Pause className="h-4 w-4" />
+                    )}
+                  </button>
+                  <button
+                    onClick={(e) => removeProgram(e, p)}
+                    title="Delete program"
+                    className="text-muted-foreground hover:text-severity-critical"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                </div>
               </CardContent>
             </Card>
           </Link>

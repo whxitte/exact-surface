@@ -103,16 +103,6 @@ GRAFANA_ADMIN_PASSWORD=<strong random>
 EXACTSURFACE_WORKER_FLEET_SIZE=3
 ```
 
-> **Put the licence in `.env`, not in a shell variable.** `export EXACTSURFACE_LICENSE=…`
-> lasts one terminal session; the next `docker compose up` or `restart` without it drops
-> the instance to read-only with nothing in the logs explaining why.
-
-Two things you do **not** need to set: `EXACTSURFACE_ENV`, which the compose file already
-pins to `prod`, and any "enforce licensing" flag — a released image always enforces, and
-no environment variable changes that. If you prefer to mount the token as a file rather
-than put it in `.env`, set `EXACTSURFACE_LICENSE_FILE` to the path inside the container
-and mount it in a compose override.
-
 > **`.env` holds every secret for this deployment.** It's gitignored — keep it that way,
 > restrict it to `chmod 600`, and back it up somewhere safe but private.
 
@@ -355,7 +345,7 @@ python -m scripts.backup restore <archive>.age --identity ./age-identity.txt
 
 Run that against a scratch database, not production.
 
-Also back up: `.env`, and your licence token.
+Also back up: `.env`.
 
 ### 6.2 Upgrades
 
