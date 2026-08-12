@@ -88,7 +88,11 @@ async def run_update(
     bundle = await bytes_get(url)
     apply_bundle(bundle, manifest.get("sha256"), dest_dir)
     if hasattr(mongo, "collection"):
-        await col.update_one({"_id": "update"}, {"$set": {"version": str(manifest["version"])}}, upsert=True)
+        await col.update_one(
+            {"_id": "update"},
+            {"$set": {"version": str(manifest["version"])}},
+            upsert=True,
+        )
     logger.info("update feed: applied bundle {}", manifest["version"])
     return {"applied": True, "version": manifest["version"]}
 

@@ -684,8 +684,6 @@ def test_the_bundle_env_template_names_every_required_variable():
         )
 
 
-
-
 def test_dev_and_customer_compose_projects_cannot_collide():
     """Two compose files sharing a project name are the same project to Docker.
 

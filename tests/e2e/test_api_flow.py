@@ -431,7 +431,7 @@ def test_schedule_endpoints_program_and_tenant_defaults():
     }
     assert phases["ingest"]["interval_seconds"] == 43200 and phases["ingest"]["source"] == "tenant"
 
-    # program override wins over the tenant default; sub-floor values are clamped
+    # program override wins over tenant default; sub-floor values clamped to 300s
     client.post(
         f"/programs/{pid}/schedule", headers=_auth(token), json={"overrides": {"ingest": 5}}
     )
@@ -440,7 +440,7 @@ def test_schedule_endpoints_program_and_tenant_defaults():
         for p in client.get(f"/programs/{pid}/schedule", headers=_auth(token)).json()["phases"]
     }
     assert phases["ingest"]["source"] == "program"
-    assert phases["ingest"]["interval_seconds"] == 3600  # floored to the Business plan's 1h
+    assert phases["ingest"]["interval_seconds"] == 300  # floored to MIN_INTERVAL_SECONDS (5 min)
 
 
 def test_timeout_config_program_and_tenant_defaults():

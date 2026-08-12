@@ -188,8 +188,6 @@ def require_router_access(write_permission: str):
     return _dep
 
 
-
-
 async def require_verified_email(
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),

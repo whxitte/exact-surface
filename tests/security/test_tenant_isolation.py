@@ -205,7 +205,6 @@ _UNSCOPED_BY_DESIGN: dict[str, str] = {
     "apikeys.py:get_by_hash": "the key hash is the credential being presented",
     "apikeys.py:create": "creates the row that will carry the tenant_id",
     # Instance-wide state, not tenant data.
-
     "scope_feed.py:get": "shared CDN/cloud ranges, identical for every tenant",
     "scope_feed.py:set": "shared CDN/cloud ranges, identical for every tenant",
     # The scheduler iterates every tenant by definition; it scopes per program after.

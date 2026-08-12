@@ -70,10 +70,8 @@ def test_missing_created_at_sorts_last_but_stably():
 from core import build_info  # noqa: E402
 from core.plans import (  # noqa: E402
     PLAN_LIMITS,
-    can_add_domain,
     can_add_user,
     effective_limits,
-    limits_for,
 )
 
 
@@ -84,7 +82,6 @@ def test_effective_limits_returns_unlimited():
 
 def test_shipped_source_version():
     assert build_info.VERSION == "dev"
-
 
 
 # -- the tier table ----------------------------------------------------------
