@@ -1,6 +1,6 @@
 {
   "_meta": {
-    "description": "Starter CDN / cloud shared-IP ranges used by core/scope.py to de-rate scanning against infrastructure Vantari's customers do not own. This embedded set is intentionally small and stable; scripts/update_scope_feeds.py refreshes the full published ranges (AWS ip-ranges.json, GCP, Azure, Cloudflare) at runtime.",
+    "description": "Starter CDN / cloud shared-IP ranges used by core/scope.py to de-rate scanning against infrastructure ExactSurface's customers do not own. This embedded set is intentionally small and stable; scripts/update_scope_feeds.py refreshes the full published ranges (AWS ip-ranges.json, GCP, Azure, Cloudflare) at runtime.",
     "classes": {
       "cdn": "Shared CDN edge; only HTTP-layer probing is ever permitted.",
       "cloud_shared": "Generic shared cloud compute range; HTTP-layer probing only unless the specific IP is confirmed dedicated to the customer."
