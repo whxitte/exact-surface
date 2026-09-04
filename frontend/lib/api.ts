@@ -6,6 +6,62 @@ export { ApiError };
 
 // -- types -------------------------------------------------------------------
 export interface TokenResponse { access_token: string; tenant_id: string }
+// -- Playground -------------------------------------------------------------
+export interface NodePort {
+  name: string;
+  type: "hosts" | "urls" | "records" | "text" | "json" | "any";
+  label: string;
+  required: boolean;
+}
+export interface NodeParam {
+  name: string;
+  kind: "str" | "int" | "bool" | "select";
+  label: string;
+  default: unknown;
+  required: boolean;
+  help: string;
+  choices: string[];
+}
+export interface NodeSpec {
+  key: string;
+  tier: "pipeline" | "utility" | "source" | "output";
+  label: string;
+  summary: string;
+  group: string;
+  inputs: NodePort[];
+  outputs: NodePort[];
+  params: NodeParam[];
+  pipeline: string;
+  impl: string;
+  caution: string;
+}
+/** A canvas as the API stores it. Positions are the UI's business, carried opaquely. */
+export interface WorkflowGraph {
+  nodes: Record<string, { type: string; params?: Record<string, unknown>; x?: number; y?: number }>;
+  edges: { source: string; sourceHandle: string; target: string; targetHandle: string }[];
+}
+export interface SavedWorkflow {
+  workflow_id: string;
+  name: string;
+  graph: WorkflowGraph;
+  program_id?: string;
+  updated_at?: string;
+}
+export interface NodeRunReport {
+  status: "running" | "success" | "failed" | "skipped";
+  label?: string;
+  error?: string;
+  note?: string;
+  ms?: number;
+  outputs?: Record<string, unknown>;
+}
+export interface WorkflowRun {
+  run_id: string;
+  order: string[];
+  nodes: Record<string, NodeRunReport>;
+  freeform: boolean;
+}
+
 export interface Program {
   program_id: string;
   apex_domain: string;
@@ -442,6 +498,18 @@ export const api = {
     ),
 
   listPrograms: () => request<Program[]>("/programs"),
+  // -- Playground --
+  playgroundNodes: () => request<{ nodes: NodeSpec[] }>("/playground/nodes"),
+  listWorkflows: () => request<{ workflows: SavedWorkflow[] }>("/playground/workflows"),
+  saveWorkflow: (id: string, body: { name: string; graph: WorkflowGraph; program_id?: string }) =>
+    request<SavedWorkflow>(`/playground/workflows/${id}`, { method: "PUT", body: JSON.stringify(body) }),
+  deleteWorkflow: (id: string) =>
+    request<void>(`/playground/workflows/${id}`, { method: "DELETE" }),
+  validateWorkflow: (graph: WorkflowGraph) =>
+    request<{ ok: boolean; order?: string[]; message?: string; node?: string }>(
+      "/playground/validate", json({ graph })),
+  runWorkflow: (program_id: string, graph: WorkflowGraph) =>
+    request<WorkflowRun>("/playground/run", json({ program_id, graph })),
   createProgram: (apex_domain: string) =>
     request<Program>("/programs", json({ apex_domain })),
   getProgram: (id: string) => request<Program>(`/programs/${id}`),

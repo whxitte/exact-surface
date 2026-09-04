@@ -517,6 +517,47 @@ const SECTIONS: Section[] = [
     ),
   },
   {
+    id: "playground",
+    title: "Playground — building your own workflows",
+    icon: Boxes,
+    keywords: "playground canvas workflow drag drop nodes wire graph n8n visual builder target",
+    body: (
+      <>
+        <p>
+          The <Term>Playground</Term> is a canvas where you wire modules together
+          yourself. Drag a node from the left, connect one node&apos;s output socket into
+          another&apos;s input, and the hosts the first one discovers become the targets the
+          next one scans. That is not a separate engine — it is the same wiring a normal
+          scan uses internally, exposed so you can rearrange it.
+        </p>
+        <p>
+          <Term>Sockets are typed and colour-coded.</Term> A hosts output only connects to
+          a hosts input; an illegal wire is refused as you drag it rather than failing
+          halfway through a run. Only modules that actually discover hosts (subdomain
+          discovery, probing, crawling, internet-index search, cloud assets, reverse-DNS)
+          offer a hosts output — the rest expose their run summary, which you can wire into
+          an <Term>Output</Term> node to read.
+        </p>
+        <p>
+          <Term>Utility nodes</Term> sit between the scan modules: filter or merge host
+          lists, pick a field out of a result, or run a pure analysis (CORS verdict, WAF
+          fingerprint, lookalike-domain generation) that sends no traffic at all.
+        </p>
+        <p>
+          <Term>The Target node is owner-only.</Term> Every other route into the scanner
+          requires a domain somebody proved they control. Target lets the instance owner
+          type hostnames directly, which waives that check for the nodes wired straight to
+          it — and only those, so the waiver stays visible as an edge you drew. The scope
+          engine still applies: cloud metadata, shared CDN edges and the rest of the
+          hard-denied ranges remain off limits, the politeness cap still paces every
+          request, and port scanning stays locked because typed hostnames confer no
+          confirmed IP ownership. Scanning something you do not control is illegal in most
+          jurisdictions; the node states that where you type.
+        </p>
+      </>
+    ),
+  },
+  {
     id: "modules",
     title: "Turning modules on and off",
     icon: Boxes,
