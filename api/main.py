@@ -21,6 +21,7 @@ from api.routes import auth as auth_routes
 from api.routes import integrations as integration_routes
 from api.routes import members as member_routes
 from api.routes import notifications as notification_routes
+from api.routes import playground as playground_routes
 from api.routes import programs as program_routes
 from api.routes import reports as report_routes
 from api.routes import schedule as schedule_routes
@@ -165,6 +166,9 @@ def create_app() -> FastAPI:
     app.include_router(integration_routes.router, dependencies=_gate(SETTINGS_MANAGE))
     app.include_router(schedule_routes.router, dependencies=_gate(SETTINGS_MANAGE))
     app.include_router(report_routes.router, dependencies=_gate(VIEW))
+    # The canvas launches real scans, so it needs the same authority as triggering
+    # one on a program. The Target node's extra waiver is owner-checked in the runner.
+    app.include_router(playground_routes.router, dependencies=_gate(PROGRAMS_MANAGE))
     app.include_router(ws_stream.router)
 
     @app.get("/healthz")

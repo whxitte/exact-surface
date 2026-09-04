@@ -1,0 +1,47 @@
+/* React Flow chrome, restyled for the dark app.
+   Lives here rather than in globals.css deliberately: Next emits the library's
+   stylesheet (imported by page.tsx) into the PAGE chunk, which loads after
+   layout.css — so identical-specificity rules in globals.css lose the cascade and
+   the controls render as a white slab. Importing this file after the library's in
+   page.tsx puts these rules last, where they win without needing !important. */
+.react-flow__controls {
+  box-shadow: none;
+}
+.react-flow__controls-button {
+  background: hsl(var(--card));
+  border-bottom: 1px solid hsl(var(--border));
+  color: hsl(var(--foreground));
+  width: 26px;
+  height: 26px;
+}
+.react-flow__controls-button:hover {
+  background: hsl(var(--muted));
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+  max-width: 12px;
+  max-height: 12px;
+}
+.react-flow__attribution {
+  background: transparent;
+}
+.react-flow__attribution a {
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+}
+.react-flow__edge-path {
+  stroke: hsl(var(--muted-foreground));
+  stroke-width: 1.5;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:hover .react-flow__edge-path {
+  stroke: hsl(var(--primary));
+}
+.react-flow__handle {
+  border-radius: 9999px;
+}
+/* The library's default connection line is near-black on a dark canvas. */
+.react-flow__connectionline path {
+  stroke: hsl(var(--primary));
+  stroke-width: 1.5;
+}

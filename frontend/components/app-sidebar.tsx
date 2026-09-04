@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Globe, ShieldAlert, Activity, Settings, LogOut, Network,
-  GitCompareArrows, BookOpen, X,
+  GitCompareArrows, BookOpen, X, Workflow,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const nav = [
   { href: "/findings", label: "Findings", icon: ShieldAlert },
   { href: "/dns", label: "DNS", icon: Network },
   { href: "/activity", label: "Activity", icon: Activity },
+  { href: "/playground", label: "Playground", icon: Workflow },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

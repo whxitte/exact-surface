@@ -5785,3 +5785,1362 @@ export const MODULES = {
     }
   ]
 } as const;
+
+
+/** The real Playground catalogue, generated from `core/playground.py` so the demo's
+ *  palette is identical to the product's. Regenerate with:
+ *  `python -c "import json,core.playground as p; print(json.dumps(p.as_json(),indent=2))"`
+ */
+export const PLAYGROUND_NODES = [
+  {
+    "key": "pipeline:domain_intel",
+    "tier": "pipeline",
+    "label": "Domain intelligence",
+    "summary": "Email spoofability (SPF/DMARC/DKIM) and domain registration risk. Fully passive \u2014 reads DNS and the public registry, never touches your servers.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "domain_intel",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:ingest",
+    "tier": "pipeline",
+    "label": "Subdomain discovery",
+    "summary": "Finds your subdomains and resolves them. Everything else works from this list.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "ingest",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:cloud_assets",
+    "tier": "pipeline",
+    "label": "Cloud asset inventory",
+    "summary": "Asks your own AWS/GCP/Azure/DigitalOcean accounts what they are running, so you find the load balancer or VM nobody pointed a DNS name at. Credentials stay in your deployment and are never sent anywhere.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "cloud_assets",
+    "impl": "",
+    "caution": "set up by whoever deployed this instance, not from Settings \u2014 see CLIENT_GUIDE.md \u00a75.9 (EXACTSURFACE_CLOUDLIST_CONFIG)"
+  },
+  {
+    "key": "pipeline:uncover",
+    "tier": "pipeline",
+    "label": "Internet-index search",
+    "summary": "Looks your assets up in Shodan/Censys/Fofa to find hosts DNS never reveals.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "uncover",
+    "impl": "",
+    "caution": "needs a Shodan/Censys API key"
+  },
+  {
+    "key": "pipeline:reverse_dns",
+    "tier": "pipeline",
+    "label": "Reverse-DNS sweep",
+    "summary": "PTR-sweeps the IP ranges confirmed to be yours, finding hosts that exist in IP space but were never published in DNS. Only runs on ASN-verified ranges.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "reverse_dns",
+    "impl": "",
+    "caution": "needs ASN-confirmed dedicated IP ranges; sweeps up to 8192 addresses"
+  },
+  {
+    "key": "pipeline:probe",
+    "tier": "pipeline",
+    "label": "Live-host probing",
+    "summary": "Checks which hosts answer over HTTP/S and fingerprints their technology.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "probe",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:tls",
+    "tier": "pipeline",
+    "label": "TLS inspection",
+    "summary": "Certificate expiry and weak TLS configuration.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "tls",
+    "impl": "",
+    "caution": "adds a TLS handshake per host"
+  },
+  {
+    "key": "pipeline:takeover",
+    "tier": "pipeline",
+    "label": "Subdomain takeover",
+    "summary": "Dangling DNS records pointing at cloud services somebody else could claim.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "takeover",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:crawl",
+    "tier": "pipeline",
+    "label": "Crawling & archives",
+    "summary": "Crawls your live sites and mines Wayback/CommonCrawl history for URLs.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      },
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "crawl",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:content_discovery",
+    "tier": "pipeline",
+    "label": "Content discovery",
+    "summary": "Brute-forces hidden paths and files with tech-aware wordlists.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "content_discovery",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:js_mine",
+    "tier": "pipeline",
+    "label": "JavaScript mining",
+    "summary": "Reads your own JS bundles for API routes, internal hostnames and source maps \u2014 the routes the app tells every visitor about.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "js_mine",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:api_surface",
+    "tier": "pipeline",
+    "label": "API & path disclosure",
+    "summary": "Reads robots.txt, sitemaps, API schemas (Swagger/OpenAPI), GraphQL introspection and .well-known \u2014 the surface each host advertises about itself.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "api_surface",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:http_misconfig",
+    "tier": "pipeline",
+    "label": "CORS, redirects & WAF",
+    "summary": "Checks whether hosts hand data to any origin (CORS), can launder a phishing link (open redirect), and which of them sit behind a WAF.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "http_misconfig",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:param_discovery",
+    "tier": "pipeline",
+    "label": "Hidden parameters",
+    "summary": "Inventories the query parameters your pages already use, and probes for undocumented ones that change how the application behaves.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "param_discovery",
+    "impl": "",
+    "caution": "sends extra requests per URL to compare responses"
+  },
+  {
+    "key": "pipeline:broken_links",
+    "tier": "pipeline",
+    "label": "Broken-link hijacking",
+    "summary": "Outbound links whose destination is an unregistered domain or an unclaimed social handle that an attacker could take over.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "broken_links",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:port_scan",
+    "tier": "pipeline",
+    "label": "Port scanning",
+    "summary": "Open ports on infrastructure you have confirmed as yours.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "port_scan",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:service_scan",
+    "tier": "pipeline",
+    "label": "Service fingerprinting",
+    "summary": "Identifies the software and version behind each open port.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "service_scan",
+    "impl": "",
+    "caution": "slower, deeper probing of each open port"
+  },
+  {
+    "key": "pipeline:scan",
+    "tier": "pipeline",
+    "label": "Vulnerability scanning",
+    "summary": "Runs the Nuclei template corpus against your live endpoints.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "scan",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:secrets",
+    "tier": "pipeline",
+    "label": "Exposed secrets",
+    "summary": "Scans page and script bodies for leaked API keys, tokens and credentials.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "secrets",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:cve_watch",
+    "tier": "pipeline",
+    "label": "CVE watch",
+    "summary": "Matches known (and actively exploited) CVEs to your fingerprinted software.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "cve_watch",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:github_osint",
+    "tier": "pipeline",
+    "label": "Public code leaks",
+    "summary": "Searches public repositories for secrets tied to your domain.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "github_osint",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:cloud_buckets",
+    "tier": "pipeline",
+    "label": "Cloud storage exposure",
+    "summary": "Guesses and checks S3/GCS/Azure bucket names derived from your domain.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "cloud_buckets",
+    "impl": "",
+    "caution": "probes ~45 third-party endpoints; name-derived attribution"
+  },
+  {
+    "key": "pipeline:nuclei_watch",
+    "tier": "pipeline",
+    "label": "New-template watch",
+    "summary": "Alerts when a newly published Nuclei template starts matching your stack.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "nuclei_watch",
+    "impl": "",
+    "caution": "baselines the template set on first run"
+  },
+  {
+    "key": "pipeline:dork",
+    "tier": "pipeline",
+    "label": "Search-engine exposure",
+    "summary": "Finds content of yours that search engines have indexed but shouldn't have.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "dork",
+    "impl": "",
+    "caution": "needs a search API key (SerpAPI/Brave/Google CSE)"
+  },
+  {
+    "key": "pipeline:supply_chain",
+    "tier": "pipeline",
+    "label": "Dependency confusion",
+    "summary": "Internal package names referenced in your public JavaScript that nobody has claimed on npm \u2014 an attacker who publishes one lands code inside your build.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "supply_chain",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:typosquat",
+    "tier": "pipeline",
+    "label": "Lookalike domains",
+    "summary": "Registered domains that impersonate yours to phish your staff and customers. Third-party DNS only \u2014 never contacts the lookalike host.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "typosquat",
+    "impl": "",
+    "caution": "resolves several hundred candidate domains per run"
+  },
+  {
+    "key": "pipeline:correlate",
+    "tier": "pipeline",
+    "label": "Risk correlation",
+    "summary": "Groups related findings per host into ranked attack chains.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "correlate",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "pipeline:notify",
+    "tier": "pipeline",
+    "label": "Alerting",
+    "summary": "Delivers new findings to your configured channels.",
+    "group": "Scan modules",
+    "inputs": [
+      {
+        "name": "targets",
+        "type": "hosts",
+        "label": "Targets",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "result",
+        "type": "json",
+        "label": "Run summary",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "timeout",
+        "kind": "int",
+        "label": "Timeout (seconds)",
+        "default": null,
+        "required": false,
+        "help": "Leave empty to use this module's configured budget.",
+        "choices": []
+      }
+    ],
+    "pipeline": "notify",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "source:target",
+    "tier": "source",
+    "label": "Target",
+    "summary": "Feeds hostnames into the canvas. Scanning a domain you do not control is illegal in most jurisdictions \u2014 you are asserting you are authorised.",
+    "group": "Input",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Discovered hosts",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "hosts",
+        "kind": "str",
+        "label": "Hosts",
+        "default": null,
+        "required": true,
+        "help": "One hostname per line, or comma-separated.",
+        "choices": []
+      }
+    ],
+    "pipeline": "",
+    "impl": "",
+    "caution": "Owner-only. Every request is still rate-capped and SSRF-guarded."
+  },
+  {
+    "key": "output:view",
+    "tier": "output",
+    "label": "Output",
+    "summary": "Renders whatever is wired into it. Wire a run summary here to read it.",
+    "group": "Output",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "any",
+        "label": "Value",
+        "required": true
+      }
+    ],
+    "outputs": [],
+    "params": [],
+    "pipeline": "",
+    "impl": "",
+    "caution": ""
+  },
+  {
+    "key": "util:filter_hosts",
+    "tier": "utility",
+    "label": "Filter hosts",
+    "summary": "Keeps only hosts containing (or not containing) a substring.",
+    "group": "Utilities",
+    "inputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Hosts",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Filtered",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "contains",
+        "kind": "str",
+        "label": "Contains",
+        "default": "",
+        "required": false,
+        "help": "Substring to match.",
+        "choices": []
+      },
+      {
+        "name": "invert",
+        "kind": "bool",
+        "label": "Exclude instead",
+        "default": false,
+        "required": false,
+        "help": "",
+        "choices": []
+      }
+    ],
+    "pipeline": "",
+    "impl": "filter_hosts",
+    "caution": ""
+  },
+  {
+    "key": "util:merge_hosts",
+    "tier": "utility",
+    "label": "Merge hosts",
+    "summary": "Combines two host lists, de-duplicated, order preserved.",
+    "group": "Utilities",
+    "inputs": [
+      {
+        "name": "a",
+        "type": "hosts",
+        "label": "Hosts A",
+        "required": true
+      },
+      {
+        "name": "b",
+        "type": "hosts",
+        "label": "Hosts B",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Merged",
+        "required": false
+      }
+    ],
+    "params": [],
+    "pipeline": "",
+    "impl": "merge_hosts",
+    "caution": ""
+  },
+  {
+    "key": "util:pick_field",
+    "tier": "utility",
+    "label": "Pick field",
+    "summary": "Pulls one field out of a run summary \u2014 e.g. `new` or `discovered`.",
+    "group": "Utilities",
+    "inputs": [
+      {
+        "name": "value",
+        "type": "json",
+        "label": "Value",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "value",
+        "type": "json",
+        "label": "Field",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "field",
+        "kind": "str",
+        "label": "Field name",
+        "default": null,
+        "required": true,
+        "help": "",
+        "choices": []
+      }
+    ],
+    "pipeline": "",
+    "impl": "pick_field",
+    "caution": ""
+  },
+  {
+    "key": "util:analyse_cors",
+    "tier": "utility",
+    "label": "CORS verdict",
+    "summary": "Decides whether response headers hand data to an arbitrary origin. Pure analysis \u2014 sends nothing.",
+    "group": "Analysis",
+    "inputs": [
+      {
+        "name": "headers",
+        "type": "json",
+        "label": "Response headers",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "verdict",
+        "type": "json",
+        "label": "Verdict",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "url",
+        "kind": "str",
+        "label": "URL (for the report)",
+        "default": "",
+        "required": false,
+        "help": "",
+        "choices": []
+      }
+    ],
+    "pipeline": "",
+    "impl": "analyse_cors",
+    "caution": ""
+  },
+  {
+    "key": "util:fingerprint_waf",
+    "tier": "utility",
+    "label": "WAF fingerprint",
+    "summary": "Names the WAF/CDN in front of a host from its response headers.",
+    "group": "Analysis",
+    "inputs": [
+      {
+        "name": "headers",
+        "type": "json",
+        "label": "Response headers",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "name": "verdict",
+        "type": "json",
+        "label": "Products",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "url",
+        "kind": "str",
+        "label": "URL (for the report)",
+        "default": "",
+        "required": false,
+        "help": "",
+        "choices": []
+      }
+    ],
+    "pipeline": "",
+    "impl": "fingerprint_waf",
+    "caution": ""
+  },
+  {
+    "key": "util:typosquat_candidates",
+    "tier": "utility",
+    "label": "Lookalike candidates",
+    "summary": "Generates phishing-style lookalike domains for a name. Resolves nothing.",
+    "group": "Analysis",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "hosts",
+        "type": "hosts",
+        "label": "Candidates",
+        "required": false
+      }
+    ],
+    "params": [
+      {
+        "name": "domain",
+        "kind": "str",
+        "label": "Domain",
+        "default": null,
+        "required": true,
+        "help": "",
+        "choices": []
+      },
+      {
+        "name": "limit",
+        "kind": "int",
+        "label": "Max candidates",
+        "default": 50,
+        "required": false,
+        "help": "",
+        "choices": []
+      }
+    ],
+    "pipeline": "",
+    "impl": "typosquat_candidates",
+    "caution": ""
+  }
+] as const;
