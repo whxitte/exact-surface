@@ -32,6 +32,8 @@ RUN apk upgrade --no-cache \
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
+# Same assertion as the `prebuilt` stage below, for the same reason.
+RUN test -d node_modules/next || { echo "FATAL: standalone bundle has no node_modules"; exit 1; }
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
 # API_PROXY_TARGET (set in compose to http://api:8000) routes /api/* to the backend.
@@ -47,6 +49,17 @@ RUN apk upgrade --no-cache \
 COPY frontend/.next/standalone ./
 COPY frontend/.next/static ./.next/static
 COPY frontend/public ./public
+# The standalone bundle carries its own traced node_modules, and it arrives here from
+# the BUILD CONTEXT -- so .dockerignore decides whether it survives. Its
+# `**/node_modules` rule matched this one too, and the image shipped a server.js with
+# no `next` module: a build that succeeded and a container that died at startup with
+# "Cannot find module 'next'". A `!frontend/.next/standalone/node_modules` negation
+# (last, so it wins) restores it. Assert it here so a context regression is a loud
+# build failure rather than a runtime one somebody else discovers.
+RUN test -d node_modules/next || { \
+      echo "FATAL: .next/standalone/node_modules is missing from the build context."; \
+      echo "Check the '!frontend/.next/standalone/node_modules' negation in .dockerignore."; \
+      exit 1; }
 EXPOSE 3000
 ENV PORT=3000 HOSTNAME=0.0.0.0
 CMD ["node", "server.js"]

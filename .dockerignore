@@ -12,3 +12,8 @@ backups
 devtools
 demo
 website
+
+# Re-include the standalone bundle Next.js traces into .next (see docker/Dockerfile.frontend
+# `prebuilt`): `**/node_modules` above matches it too, which silently shipped a server.js
+# with no `next` module. Last matching pattern wins, so this negation must stay last.
+!frontend/.next/standalone/node_modules

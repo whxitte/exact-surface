@@ -712,3 +712,42 @@ def test_dev_and_customer_compose_projects_cannot_collide():
     assert len(set(names.values())) == len(names), (
         f"compose project names must all be distinct, got {names}"
     )
+
+
+def test_the_frontend_standalone_bundle_survives_the_build_context():
+    """`.dockerignore` must not strip the node_modules Next.js traces into .next.
+
+    ``docker/Dockerfile.frontend``'s ``prebuilt`` stage — the one CI publishes, because
+    the standalone output is arch-independent JS and rebuilding it per architecture
+    under QEMU is slow — copies ``frontend/.next/standalone`` from the BUILD CONTEXT.
+    The bundle carries its own traced ``node_modules``, and the blanket
+    ``**/node_modules`` rule matched it: the build succeeded, the image shipped a
+    ``server.js`` with no ``next`` module, and every container died at startup with
+    "Cannot find module 'next'". Both published images had it.
+
+    Docker resolves ignore rules last-match-wins, so the negation only works if it comes
+    after the blanket rule. That ordering is the thing worth asserting: a later edit
+    that appends another ``**/node_modules`` (or sorts the file) silently re-breaks it,
+    and the next release ships an image nobody can start.
+    """
+    lines = [ln.strip() for ln in (REPO / ".dockerignore").read_text().splitlines()]
+    rules = [ln for ln in lines if ln and not ln.startswith("#")]
+
+    negation = "!frontend/.next/standalone/node_modules"
+    assert negation in rules, (
+        ".dockerignore must re-include the standalone bundle's node_modules; without it "
+        "the published frontend image has no `next` module"
+    )
+    blanket = [i for i, r in enumerate(rules) if r == "**/node_modules"]
+    assert blanket, "expected a **/node_modules rule to negate"
+    assert rules.index(negation) > blanket[-1], (
+        "the negation must come after every **/node_modules rule — Docker applies the "
+        "LAST matching pattern, so an earlier negation is a no-op"
+    )
+
+    # And the image itself refuses to build without it, so a context regression fails
+    # loudly at build time rather than at some stranger's `docker compose up`.
+    dockerfile = (REPO / "docker" / "Dockerfile.frontend").read_text()
+    assert dockerfile.count("test -d node_modules/next") == 2, (
+        "both the runtime and prebuilt stages should assert the bundle is intact"
+    )
