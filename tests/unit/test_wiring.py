@@ -424,12 +424,18 @@ def test_demo_attack_surface_fixture_matches_the_current_ui_contract():
     )
 
 
-def test_the_marketing_site_never_enters_a_product_image():
-    """website/ is static marketing HTML deployed to Vercel -- it has no reason to be
-    in a product image, and shipping it there would just be bloat and an unreviewed
-    surface. Same hygiene as demo/ and devtools/, for the same reason: an explicit
-    COPY list can't accidentally sweep it in, but only if nobody adds `COPY . .`."""
-    assert (REPO / "website").is_dir(), "website/ is missing"
+def test_the_project_site_is_not_on_this_branch():
+    """The static project site lives on the orphan `site` branch, which GitHub Pages
+    deploys and which carries nothing else. It must not come back as a directory here:
+    beside the product it is bloat in every clone and an unreviewed surface a `COPY . .`
+    could sweep into an image.
+
+    The .dockerignore entry and the Dockerfile assertions stay as defence in depth --
+    they are what makes re-adding the directory harmless rather than a shipped
+    regression, and this test would otherwise be the only thing standing in the way."""
+    assert not (REPO / "website").is_dir(), (
+        "website/ is back on this branch; the site belongs on the `site` branch"
+    )
     for name in ("Dockerfile.api", "Dockerfile.pipeline", "Dockerfile.frontend"):
         path = REPO / "docker" / name
         if path.exists():
