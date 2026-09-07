@@ -156,6 +156,11 @@ class Program(TenantScopedModel):
     #: §9b opt-in: operator attests they own the cloud infra their domain runs on,
     #: unlocking port/content/active scans on cloud/public IPs (not third-party CDNs).
     scan_shared_infra: bool = False
+    #: Waives the scope engine for this program: hosts outside the verified apex,
+    #: internal/metadata/CGNAT/reserved addresses and third-party CDN edges all
+    #: become fully scannable. Off by default; the operator's own exclusion lists
+    #: and the politeness limiter still apply. See core.scope.ProgramScope.
+    scope_override: bool = False
     #: opt-IN for modules that are off by default (see core.modules.OPT_IN).
     enabled_modules: list[str] = Field(default_factory=list)
     #: opt-OUT for modules that are on by default. Essential modules (ingest, probe)

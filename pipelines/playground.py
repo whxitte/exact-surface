@@ -103,6 +103,9 @@ def freeform_scope(hosts: list[str], program: dict | None = None) -> ProgramScop
         # access only — the same treatment any unconfirmed address gets.
         authorized_dedicated_cidrs=(),
         scan_shared_infra=False,
+        # Never inherited: the free-form waiver already relaxes the §9b authorization
+        # check, and stacking a scope waiver on top would leave nothing at all.
+        scope_override=False,
     )
 
 

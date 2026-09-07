@@ -189,3 +189,88 @@ async def test_assert_in_scope_allows_and_denies():
 
     with pytest.raises(OutOfScope):
         await assert_in_scope("app.customer.com", SCOPE, resolver_bad, ENGINE)
+
+
+# --------------------------------------------------------------------------- #
+# scope_override — the deliberate waiver. Off by default; when on it is total,
+# except for the two things the operator themselves declared.
+# --------------------------------------------------------------------------- #
+OVERRIDE_SCOPE = ProgramScope(
+    verified_apexes=("customer.com",),
+    excluded_hosts=frozenset({"legacy.customer.com"}),
+    excluded_cidrs=("45.55.99.0/24",),
+    scope_override=True,
+)
+
+
+def test_override_is_off_by_default():
+    """The one property that must never regress: nothing gets this behaviour by
+    accident. Every other test in this file assumes the default."""
+    assert ProgramScope(verified_apexes=("customer.com",)).scope_override is False
+
+
+@pytest.mark.parametrize(
+    "ip",
+    ["10.0.0.5", "127.0.0.1", "169.254.169.254", "100.64.0.1", "224.0.0.1", "240.0.0.1"],
+)
+def test_override_reaches_every_hard_denied_class(ip):
+    """Including 169.254.169.254 — the cloud metadata address. This is the single
+    most dangerous consequence of the switch and it is tested rather than implied."""
+    d = ENGINE.evaluate("app.customer.com", [ip], OVERRIDE_SCOPE)
+    assert d.allowed and d.permits(Action.PORT_SCAN) and d.permits(Action.ACTIVE_SCAN)
+
+
+def test_override_reaches_hosts_outside_the_verified_apex():
+    d = ENGINE.evaluate("somewhere-else.example.net", ["8.8.8.8"], OVERRIDE_SCOPE)
+    assert d.allowed and d.permits(Action.ACTIVE_SCAN)
+
+
+def test_override_promotes_a_third_party_cdn_edge():
+    """scan_shared_infra deliberately never does this; the override does. That
+    difference is the reason both switches exist."""
+    d = ENGINE.evaluate("www.customer.com", ["104.16.5.5"], OVERRIDE_SCOPE)
+    assert d.allowed and d.permits(Action.PORT_SCAN)
+
+
+def test_override_says_so_in_the_reason():
+    """Run logs are where somebody works out why a scan touched what it touched."""
+    d = ENGINE.evaluate("app.customer.com", ["10.0.0.5"], OVERRIDE_SCOPE)
+    assert "override" in d.reason.lower()
+
+
+# -- what the override does NOT waive ---------------------------------------
+def test_override_still_honours_an_excluded_host():
+    """The exclusion list is the operator's own instruction. Their override must not
+    outrank it, or 'never touch this' would mean nothing."""
+    d = ENGINE.evaluate("legacy.customer.com", ["45.55.1.1"], OVERRIDE_SCOPE)
+    assert not d.allowed and "exclusion" in d.reason
+
+
+def test_override_still_honours_an_excluded_cidr():
+    d = ENGINE.evaluate("app.customer.com", ["45.55.99.7"], OVERRIDE_SCOPE)
+    assert not d.allowed and "exclusion" in d.reason
+
+
+def test_override_does_not_leak_between_programs():
+    """One program's waiver must not widen another's. They are separate scopes and
+    nothing is cached across them."""
+    plain = ProgramScope(verified_apexes=("customer.com",))
+    assert not ENGINE.evaluate("app.customer.com", ["10.0.0.5"], plain).allowed
+    assert ENGINE.evaluate("app.customer.com", ["10.0.0.5"], OVERRIDE_SCOPE).allowed
+    assert not ENGINE.evaluate("app.customer.com", ["10.0.0.5"], plain).allowed
+
+
+@pytest.mark.asyncio
+async def test_assert_in_scope_raises_without_override_and_passes_with_it():
+    """The pipelines call assert_in_scope, not evaluate, so the waiver has to reach
+    the wrapper too."""
+
+    async def resolver(_host):
+        return ["10.0.0.5"]
+
+    plain = ProgramScope(verified_apexes=("customer.com",))
+    with pytest.raises(OutOfScope):
+        await assert_in_scope("app.customer.com", plain, resolver, ENGINE)
+
+    decision = await assert_in_scope("app.customer.com", OVERRIDE_SCOPE, resolver, ENGINE)
+    assert decision.allowed and decision.permits(Action.PORT_SCAN)
