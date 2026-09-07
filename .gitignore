@@ -54,3 +54,10 @@ age-identity*.txt
 # removed from history.
 logs-for-claue.txt
 *-logs.txt
+
+# Kept locally, deliberately not in the public repository.
+# The project site lives on the `site` branch, not here.
+website/
+context.md
+EXACTSURFACE_BUILD_SPEC.md
+.claude/
