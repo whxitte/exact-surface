@@ -2,6 +2,10 @@
 
 **Continuous external attack-surface intelligence — detection only, self-hosted, open source.**
 
+[![CI](https://github.com/whxitte/exact-surface/actions/workflows/ci.yml/badge.svg)](https://github.com/whxitte/exact-surface/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/whxitte/exact-surface?sort=semver)](https://github.com/whxitte/exact-surface/releases)
+[![Licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
+
 ExactSurface answers one question, continuously, for every domain you own:
 *"What does an external attacker see right now, and what can they do with it?"*
 
