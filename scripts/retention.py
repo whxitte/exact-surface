@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from core.config import get_settings
 from core.logging import logger
 
 #: collection -> the timestamp field that decides its age. `last_seen` where we have it,
@@ -110,17 +111,16 @@ async def purge_all(
     mongo: Any, *, now: datetime | None = None, dry_run: bool = False
 ) -> list[PurgeResult]:
     """Purge every tenant at its retention window."""
-    from db.programs import tenant_limits
-
     tenants = await mongo.collection("tenants").find({}).to_list(None)
     results: list[PurgeResult] = []
     for tenant in tenants:
         tid = tenant.get("tenant_id")
         if not tid:
             continue
-        limits = await tenant_limits(mongo, tid)
         results.append(
-            await purge_tenant(mongo, tid, limits.retention_days, now=now, dry_run=dry_run)
+            await purge_tenant(
+                mongo, tid, get_settings().retention_days, now=now, dry_run=dry_run
+            )
         )
     return results
 

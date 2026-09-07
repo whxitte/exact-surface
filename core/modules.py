@@ -367,7 +367,6 @@ def catalogue(
             "enabled": state.is_enabled(spec.name),
             "turned_off": spec.name in opted_out,
             "skip_reason": state.reason(spec.name),
-            "licensed": True,
         }
         for spec in MODULES
     ]

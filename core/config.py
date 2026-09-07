@@ -183,17 +183,22 @@ class Settings(BaseSettings):
     email_resend_cooloff_seconds: int = Field(default=60)
 
     license_enforced: bool = Field(default=False)
-    license_public_key: str | None = Field(default=None)
+    # Ed25519 public key that signs the update feed's manifest (see core/updates.py).
+    update_public_key: str | None = Field(default=None)
     license_token: str | None = Field(default=None)
-    license_file: str | None = Field(default=None)
-    license_check_interval_seconds: int = Field(default=3600, ge=60)
-    license_refresh_url: str | None = Field(default=None)
     update_feed_url: str | None = Field(default=None)
     # Where verified template bundles are extracted (point the scanner's templates here).
     update_templates_dir: str = Field(default="./data/nuclei-templates")
-    # Deployment/build watermark stamped on exported reports + a response header, so a
-    # leaked instance's output is traceable. Set per-build (e.g. the git sha or a tag).
+    # Stamped on exported reports so a report can be traced back to the build that
+    # produced it. Set per-build (e.g. the git sha or a tag).
     build_id: str = Field(default="dev")
+
+    # Floor for per-pipeline cadence overrides. 0 means the only limit is the politeness
+    # cap. This was previously a plan attribute; it is an operator's choice.
+    min_scan_interval_seconds: int = Field(default=0, ge=0)
+    # How long findings, assets and scan history are kept before scripts/retention.py
+    # purges them.
+    retention_days: int = Field(default=3650, ge=1)
 
     # -- backups (§7 Phase G, §9 retention) ------------------------------
     backup_dir: str = Field(default="./backups")
@@ -226,7 +231,7 @@ class Settings(BaseSettings):
     metrics_port: int = Field(default=9100, description="worker/scheduler /metrics port")
     log_level: str = Field(default="INFO")
 
-    @field_validator("license_public_key")
+    @field_validator("update_public_key")
     @classmethod
     def _accept_base64_public_key(cls, v: str | None) -> str | None:
         """Accept the verify key as a PEM *or* as base64 of a PEM.
@@ -236,9 +241,9 @@ class Settings(BaseSettings):
 
         * ``build-args:`` in docker/build-push-action is a newline-delimited KEY=VALUE
           list, so a PEM silently truncates to ``-----BEGIN PUBLIC KEY-----`` and every
-          licence fails to verify -- an instance that enforces but can never be
-          licensed. This shipped in v1.0.0 and was invisible in local builds, where
-          compose's `args:` mapping handles newlines correctly.
+          signature check fails -- an instance that verifies nothing it fetches. This
+          shipped in v1.0.0 and was invisible in local builds, where compose's `args:`
+          mapping handles newlines correctly.
         * ``.env`` has no multi-line syntax either.
 
         Rather than require operators to remember which channel mangles what, take

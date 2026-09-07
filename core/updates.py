@@ -10,8 +10,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Any
 
-from core.license import verify_blob
 from core.logging import logger
+from core.signing import verify_blob
 
 
 def verify_manifest(response: dict, public_key_pem: str) -> dict | None:
@@ -129,7 +129,7 @@ async def check_for_updates(mongo: Any) -> dict:
             mongo=mongo,
             feed_url=settings.update_feed_url,
             license_token=None,
-            public_key_pem=settings.license_public_key or "",
+            public_key_pem=settings.update_public_key or "",
             dest_dir=settings.update_templates_dir,
             json_get=_default_json_get,
             bytes_get=_default_bytes_get,

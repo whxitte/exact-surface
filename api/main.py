@@ -124,18 +124,6 @@ def create_app() -> FastAPI:
                 return Response(status_code=400, content="invalid Content-Length")
         return await call_next(request)
 
-    # Deployment watermark on every response.
-    @app.middleware("http")
-    async def _watermark(request, call_next):
-        response = await call_next(request)
-        try:
-            from core.entitlements import watermark
-
-            response.headers["X-ExactSurface-Instance"] = watermark()
-        except Exception:  # noqa: BLE001, S110 - a header stamp must never break a response
-            pass
-        return response
-
     # Prometheus request metrics.
     @app.middleware("http")
     async def _metrics(request, call_next):

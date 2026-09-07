@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from core.lifecycle import FindingState
-from core.models import Asset, Authorization, Finding, Plan, Tenant
+from core.models import Asset, Authorization, Finding
 from core.severity import Severity, escalate_for_kev, from_cvss, meets_threshold
 from modules.registry import MODULE_REGISTRY, enabled_modules, required_binaries
 
@@ -31,10 +31,6 @@ def test_finding_defaults_new_and_info():
         name="n",
     )
     assert f.state == FindingState.NEW and f.severity == Severity.INFO
-
-
-def test_tenant_default_plan_free():
-    assert Tenant(tenant_id="t1", name="Acme").plan == Plan.FREE
 
 
 def test_authorization_is_current():

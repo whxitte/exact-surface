@@ -436,19 +436,6 @@ export interface Integration {
   configured: boolean;
   masked: string;
 }
-// -- status & info ----------------------------------------------------
-export interface LicenseInfo {
-  status: string; // active | grace | expired | invalid | missing | tampered | unlicensed
-  read_only: boolean;
-  reason: string;
-  enforced: boolean;
-  customer_name?: string | null;
-  plan?: string | null;
-  max_domains?: number | null;
-  expires_at?: string | null;
-  grace_ends_at?: string | null;
-}
-
 // -- access control (RBAC) ---------------------------------------------------
 export interface PermissionInfo { key: string; label: string; description: string }
 export interface Group {
@@ -480,14 +467,9 @@ export const api = {
       auth: string;
       email: string | null;
       email_verified: boolean | null;
-      plan?: string;
-      domain_limit?: number | null;
-      domains_used?: number;
       is_owner?: boolean;
       permissions?: string[];
-      license?: LicenseInfo;
     }>("/auth/me"),
-  license: () => request<LicenseInfo>("/auth/license"),
   verifyEmail: (token: string) =>
     request<{ verified: boolean; email: string }>("/auth/verify-email", json({ token })),
   resendVerification: () => request<void>("/auth/resend-verification", { method: "POST" }),

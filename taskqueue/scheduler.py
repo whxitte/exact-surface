@@ -24,7 +24,6 @@ from core import modules as module_registry
 from core.config import Settings, get_settings
 from core.logging import logger
 from core.metrics import REGISTRY
-from core.plans import allowed_program_ids, effective_limits
 from db.audit import ScanRunRepo
 from db.authorizations import AuthorizationRepo
 from db.programs import ProgramRepo
@@ -115,36 +114,14 @@ class Scheduler:
             out[t["tenant_id"]] = t.get("cadence_overrides") or {}
         return out
 
-    async def _plan_allowed(self, programs: list[dict]) -> set[str]:
-        """Return program IDs inside the tenant's allowance."""
-        from core import entitlements as licensing
-
-        by_tenant: dict[str, list[dict]] = {}
-        for prog in programs:
-            by_tenant.setdefault(prog["tenant_id"], []).append(prog)
-        stored = {
-            t["tenant_id"]: t.get("plan", "free")
-            for t in await self._mongo.collection("tenants").find({}).to_list(None)
-        }
-        ent = licensing.current().entitlements
-        allowed: set[str] = set()
-        for tid, progs in by_tenant.items():
-            limits = effective_limits(entitlements=ent, stored_plan=stored.get(tid, "free"))
-            allowed |= allowed_program_ids(limits, progs)
-        return allowed
-
     async def _ready_programs(self) -> list[dict]:
-        """Programs eligible to scan: enabled, verified, currently authorized, and
-        inside the tenant's plan allowance."""
+        """Programs eligible to scan: enabled, verified and currently authorized."""
         all_programs = await ProgramRepo.from_mongo(self._mongo).list_all()
-        allowed = await self._plan_allowed(all_programs)
         ready: list[dict] = []
         auth_repo = AuthorizationRepo.from_mongo(self._mongo)
         for prog in all_programs:
             if not (prog.get("enabled", True) and prog.get("verified")):
                 continue
-            if prog["program_id"] not in allowed:
-                continue  # over plan quota — never enqueue work for it
             auth = await auth_repo.get(prog["tenant_id"], prog["program_id"])
             if _auth_current(auth):
                 ready.append(prog)
@@ -162,17 +139,10 @@ class Scheduler:
         * **Steady state** — thereafter each phase recurs on its own effective
           cadence (built-in ← tenant defaults ← program overrides).
         """
-        from core import entitlements as licensing
-
         now = now or datetime.now(UTC)
         schedule = ScheduleRepo.from_mongo(self._mongo)
         audit = ScanRunRepo.from_mongo(self._mongo)
         tenant_defaults = await self._tenant_defaults()
-        licensing_state = licensing.current()
-        stored_plans = {
-            t["tenant_id"]: t.get("plan", "free")
-            for t in await self._mongo.collection("tenants").find({}).to_list(None)
-        }
         per_tenant: dict[str, int] = {}
         jobs: list[Job] = []
 
@@ -218,14 +188,10 @@ class Scheduler:
                 continue  # never fan out per-phase for an un-bootstrapped program
 
             # -- steady state: per-phase cadence --------------------------------
-            limits = effective_limits(
-                entitlements=licensing_state.entitlements,
-                stored_plan=stored_plans.get(tid),
-            )
             cadence = self._cadence_override or effective_cadence(
                 prog.get("cadence_overrides"),
                 tenant_defaults.get(tid),
-                floor=limits.min_scan_interval_seconds,
+                floor=get_settings().min_scan_interval_seconds,
             )
             # A module the user turned off (or whose dependency is off) must not be
             # scheduled either — otherwise the per-phase cadence would quietly keep

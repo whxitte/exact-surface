@@ -43,12 +43,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 _require_settings_manage = require_permission(SETTINGS_MANAGE)
 
 
-def _license_summary() -> dict:
-    from core.entitlements import summary
-
-    return summary()
-
-
 async def _issue_and_send_verification(
     mongo: Any, sender: EmailSender, *, user_id: str, email: str
 ) -> None:
@@ -196,13 +190,6 @@ async def me(
             email_verified = bool(user.get("email_verified"))
             email = user.get("email")
 
-    # Plan + usage status.
-    from core.plans import coerce_plan, max_domains
-    from db.programs import ProgramRepo, tenant_plan
-
-    plan = coerce_plan(await tenant_plan(mongo, principal.tenant_id))
-    cap = max_domains(plan)
-    used = len(await ProgramRepo.from_mongo(mongo).list(principal.tenant_id))
     return {
         "tenant_id": principal.tenant_id,
         "user_id": principal.user_id,
@@ -210,21 +197,11 @@ async def me(
         "auth": principal.method,
         "email": email,
         "email_verified": email_verified,
-        "plan": plan.value,
-        "domain_limit": cap,  # None = unlimited
-        "domains_used": used,
         # Effective RBAC state so the UI can hide what the caller can't do (§ access
         # control). Authoritative enforcement is server-side; this is only for display.
         "is_owner": principal.is_owner,
         "permissions": sorted(principal.permissions),
-        "license": _license_summary(),
     }
-
-
-@router.get("/license")
-async def license_status(_: Principal = Depends(get_principal)) -> dict:
-    """The instance's status (for the settings page)."""
-    return _license_summary()
 
 
 @router.post("/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)

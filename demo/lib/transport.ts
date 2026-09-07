@@ -93,7 +93,6 @@ function resolve(path: string): unknown {
     case "/stats":                     return fx.STATS;
     case "/activity":                  return fx.ACTIVITY;
     case "/auth/me":                   return fx.ME;
-    case "/auth/license":              return fx.LICENSE;
     case "/auth/signup-open":          return { open: false };
     // Playground: the demo has no backend to execute a canvas, so it ships the real
     // node catalogue (so the palette looks exactly like the product) and an empty

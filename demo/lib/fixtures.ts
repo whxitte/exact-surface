@@ -4671,7 +4671,6 @@ export const ME = {
   "role": "owner",
   "tenant_id": "t_demo",
   "email_verified": true,
-  "plan": "business",
   "permissions": [
     "*"
   ]
@@ -4680,16 +4679,6 @@ export const ME = {
 export const LOGIN = {
   "access_token": "demo-token",
   "tenant_id": "t_demo"
-} as const;
-
-export const LICENSE = {
-  "status": "active",
-  "read_only": false,
-  "plan": "business",
-  "customer_name": "Demo Corp",
-  "expires_at": null,
-  "reason": "",
-  "days_left": null
 } as const;
 
 export const MEMBERS = [
@@ -5375,8 +5364,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "ingest",
@@ -5390,8 +5378,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "cloud_assets",
@@ -5405,8 +5392,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "uncover",
@@ -5420,8 +5406,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "reverse_dns",
@@ -5435,8 +5420,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "probe",
@@ -5450,8 +5434,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "tls",
@@ -5465,8 +5448,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "takeover",
@@ -5480,8 +5462,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "crawl",
@@ -5495,8 +5476,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "content_discovery",
@@ -5510,8 +5490,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "js_mine",
@@ -5525,8 +5504,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "api_surface",
@@ -5540,8 +5518,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "http_misconfig",
@@ -5555,8 +5532,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "param_discovery",
@@ -5570,8 +5546,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "broken_links",
@@ -5585,8 +5560,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "port_scan",
@@ -5600,8 +5574,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "service_scan",
@@ -5615,8 +5588,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "scan",
@@ -5630,8 +5602,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "secrets",
@@ -5645,8 +5616,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "cve_watch",
@@ -5660,8 +5630,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "github_osint",
@@ -5675,8 +5644,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "cloud_buckets",
@@ -5690,8 +5658,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "nuclei_watch",
@@ -5705,8 +5672,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "dork",
@@ -5720,8 +5686,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": false,
       "turned_off": false,
-      "skip_reason": "not enabled \u2014 needs an API key or extra requests",
-      "licensed": true
+      "skip_reason": "not enabled \u2014 needs an API key or extra requests"
     },
     {
       "name": "supply_chain",
@@ -5735,8 +5700,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "typosquat",
@@ -5750,8 +5714,7 @@ export const MODULES = {
       "opt_in_reason": "needs an API key or extra requests",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "correlate",
@@ -5765,8 +5728,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     },
     {
       "name": "notify",
@@ -5780,8 +5742,7 @@ export const MODULES = {
       "opt_in_reason": "",
       "enabled": true,
       "turned_off": false,
-      "skip_reason": "",
-      "licensed": true
+      "skip_reason": ""
     }
   ]
 } as const;

@@ -33,8 +33,8 @@ class ReportContext:
     leaks: list[dict]
     cve_matches: list[dict]
     issues: list[CorrelatedIssue] = field(default_factory=list)
-    #: deployment watermark (customer:build), set by the report pipeline for traceability
-    watermark: str = ""
+    #: the build that produced this report, so a report can be traced to a version
+    build_id: str = ""
 
     @property
     def top_issues(self) -> list[CorrelatedIssue]:

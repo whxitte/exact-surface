@@ -63,7 +63,6 @@ from db.ports import PortRepo
 from db.programs import (
     ProgramRepo,
     delete_program_and_data,
-    tenant_limits,
 )
 from db.schedule import ScheduleRepo
 from db.secrets import SecretRepo
@@ -159,8 +158,7 @@ async def _schedule_view(mongo: Any, program: dict) -> dict:
     """Per-phase cadence with each phase's last-run + next-due, plus the last full
     run's start/finish. Powers the domains screen's 'last/next scan' breakdown."""
     tid, pid = program["tenant_id"], program["program_id"]
-    limits = await tenant_limits(mongo, tid)
-    floor = limits.min_scan_interval_seconds
+    floor = get_settings().min_scan_interval_seconds
     prog_over = sanitize_overrides(program.get("cadence_overrides"), floor=floor)
     tenant = await TenantRepo.from_mongo(mongo).get(tid)
     tenant_over = sanitize_overrides((tenant or {}).get("cadence_overrides"), floor=floor)
@@ -221,12 +219,11 @@ async def set_schedule(
 ) -> dict:
     """Set this program's per-pipeline cadence overrides (seconds). Unknown pipelines
     and sub-floor intervals are dropped/clamped server-side — the politeness floor
-    always, plus the plan's own minimum interval. Clamped on write as well as on read,
+    always, plus the configured minimum interval. Clamped on write as well as on read,
     so the settings screen never echoes back a cadence that will not actually run."""
-    limits = await tenant_limits(mongo, program["tenant_id"])
     overrides = sanitize_overrides(
         body.get("overrides") if isinstance(body, dict) else None,
-        floor=limits.min_scan_interval_seconds,
+        floor=get_settings().min_scan_interval_seconds,
     )
     await ProgramRepo.from_mongo(mongo).set_cadence_overrides(
         program["tenant_id"], program["program_id"], overrides
