@@ -1,6 +1,6 @@
 # Capabilities, Limits, and Module Controls
 
-ExactSurface is **100% free and open for self-hosted instances**. Once delivered/built, there are no domain restrictions, user caps, feature paywalls, or read-only subscription enforcement.
+ExactSurface is **free and open source** (Apache-2.0), self-hosted. There are no domain restrictions, user caps, feature paywalls, or read-only subscription enforcement — see [`LICENSING.md`](LICENSING.md).
 
 ---
 
