@@ -12,7 +12,7 @@ per re-scan — multi-tenant from line one, and **never exploits, only detects**
 | | |
 |---|---|
 | **Live demo** | [exactsurface-demo.vercel.app](https://exactsurface-demo.vercel.app) — the real frontend against seeded output from a real scan. No backend, nothing to sign up for. |
-| **Website** | [exactsurface-website.vercel.app](https://exactsurface-website.vercel.app) |
+| **Project site** | [whxitte.github.io/exact-surface](https://whxitte.github.io/exact-surface) — built from the `site` branch |
 | **Licence** | Apache-2.0 |
 | **Current release** | 1.2.0 |
 
@@ -167,18 +167,18 @@ re-scans idempotent and alerts state-aware. New or changed facts fan out to
 
 ## What lives in this repo
 
-Four applications. Only the first is what you deploy.
+Three applications on this branch. Only the first is what you deploy — the project
+site lives on the `site` branch, which carries nothing else.
 
 | | What | Who runs it | Built from |
 |---|---|---|---|
 | **The product** | api + frontend + pipeline images, run from `deploy/` | you, self-hosted | `docker/Dockerfile.{api,frontend,pipeline}` |
 | **The demo** | a static, backend-free build of the real frontend | the maintainer, on Vercel | `demo/Dockerfile` (or Vercel — see `demo/README.md`) |
-| **The marketing site** | static HTML, no build step | the maintainer, on Vercel | `website/` |
 | **The workbench** | internal module test bench | contributors, locally only | `devtools/`, never containerised |
 
 **They cannot mix.** The product Dockerfiles copy named directories only — never
-`COPY . .` — so `demo/`, `website/` and `devtools/` never enter the build context of a
-product image. `.dockerignore` excludes all three, `demo/Dockerfile.dockerignore`
+`COPY . .` — so `demo/` and `devtools/` never enter the build context of a product
+image. `.dockerignore` excludes them, `demo/Dockerfile.dockerignore`
 excludes every backend directory from the demo's own context, and
 `tests/unit/test_wiring.py` fails the build if any of that is undone. Verified against
 real images, not merely asserted.
@@ -198,43 +198,19 @@ real images, not merely asserted.
 | [`deploy/README.md`](deploy/README.md) | the deployment folder itself: what comes up, configuration, troubleshooting |
 | [`docs/DEVTOOLS.md`](docs/DEVTOOLS.md) | the Workbench — why it is a separate app and how it is contained |
 | [`docs/OWNER_RUNBOOK.md`](docs/OWNER_RUNBOOK.md) | cutting a release |
-| [`EXACTSURFACE_BUILD_SPEC.md`](EXACTSURFACE_BUILD_SPEC.md) | the original design spec |
-| [`context.md`](context.md) | the running engineering log: what is done, what is known-broken, and why |
+| [`CHANGELOG.md`](CHANGELOG.md) | what changed in each version |
 
 New here? `ARCHITECTURE.md` → `SECURITY.md` §2 (why domain control ≠ scanning
 authorisation) → ADR-0005 and ADR-0008. Those explain the constraints that shape
 everything else.
 
-## Status
+## Releases
 
-**1.2.0. Released, and run unattended end to end against real infrastructure** —
-discover → probe → crawl → content-discovery → vuln scan → secrets → CVE watch →
-correlate → notify, all 28 modules, with the logs read line by line afterward rather
-than a green summary trusted.
+Current release **1.2.0**. See [`CHANGELOG.md`](CHANGELOG.md) for what changed in each
+version, and the [releases page](https://github.com/whxitte/exact-surface/releases) for
+image digests and the packaged `deploy/` bundle.
 
-| Area | State |
-|---|---|
-| Core — scope engine, fingerprints, severity, lifecycle, plans, signal | ✅ built + exhaustively unit-tested |
-| Politeness limiter — fleet-shared (Redis), degrading, wired into every scan | ✅ ADR-0012; every scanner subprocess rate-capped (ADR-0013) |
-| Modules + pipelines (recon → probe → crawl → scan → secrets → CVE → notify) | ✅ 28 modules, all reachable, all documented in-app |
-| Scheduler + worker execution (arq), cascade, cadence, fairness cap | ✅ run unattended against a real domain |
-| Playground | ✅ 36 nodes, executed on the worker through the same dispatch table |
-| API — auth, tenant isolation, RBAC; Next.js dashboard | ✅ security suite in `tests/security/` |
-| Observability — Prometheus/Grafana, Sentry, per-process `/metrics` | ✅ ADR-0011 |
-| Encrypted Mongo backups, scope-feed auto-update, production compose | ✅ ADR-0014 |
-| Self-hosted install (`deploy/` bundle) | ✅ built, documented, run end to end |
-| Unit + integration + security tests | ✅ 1022 passing; ruff, tsc and eslint clean |
-
-**Not yet done, stated plainly:**
-
-- **A clean-machine install by someone who is not the maintainer.** The highest-value
-  remaining validation, and the most likely source of the next real bug.
-- **The 7-day unattended multi-tenant soak.**
-- **A load test** — 100 tenants / 10k assets / 1M findings, p99 < 500ms.
-- **A backup has never been restored**, only taken.
-- **CVE/KEV match latency is not measurable** — `CveRecord` has no `published` timestamp.
-
-> A recurring lesson from the engineering log, still true: the failures worth worrying
+> A recurring lesson from building this, worth stating once: the failures worth worrying
 > about are not the ones a green test suite catches. Every serious bug this project has
 > shipped — a dispatch route missing, a scope-feed file never committed, a compose
 > project-name collision that could silently destroy a running deployment, a published
