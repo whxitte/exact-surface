@@ -118,9 +118,7 @@ async def purge_all(
         if not tid:
             continue
         results.append(
-            await purge_tenant(
-                mongo, tid, get_settings().retention_days, now=now, dry_run=dry_run
-            )
+            await purge_tenant(mongo, tid, get_settings().retention_days, now=now, dry_run=dry_run)
         )
     return results
 

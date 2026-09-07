@@ -20,8 +20,9 @@ dev: install ## Alias for install (dev setup)
 test: ## Run the test suite
 	$(PY) -m pytest
 
-lint: ## Lint with ruff
+lint: ## Lint with ruff (both checks CI runs)
 	$(PY) -m ruff check .
+	$(PY) -m ruff format --check .
 
 fmt: ## Auto-format with ruff
 	$(PY) -m ruff format .

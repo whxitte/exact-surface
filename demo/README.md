@@ -59,7 +59,7 @@ Docker (above) works anywhere. To deploy without a container, on Vercel:
    directory changes.)
 4. **Install Command**: leave as default (`npm ci`).
 5. No environment variables needed — there is no backend to point at.
-6. Deploy, then point `demo.exactsurface.com` at the project.
+6. Deploy. The Vercel URL is the demo; no custom domain is needed.
 
 This is dashboard configuration, not a checked-in `vercel.json` — deliberately, so
 `frontend/` (which *does* ship inside the real product image) stays free of any
