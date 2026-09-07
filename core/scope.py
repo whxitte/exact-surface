@@ -55,7 +55,8 @@ class IpClass(str, Enum):
 
 #: IP classes refused for every program that has not explicitly waived the engine.
 #: Lab mode (``EXACTSURFACE_LAB_ALLOW_PRIVATE``) relaxes PRIVATE only; a program's
-#: ``scope_override`` relaxes all of them. Both are opt-in and off by default.
+#: ``scope_override`` relaxes all of them except ``NEVER_OVERRIDABLE``. Both are
+#: opt-in and off by default.
 HARD_DENY: frozenset[IpClass] = frozenset(
     {
         IpClass.PRIVATE,
@@ -67,6 +68,15 @@ HARD_DENY: frozenset[IpClass] = frozenset(
         IpClass.UNSPECIFIED,
     }
 )
+
+#: The one class ``scope_override`` cannot reach. 169.254.0.0/16 is link-local, and
+#: 169.254.169.254 on it is the cloud metadata service of whatever host the *worker*
+#: runs on — not a property of the target at all. A host that resolves there turns
+#: ExactSurface into an SSRF vector against its own instance, and would report that
+#: instance's IAM credentials as a "finding" on someone else's domain. Every other
+#: hard-denied class describes the target and is the operator's call; this one
+#: describes us, so it is not on offer.
+NEVER_OVERRIDABLE: frozenset[IpClass] = frozenset({IpClass.LINK_LOCAL})
 
 #: IP classes that are reachable but only over the HTTP layer (never port/active).
 HTTP_ONLY_CLASSES: frozenset[IpClass] = frozenset(
@@ -114,9 +124,10 @@ class ProgramScope:
     scan_shared_infra: bool = False
     #: **Waives the scope engine for this program.** Off by default, and the only
     #: switch in the product that makes ExactSurface reach an address it would
-    #: otherwise refuse: hosts outside the verified apex, every HARD_DENY class
-    #: (internal, loopback, link-local/metadata, CGNAT, multicast, reserved), and
-    #: third-party CDN edges — all of which become fully scannable.
+    #: otherwise refuse: hosts outside the verified apex, the hard-denied classes
+    #: (internal, loopback, CGNAT, multicast, reserved), and third-party CDN edges —
+    #: all of which become fully scannable. ``NEVER_OVERRIDABLE`` is the exception:
+    #: link-local, and so the cloud metadata address, stays denied.
     #:
     #: Two things it deliberately does NOT waive, because they are not the engine
     #: guessing at authority but the operator stating it:
@@ -319,11 +330,15 @@ class ScopeEngine:
             #    Lab mode is the ONE exception: RFC1918 private is allowed so a
             #    local VM can be scanned. Everything else stays hard-denied.
             lab_private = self._allow_private and cls == IpClass.PRIVATE
-            if cls in HARD_DENY and not lab_private and not scope.scope_override:
+            waived = scope.scope_override and cls not in NEVER_OVERRIDABLE
+            if cls in HARD_DENY and not lab_private and not waived:
                 return ScopeDecision(
                     host_l,
                     False,
-                    f"resolves to non-routable/internal IP {ip} ({cls.value})",
+                    f"link-local/metadata address {ip} is denied even under scope "
+                    f"override (it is this instance's own metadata service)"
+                    if cls in NEVER_OVERRIDABLE
+                    else f"resolves to non-routable/internal IP {ip} ({cls.value})",
                     ip_class=cls,
                 )
 

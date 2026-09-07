@@ -147,7 +147,8 @@ deliberately refuses to. With it on, for that program only:
 | Gate | Normally | With `scope_override` |
 |---|---|---|
 | Host under a verified apex | required | **skipped** |
-| `HARD_DENY` classes (private, loopback, link-local/metadata, CGNAT, multicast, reserved) | refused | **reachable** |
+| Hard-denied classes (private, loopback, CGNAT, multicast, reserved) | refused | **reachable** |
+| Link-local `169.254.0.0/16`, incl. the metadata address | refused | **still refused** |
 | Third-party CDN edge | HTTP-layer only, never promotable | **full action set** |
 | Unconfirmed public / cloud-shared | HTTP-layer only | **full action set** |
 | Program's `excluded_hosts` / `excluded_cidrs` | refused | **still refused** |
@@ -161,12 +162,19 @@ is the correct default and the wrong answer for someone scanning their own estat
 and §2b already concedes that anyone with database access can assert whatever they
 like. This makes that assertion an explicit, logged setting instead of a Mongo write.
 
-**What it costs, stated plainly.** Two of those rows reach past the operator's own
-estate. A CDN edge is shared with that provider's other customers, so full scanning
-of one is scanning infrastructure that is not theirs. And `169.254.169.254` is not a
-property of the target at all — it is the *worker's own* cloud metadata service, so a
-host resolving to it turns the scanner into an SSRF vector against the machine
-ExactSurface runs on. Neither is a bug in this feature; both are what the switch means.
+**What it costs, stated plainly.** One of those rows reaches past the operator's own
+estate: a CDN edge is shared with that provider's other customers, so scanning one in
+full is scanning infrastructure that is not theirs. That is what the switch means, not
+a bug in it.
+
+**The one thing it cannot buy** is link-local, and so `169.254.169.254`. Every other
+hard-denied class describes the *target*, and whether to reach it is the operator's
+call. That one describes *us*: it is the cloud metadata service of whatever host the
+worker runs on, so reaching it would make ExactSurface an SSRF vector against its own
+instance and report that instance's IAM credentials as a finding on someone else's
+domain. Waiving it grants the operator no reach over their own estate, so it is not on
+offer — see `NEVER_OVERRIDABLE` in `core/scope.py`. A mixed answer containing one is
+refused whole, so a second A record cannot get around it.
 
 **What keeps it honest.** Off by default and per-program, never global. Both edges log
 at WARNING with the program, apex, actor and tenant. Exclusion lists outrank it,

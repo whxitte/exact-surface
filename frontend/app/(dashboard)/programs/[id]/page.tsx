@@ -260,11 +260,12 @@ export default function ProgramDetail() {
       !window.confirm(
         `Disable scope safety for ${program?.apex_domain ?? "this program"}?\n\n` +
           "Scans will then reach addresses ExactSurface normally refuses: hosts " +
-          "outside this domain, internal and loopback ranges, the cloud metadata " +
-          "address, and third-party CDN edges — with port scanning, content " +
-          "discovery and active scanning enabled on all of them.\n\n" +
+          "outside this domain, internal and loopback ranges, and third-party CDN " +
+          "edges — with port scanning, content discovery and active scanning " +
+          "enabled on all of them.\n\n" +
           "Only continue if you are authorised to scan everything this domain " +
-          "resolves to. Your exclusion lists and the rate limit still apply.",
+          "resolves to. Your exclusion lists, the rate limit and the link-local " +
+          "block still apply.",
       )
     ) {
       return;
@@ -273,7 +274,7 @@ export default function ProgramDetail() {
       await api.setScopeOverride(id, value);
       setMsg(
         value
-          ? "Scope safety disabled for this program. Scans may now reach internal, metadata and CDN addresses, and hosts outside this domain."
+          ? "Scope safety disabled for this program. Scans may now reach internal and CDN addresses, and hosts outside this domain."
           : "Scope safety restored. The engine refuses out-of-scope, internal and CDN addresses again.",
       );
       loadProgram();
@@ -497,9 +498,9 @@ export default function ProgramDetail() {
                   <>
                     <span className="font-medium text-severity-critical">Active.</span> Scans
                     for this domain may reach hosts outside it, internal and loopback
-                    ranges, the cloud metadata address, and third-party CDN edges — with
-                    port scanning, content discovery and active scanning on all of them.
-                    Only your exclusion lists and the rate limit still apply.
+                    ranges, and third-party CDN edges — with port scanning, content
+                    discovery and active scanning on all of them. Your exclusion lists,
+                    the rate limit and the link-local block still apply.
                   </>
                 ) : (
                   <>

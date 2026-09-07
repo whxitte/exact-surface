@@ -457,9 +457,9 @@ async def set_scan_config(
     too, while third-party CDNs and internal ranges stay locked.
 
     ``scope_override`` waives the scope engine outright for this program — apex
-    ownership, every hard-denied class (internal, loopback, link-local and the cloud
-    metadata address, CGNAT, multicast, reserved) and third-party CDN edges all become
-    fully scannable. It is logged at WARNING on both edges because it is the one
+    ownership, the hard-denied classes (internal, loopback, CGNAT, multicast, reserved)
+    and third-party CDN edges all become fully scannable. Link-local stays denied: see
+    ``core.scope.NEVER_OVERRIDABLE``. It is logged at WARNING on both edges because it is the one
     setting whose blast radius reaches beyond the operator's own estate, and because
     "when did this get turned on" is the first question anyone asks afterwards.
 

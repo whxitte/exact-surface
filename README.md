@@ -43,21 +43,23 @@ to work around one, read [`docs/SECURITY.md`](docs/SECURITY.md) §2 first.
 ### Scope override
 
 A program setting — **off by default** — that waives the scope engine for that domain:
-scans may then reach hosts outside it, internal and loopback ranges, the cloud metadata
-address, and third-party CDN edges, with the full action set on all of them.
+scans may then reach hosts outside it, internal and loopback ranges, and third-party CDN
+edges, with the full action set on all of them.
 
 It exists because the engine decides scope from what it can *prove*, and an operator
 sometimes owns infrastructure it cannot prove: hosts behind a CDN, an internal range, a
 cloud block the ASN check will not confirm. Withholding port scanning there is the right
 default and the wrong answer for someone scanning their own estate.
 
-It does not waive: your own host and CIDR exclusion lists, the politeness rate cap, or
-the requirement that a program be verified and authorized to scan at all. It changes what
-a scan may *reach*, never whether it was allowed to run, and every flip is logged.
+It does not waive: your own host and CIDR exclusion lists, the politeness rate cap, the
+requirement that a program be verified and authorized to scan at all, or the link-local
+block. It changes what a scan may *reach*, never whether it was allowed to run, and every
+flip is logged.
 
-**It can reach beyond your own estate.** A CDN edge is shared with that provider's other
-customers; the metadata address belongs to whatever host the worker runs on. Turn it on
-only where you are authorised to scan everything the domain resolves to.
+**It can reach beyond your own estate** — a CDN edge is shared with that provider's other
+customers — so turn it on only where you are authorised to scan everything the domain
+resolves to. It deliberately cannot reach `169.254.169.254`: that is the metadata service
+of the host running the worker, not anything belonging to the target.
 
 ---
 

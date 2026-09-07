@@ -16,10 +16,10 @@ docker pull ghcr.io/whxitte/pipeline:1.2.0
 
 - **Scope override** — a per-program setting, off by default, that waives the scope
   engine for that domain: hosts outside the verified apex, every hard-denied class
-  (internal, loopback, link-local and the cloud metadata address, CGNAT, multicast,
-  reserved) and third-party CDN edges all become fully scannable. The program's own
-  exclusion lists, the politeness cap and the requirement to be verified and authorized
-  are untouched. Both edges are logged at WARNING. See `docs/SECURITY.md` §2d for what
+  (internal, loopback, CGNAT, multicast, reserved) and third-party CDN edges all become
+  fully scannable. Untouched: the program's own exclusion lists, the politeness cap, the
+  requirement to be verified and authorized, and link-local `169.254.0.0/16` — the
+  metadata address is the worker's own, so no override can reach it. Both edges are logged at WARNING. See `docs/SECURITY.md` §2d for what
   it costs, including the two rows that reach beyond your own estate.
 - `SECURITY.md` (vulnerability disclosure, with GitHub private reporting enabled) and
   `CONTRIBUTING.md`.
