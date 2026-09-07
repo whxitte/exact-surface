@@ -55,11 +55,18 @@ export interface NodeRunReport {
   ms?: number;
   outputs?: Record<string, unknown>;
 }
+/** POST /playground/run only queues — the worker does the work. */
+export interface QueuedRun {
+  run_id: string;
+  status: string;
+}
+/** GET /playground/runs/{id} — polled while a run is in flight. */
 export interface WorkflowRun {
   run_id: string;
-  order: string[];
+  status: "queued" | "running" | "success" | "failed" | "cancelled" | string;
   nodes: Record<string, NodeRunReport>;
-  freeform: boolean;
+  error?: string | null;
+  finished_at?: string | null;
 }
 
 export interface Program {
@@ -509,7 +516,8 @@ export const api = {
     request<{ ok: boolean; order?: string[]; message?: string; node?: string }>(
       "/playground/validate", json({ graph })),
   runWorkflow: (program_id: string, graph: WorkflowGraph) =>
-    request<WorkflowRun>("/playground/run", json({ program_id, graph })),
+    request<QueuedRun>("/playground/run", json({ program_id, graph })),
+  workflowRun: (runId: string) => request<WorkflowRun>(`/playground/runs/${runId}`),
   createProgram: (apex_domain: string) =>
     request<Program>("/programs", json({ apex_domain })),
   getProgram: (id: string) => request<Program>(`/programs/${id}`),

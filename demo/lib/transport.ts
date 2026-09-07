@@ -121,6 +121,19 @@ export async function request<T>(path: string, opts: RequestInit = {}): Promise<
     // Login is the one mutation with a real answer: the demo shows the actual login
     // screen, so signing in has to work.
     if (path.startsWith("/auth/login")) return delay(fx.LOGIN as T);
+    // A Playground run is queued to the scanning worker and then polled for progress.
+    // The demo has neither, and the generic refusal below carries no `run_id`, so the
+    // canvas would poll an undefined run until its ten-minute bound expired. Throwing
+    // puts the explanation straight into the page's own error banner.
+    if (path.startsWith("/playground/run")) {
+      await delay(null);
+      throw new ApiError(
+        501,
+        "Running a canvas needs the scanning worker, which this static demo does not have. " +
+          "Everything else here is the real thing — drag nodes out of the palette and wire " +
+          "them together to see how a workflow is built.",
+      );
+    }
     return delay(REFUSAL as T);
   }
   return delay(resolve(path) as T);
