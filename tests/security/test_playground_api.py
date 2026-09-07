@@ -8,7 +8,41 @@ check, so its boundaries are adversarial surface, not just feature surface.
 
 from __future__ import annotations
 
+import pytest
+
 from tests.security.conftest import app_ctx, auth, signup  # noqa: F401
+
+
+@pytest.fixture()
+def queued() -> list[tuple]:
+    """Capture enqueues instead of reaching Redis.
+
+    Without this the suite is only hermetic on a machine that happens to have the dev
+    stack up — it silently connected to a real Redis and pushed junk jobs onto the
+    live queue. Patching the pool makes the assertion about the API's decision, which
+    is what these tests are actually for.
+    """
+    import taskqueue.arq_client as arq_client
+
+    calls: list[tuple] = []
+
+    class _Pool:
+        async def enqueue_job(self, *args, **kwargs):
+            calls.append((args, kwargs))
+
+        async def aclose(self):
+            return None
+
+    original = arq_client.create_pool
+
+    async def fake_create_pool(*_a, **_k):
+        return _Pool()
+
+    arq_client.create_pool = fake_create_pool
+    try:
+        yield calls
+    finally:
+        arq_client.create_pool = original
 
 
 def _target_graph(hosts: str = "example.com") -> dict:
@@ -122,9 +156,13 @@ def test_run_requires_a_program_to_store_results_in(app_ctx):  # noqa: F811
     assert "program" in r.json()["detail"].lower()
 
 
-def test_owner_may_run_a_target_node(app_ctx):  # noqa: F811
+def test_owner_may_queue_a_target_node_run(app_ctx, queued):  # noqa: F811
     """The first account is the owner, so the free-form waiver applies to them —
-    the concession SECURITY.md §2b already makes explicit for the operator."""
+    the concession SECURITY.md §2b already makes explicit for the operator.
+
+    Queueing is where the check has to happen: the worker re-checks too, but a
+    refusal only reaches the user as a readable error if it is raised on the request.
+    """
     client, _ = app_ctx
     tok = signup(client, email="o@x.com", name="X")["access_token"]
     r = client.post(
@@ -133,13 +171,67 @@ def test_owner_may_run_a_target_node(app_ctx):  # noqa: F811
         json={"program_id": "p1", "graph": _target_graph()},
     )
     assert r.status_code == 200, r.text
-    body = r.json()
-    assert body["freeform"] is True
-    assert body["nodes"]["t"]["status"] == "success"
-    assert body["nodes"]["o"]["status"] == "success"
+    assert r.json()["status"] == "queued"
+    # is_owner must reach the worker — the runner re-checks it there.
+    (_args, kwargs) = queued[0]
+    assert kwargs["is_owner"] is True
 
 
-def test_a_member_cannot_run_a_target_node(app_ctx):  # noqa: F811
+def test_a_queue_outage_is_reported_not_silently_swallowed(app_ctx):  # noqa: F811
+    """If the worker is down the user must be told, not left watching a run that
+    will never start."""
+    import taskqueue.arq_client as arq_client
+
+    client, _ = app_ctx
+    tok = signup(client, email="o@x.com", name="X")["access_token"]
+    original = arq_client.create_pool
+
+    async def broken(*_a, **_k):
+        raise RuntimeError("no redis")
+
+    arq_client.create_pool = broken
+    try:
+        r = client.post(
+            "/playground/run",
+            headers=auth(tok),
+            json={"program_id": "p1", "graph": _target_graph()},
+        )
+    finally:
+        arq_client.create_pool = original
+    assert r.status_code == 503
+    assert "queue" in r.json()["detail"].lower()
+
+
+def test_a_queued_run_is_pollable(app_ctx, queued):  # noqa: F811
+    """The canvas colours its nodes from this endpoint, so a run id must resolve
+    even before the worker has touched it."""
+    client, fake = app_ctx
+    tok = signup(client, email="o@x.com", name="X")["access_token"]
+    client.post(
+        "/playground/run", headers=auth(tok), json={"program_id": "p1", "graph": _target_graph()}
+    )
+    from tests.security.conftest import run as run_async
+
+    doc = run_async(fake.collection("scan_runs").find_one({"pipeline": "playground"}))
+    r = client.get(f"/playground/runs/{doc['scan_id']}", headers=auth(tok))
+    assert r.status_code == 200
+    assert r.json()["run_id"] == doc["scan_id"]
+
+
+def test_polling_another_tenants_run_is_a_404(app_ctx, queued):  # noqa: F811
+    client, fake = app_ctx
+    a = signup(client, email="a@x.com", name="A")["access_token"]
+    b = signup(client, email="b@y.com", name="B")["access_token"]
+    client.post(
+        "/playground/run", headers=auth(a), json={"program_id": "p1", "graph": _target_graph()}
+    )
+    from tests.security.conftest import run as run_async
+
+    doc = run_async(fake.collection("scan_runs").find_one({"pipeline": "playground"}))
+    assert client.get(f"/playground/runs/{doc['scan_id']}", headers=auth(b)).status_code == 404
+
+
+def test_a_member_cannot_run_a_target_node(app_ctx, queued):  # noqa: F811
     """The whole justification for the waiver is that it grants an owner nothing they
     could not already do by editing Mongo. A member has no such access, so for them
     this would be a genuine escalation — 403, with a reason they can act on."""

@@ -192,6 +192,98 @@ async def run_bypass_task(
     )
 
 
+async def run_playground_task(
+    ctx: dict,
+    tenant_id: str,
+    program_id: str,
+    graph: dict,
+    scan_id: str | None = None,
+    is_owner: bool = False,
+) -> dict:
+    """arq task: run a Playground canvas (user-triggered only).
+
+    The Playground *must* run here rather than inline in the API, and the reason is
+    concrete: the recon toolchain (subfinder, httpx, nuclei, naabu, feroxbuster...)
+    ships only in the pipeline image, which is what the worker runs. The API image is
+    deliberately small — serving JSON does not need 2GB of Go binaries and wordlists,
+    and shipping them there would enlarge its CVE surface for nothing. Running a
+    canvas in the API therefore fails every pipeline node with ToolNotFound.
+
+    Progress is written to the ScanRun row as each node reports, so the canvas can
+    poll one endpoint and colour its nodes live — the same plumbing the Activity feed
+    already uses for a scheduled scan.
+    """
+    import asyncio
+    from datetime import UTC, datetime
+
+    from core.models import ScanRun, ScanStatus
+    from core.playground import Graph
+    from core.tenant import TenantContext
+    from db.audit import ScanRunRepo
+    from pipelines.playground import PlaygroundDenied, run_workflow
+
+    mongo = ctx["mongo"]
+    audit = ScanRunRepo.from_mongo(mongo)
+    progress: dict[str, dict] = {}
+    started = datetime.now(UTC)
+
+    def _run(status: ScanStatus, **extra: object) -> ScanRun:
+        return ScanRun(
+            tenant_id=tenant_id,
+            program_id=program_id,
+            scan_id=scan_id or "",
+            pipeline="playground",
+            status=status,
+            started_at=started,
+            stats={"nodes": progress},
+            **extra,  # type: ignore[arg-type]
+        )
+
+    pending: set[asyncio.Task] = set()
+
+    def on_event(event: dict) -> None:
+        """Mirror each node transition into the ScanRun so the canvas can poll it.
+
+        ``save`` also publishes to the activity bus, so this reuses the live-update
+        path a scheduled scan already uses rather than inventing a second one. Fired
+        from a sync callback, so the write is scheduled rather than awaited — and the
+        task is held in a set, because a bare create_task can be garbage-collected
+        mid-flight and silently drop the update.
+        """
+        node = event.get("node", "")
+        if not node or not scan_id:
+            return
+        fields = {k: v for k, v in event.items() if k != "node"}
+        progress[node] = {**progress.get(node, {}), **fields}
+        task = asyncio.ensure_future(audit.save(_run(ScanStatus.RUNNING)))
+        pending.add(task)
+        task.add_done_callback(pending.discard)
+
+    edges = [tuple(e) for e in (graph.get("edges") or [])]
+    try:
+        result = await run_workflow(
+            mongo=mongo,
+            engine=ctx["engine"],
+            tenant=TenantContext(tenant_id=tenant_id),
+            program_id=program_id,
+            graph=Graph(nodes=graph.get("nodes") or {}, edges=edges),
+            is_owner=is_owner,
+            hmac_key=ctx["settings"].secret_hash_key_bytes(),
+            limiter=ctx["limiter"],
+            on_event=on_event,
+        )
+    except PlaygroundDenied as exc:
+        if scan_id:
+            await audit.save(_run(ScanStatus.FAILED, finished_at=datetime.now(UTC), error=str(exc)))
+        raise
+
+    if pending:  # let every queued progress write land before the terminal one
+        await asyncio.gather(*pending, return_exceptions=True)
+    if scan_id:
+        await audit.save(_run(ScanStatus.SUCCESS, finished_at=datetime.now(UTC)))
+    return result
+
+
 async def _emit_cascade(
     ctx: dict, tenant_id: str, program_id: str, pipeline: str, result: dict
 ) -> None:
@@ -232,7 +324,12 @@ def _redis_settings():
 class WorkerSettings:
     """arq reads these as CLASS attributes — they must be plain values, not properties."""
 
-    functions = [run_program_task, run_pipeline_task, run_bypass_task]  # noqa: RUF012
+    functions = [  # noqa: RUF012
+        run_program_task,
+        run_pipeline_task,
+        run_bypass_task,
+        run_playground_task,
+    ]
     on_startup = startup
     on_shutdown = shutdown
     max_jobs = get_settings().worker_concurrency

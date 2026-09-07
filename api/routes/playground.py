@@ -1,11 +1,17 @@
 """Playground routes — the node catalogue, saved canvases, and running one.
 
-Runs execute **inline** rather than through the worker queue. That is a deliberate
-difference from a scheduled scan: the Playground is an interactive tool where the user
-is watching, iterating and expecting to see output, and round-tripping through arq
-would cost that immediacy for no benefit. The trade is that a canvas full of long
-pipeline nodes ties up a request — which is why ``run`` is rate-limited and the
-per-node timeout is bounded.
+Runs are **enqueued to the worker**, not executed inline. That is not a stylistic
+choice, it is forced by where the tools live: the recon toolchain (subfinder, httpx,
+nuclei, naabu, feroxbuster...) ships only in the pipeline image, which is what the
+worker runs. ``docker/Dockerfile.api`` deliberately carries none of it — the API
+serves JSON, and adding ~2GB of Go binaries and wordlists would bloat it and widen its
+CVE surface for nothing.
+
+An earlier version of this module ran canvases inline for interactivity. It worked for
+utility nodes and failed every pipeline node with ``ToolNotFound: subfinder`` the first
+time it met a real scan, because the API container has no scanner. Progress therefore
+arrives the same way a scheduled scan's does: written to the run's ScanRun row, which
+``save`` also publishes to the activity bus, and polled via ``GET /playground/runs/…``.
 """
 
 from __future__ import annotations
@@ -17,13 +23,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from api.deps import Principal, get_mongo_dep, get_principal
 from api.rate_limit import limiter
-from core.config import get_settings
-from core.models import Role
+from core.logging import logger
+from core.models import Role, ScanRun, ScanStatus
 from core.playground import Graph, GraphError, as_json, validate
-from core.scope import default_engine
-from core.tenant import TenantContext
+from db.audit import ScanRunRepo
 from db.workflows import WorkflowRepo
-from pipelines.playground import PlaygroundDenied, run_workflow
 
 router = APIRouter(prefix="/playground", tags=["playground"])
 
@@ -145,12 +149,16 @@ async def run(
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
-    """Execute a canvas and return per-node results.
+    """Queue a canvas for execution and return the run id to poll.
 
     ``program_id`` is required even for a free-form run: results are persisted by the
     pipelines themselves and have to belong somewhere the user can find, review and
     delete them. What a Target node changes is the *scope* a node runs under, never
     where its output lands.
+
+    The graph is validated and the owner check is applied *here*, synchronously, so a
+    refusal reaches the user as a 4xx they can read rather than a job that quietly dies
+    in a worker log. The runner re-checks both — a queued payload must never be trusted.
     """
     program_id = str(body.get("program_id") or "").strip()
     if not program_id:
@@ -160,33 +168,92 @@ async def run(
         )
 
     graph = _graph_from(body.get("graph") or {})
-    events: list[dict] = []
     try:
-        result = await run_workflow(
-            mongo=mongo,
-            engine=default_engine(),
-            tenant=TenantContext(principal.tenant_id, principal.user_id),
-            program_id=program_id,
-            graph=graph,
-            is_owner=await _is_owner_now(mongo, principal),
-            hmac_key=get_settings().secret_hash_key_bytes(),
-            on_event=events.append,
-        )
+        validate(graph)
     except GraphError as exc:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             {"message": str(exc), "node": exc.node_id},
         ) from exc
-    except PlaygroundDenied as exc:
-        # 403, not 500: this is a policy answer the user needs to read.
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc)) from exc
 
-    # `outputs` can hold a full crawl; the report's bounded previews are what the UI
-    # renders. Returning both would double a large payload for no gain.
+    is_owner = await _is_owner_now(mongo, principal)
+    if any(n.get("type") == "source:target" for n in graph.nodes.values()) and not is_owner:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "The Target node scans hostnames nobody on this instance has verified, so it "
+            "is restricted to the instance owner. Add and verify the domain as a program "
+            "to scan it as a member.",
+        )
+
+    scan_id = uuid.uuid4().hex
+    audit = ScanRunRepo.from_mongo(mongo)
+    await audit.save(
+        ScanRun(
+            tenant_id=principal.tenant_id,
+            program_id=program_id,
+            scan_id=scan_id,
+            pipeline="playground",
+            status=ScanStatus.QUEUED,
+        )
+    )
+
+    payload = {
+        "nodes": graph.nodes,
+        "edges": [list(e) for e in graph.edges],
+    }
+    enqueued = False
+    try:
+        from taskqueue.arq_client import create_pool
+
+        pool = await create_pool()
+        try:
+            await pool.enqueue_job(
+                "run_playground_task",
+                principal.tenant_id,
+                program_id,
+                payload,
+                scan_id=scan_id,
+                is_owner=is_owner,
+            )
+            enqueued = True
+        finally:
+            await pool.aclose()
+    except Exception as exc:  # noqa: BLE001 - report it, do not 500
+        logger.warning("playground enqueue failed: {}", exc)
+
+    if not enqueued:
+        await audit.save(
+            ScanRun(
+                tenant_id=principal.tenant_id,
+                program_id=program_id,
+                scan_id=scan_id,
+                pipeline="playground",
+                status=ScanStatus.FAILED,
+                error="could not reach the job queue — is the worker running?",
+            )
+        )
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Could not reach the job queue. Is the worker running?",
+        )
+
+    return {"run_id": scan_id, "status": "queued"}
+
+
+@router.get("/runs/{run_id}")
+async def run_status(
+    run_id: str,
+    principal: Principal = Depends(get_principal),
+    mongo: Any = Depends(get_mongo_dep),
+) -> dict:
+    """Poll one run. ``nodes`` carries each node's status as the worker reports it."""
+    doc = await ScanRunRepo.from_mongo(mongo).get(principal.tenant_id, run_id)
+    if not doc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such run")
     return {
-        "run_id": "pgr_" + uuid.uuid4().hex[:12],
-        "order": result["order"],
-        "nodes": result["nodes"],
-        "freeform": result["freeform"],
-        "events": events,
+        "run_id": run_id,
+        "status": doc.get("status"),
+        "nodes": (doc.get("stats") or {}).get("nodes") or {},
+        "error": doc.get("error"),
+        "finished_at": doc.get("finished_at"),
     }

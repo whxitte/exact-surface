@@ -152,8 +152,27 @@ function Playground() {
     setError("");
     setRun(null);
     try {
-      const result = await api.runWorkflow(programId, toGraph(nodes, edges));
-      setRun(result);
+      // The worker runs the canvas (the scanning tools only exist in its image), so
+      // this queues and then polls. Node status arrives incrementally, which is why
+      // each poll result is set rather than only the final one.
+      const { run_id } = await api.runWorkflow(programId, toGraph(nodes, edges));
+      const TERMINAL = ["success", "failed", "cancelled"];
+      // Bounded so a stuck worker cannot leave the UI spinning forever.
+      for (let i = 0; i < 600; i++) {
+        await new Promise((r) => setTimeout(r, 1000));
+        let snapshot;
+        try {
+          snapshot = await api.workflowRun(run_id);
+        } catch {
+          continue; // a blip while the worker starts is not a failed run
+        }
+        setRun(snapshot);
+        if (TERMINAL.includes(snapshot.status)) {
+          if (snapshot.status === "failed" && snapshot.error) setError(snapshot.error);
+          return;
+        }
+      }
+      setError("This run is taking longer than expected — check the Activity page.");
     } catch (e) {
       const msg = e instanceof Error ? e.message : "run failed";
       setError(msg);
