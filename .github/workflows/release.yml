@@ -4,17 +4,16 @@
 #
 # Produces, for that version:
 #   * api, frontend and pipeline images on GHCR (ghcr.io), tagged :X.Y.Z and :latest,
-#     with the licence verify-key and build id baked in
+#     with the build id baked in
 #   * a GitHub Release recording the image digests
 #
 # Registry: GHCR, not Docker Hub. Docker Hub's free tier allows only ONE private repo
 # and we publish three images; GHCR gives unlimited private packages and authenticates
 # with the built-in GITHUB_TOKEN, so there are no registry secrets to manage.
 #
-# Required repository secret (one):
-#   LICENSE_PUBLIC_KEY    Ed25519 PUBLIC key PEM — verify-only, safe to bake in.
-#                         The PRIVATE key never touches CI; it stays on your machine
-#                         and on the control plane.
+# No repository secrets required: the GITHUB_TOKEN GHCR gives every workflow is
+# enough to push. (This block used to require LICENSE_PUBLIC_KEY; licensing was
+# removed in 1.1.0 and nothing has read that secret since.)
 name: Release
 
 on:
