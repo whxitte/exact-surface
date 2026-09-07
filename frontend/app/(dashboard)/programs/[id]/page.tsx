@@ -26,7 +26,7 @@ import { DomainIntelCard } from "@/components/domain-intel-card";
 import { SeverityBadge } from "@/components/ui/badge";
 import { Modal } from "@/components/ui/modal";
 import { severityRank } from "@/lib/severity";
-import { timeAgo } from "@/lib/utils";
+import { cn, timeAgo } from "@/lib/utils";
 
 /** Display names for tabs whose key doesn't capitalise nicely. */
 const TAB_LABELS: Partial<Record<string, string>> = { jsmine: "JS Mine", cves: "CVEs" };
@@ -252,6 +252,35 @@ export default function ProgramDetail() {
       setMsg((e as Error).message || "Could not update scan config.");
     }
   }
+  async function toggleScopeOverride(value: boolean) {
+    // Confirm on the way ON only. Turning it back off is the safe direction and
+    // should never be made awkward.
+    if (
+      value &&
+      !window.confirm(
+        `Disable scope safety for ${program?.apex_domain ?? "this program"}?\n\n` +
+          "Scans will then reach addresses ExactSurface normally refuses: hosts " +
+          "outside this domain, internal and loopback ranges, the cloud metadata " +
+          "address, and third-party CDN edges — with port scanning, content " +
+          "discovery and active scanning enabled on all of them.\n\n" +
+          "Only continue if you are authorised to scan everything this domain " +
+          "resolves to. Your exclusion lists and the rate limit still apply.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.setScopeOverride(id, value);
+      setMsg(
+        value
+          ? "Scope safety disabled for this program. Scans may now reach internal, metadata and CDN addresses, and hosts outside this domain."
+          : "Scope safety restored. The engine refuses out-of-scope, internal and CDN addresses again.",
+      );
+      loadProgram();
+    } catch (e) {
+      setMsg((e as Error).message || "Could not update scan config.");
+    }
+  }
   async function toggleMonitoring() {
     if (!program) return;
     try {
@@ -431,13 +460,59 @@ export default function ProgramDetail() {
                 (and a button inside a label would be invalid markup). */}
             <span className="ml-2 flex items-center gap-3 text-xs text-muted-foreground">
               <Switch
-                checked={!!program.scan_shared_infra}
+                checked={!!program.scan_shared_infra || !!program.scope_override}
                 onChange={toggleSharedInfra}
+                disabled={!!program.scope_override}
               />
-              <span>Scan my cloud infra (ports/content/active on cloud IPs — §9b)</span>
+              <span className={program.scope_override ? "opacity-60" : undefined}>
+                Scan my cloud infra (ports/content/active on cloud IPs — §9b)
+                {program.scope_override && " — already covered by the override"}
+              </span>
             </span>
           </div>
         )
+      )}
+
+      {/* Scope override — the only switch here that widens what may be contacted. */}
+      {program?.verified && (
+        <div
+          className={cn(
+            "rounded-lg border px-4 py-3",
+            program.scope_override
+              ? "border-severity-critical bg-severity-critical/10"
+              : "border-border",
+          )}
+        >
+          <div className="flex items-start gap-3">
+            <Switch checked={!!program.scope_override} onChange={toggleScopeOverride} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                {program.scope_override && (
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-severity-critical" />
+                )}
+                <span>Disable scope safety for this domain</span>
+              </div>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                {program.scope_override ? (
+                  <>
+                    <span className="font-medium text-severity-critical">Active.</span> Scans
+                    for this domain may reach hosts outside it, internal and loopback
+                    ranges, the cloud metadata address, and third-party CDN edges — with
+                    port scanning, content discovery and active scanning on all of them.
+                    Only your exclusion lists and the rate limit still apply.
+                  </>
+                ) : (
+                  <>
+                    Off. The scope engine refuses out-of-scope hosts, internal and
+                    metadata addresses, and limits third-party CDN edges to HTTP probing.
+                    Turn this on only for infrastructure you are authorised to scan in
+                    full — it is the one setting that can reach beyond your own estate.
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Scan modules — every module, with dependency-aware on/off */}

@@ -139,6 +139,45 @@ An operator who genuinely owns the cloud their domain runs on can set
 `CLOUD_SHARED` / `PUBLIC` IPs. It **never** unlocks a third-party CDN edge, and
 **never** overrides a hard-deny class.
 
+### 2d. `scope_override` — waiving the engine outright
+
+A second program setting, **off by default**, that does what `scan_shared_infra`
+deliberately refuses to. With it on, for that program only:
+
+| Gate | Normally | With `scope_override` |
+|---|---|---|
+| Host under a verified apex | required | **skipped** |
+| `HARD_DENY` classes (private, loopback, link-local/metadata, CGNAT, multicast, reserved) | refused | **reachable** |
+| Third-party CDN edge | HTTP-layer only, never promotable | **full action set** |
+| Unconfirmed public / cloud-shared | HTTP-layer only | **full action set** |
+| Program's `excluded_hosts` / `excluded_cidrs` | refused | **still refused** |
+| Politeness rate cap | applied | **still applied** |
+| Verified + current authorization record | required to scan | **still required** |
+
+**Why it exists.** The engine grants scope from what it can *prove*. An operator can
+own infrastructure it cannot prove — hosts behind a CDN, an internal range, a cloud
+block `asnmap` will not confirm against the apex's ASN. Refusing port scanning there
+is the correct default and the wrong answer for someone scanning their own estate,
+and §2b already concedes that anyone with database access can assert whatever they
+like. This makes that assertion an explicit, logged setting instead of a Mongo write.
+
+**What it costs, stated plainly.** Two of those rows reach past the operator's own
+estate. A CDN edge is shared with that provider's other customers, so full scanning
+of one is scanning infrastructure that is not theirs. And `169.254.169.254` is not a
+property of the target at all — it is the *worker's own* cloud metadata service, so a
+host resolving to it turns the scanner into an SSRF vector against the machine
+ExactSurface runs on. Neither is a bug in this feature; both are what the switch means.
+
+**What keeps it honest.** Off by default and per-program, never global. Both edges log
+at WARNING with the program, apex, actor and tenant. Exclusion lists outrank it,
+because those are the operator's own instruction and an override that ignored them
+would be a footgun with no use case. The Playground's ephemeral scope sets it to
+`False` explicitly so the free-form waiver and this one can never compound.
+
+Covered in `tests/unit/test_scope.py` (including that it defaults off, that it does
+not leak between programs, and that it reaches the metadata address — asserted rather
+than implied) and `tests/security/test_scope_override_api.py`.
+
 ---
 
 ## 3. Central scope enforcement (the #1 control)

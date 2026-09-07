@@ -53,7 +53,9 @@ class IpClass(str, Enum):
     UNSPECIFIED = "unspecified"
 
 
-#: IP classes that can never be scanned, under any circumstance or override.
+#: IP classes refused for every program that has not explicitly waived the engine.
+#: Lab mode (``EXACTSURFACE_LAB_ALLOW_PRIVATE``) relaxes PRIVATE only; a program's
+#: ``scope_override`` relaxes all of them. Both are opt-in and off by default.
 HARD_DENY: frozenset[IpClass] = frozenset(
     {
         IpClass.PRIVATE,
@@ -110,6 +112,25 @@ class ProgramScope:
     #: ports/content/active-scan run on their own AWS/GCP/Azure assets. Third-party
     #: CDN edges (Cloudflare/Akamai/Fastly) and every HARD_DENY class stay locked.
     scan_shared_infra: bool = False
+    #: **Waives the scope engine for this program.** Off by default, and the only
+    #: switch in the product that makes ExactSurface reach an address it would
+    #: otherwise refuse: hosts outside the verified apex, every HARD_DENY class
+    #: (internal, loopback, link-local/metadata, CGNAT, multicast, reserved), and
+    #: third-party CDN edges — all of which become fully scannable.
+    #:
+    #: Two things it deliberately does NOT waive, because they are not the engine
+    #: guessing at authority but the operator stating it:
+    #:
+    #: * ``excluded_hosts`` and ``excluded_cidrs`` — an explicit "never touch this"
+    #:   list. An override that ignored the operator's own exclusions would be a
+    #:   footgun with no use case.
+    #: * The politeness limiter, which is about not hurting whatever is on the other
+    #:   end and has nothing to do with whether the target is in scope.
+    #:
+    #: The authorization gate is likewise untouched: a program still has to be
+    #: verified and authorized to scan at all. This changes what a scan may *reach*,
+    #: not whether the program was allowed to run.
+    scope_override: bool = False
 
     def owns_host(self, host: str) -> bool:
         h = host.lower().rstrip(".")
@@ -265,11 +286,14 @@ class ScopeEngine:
         """Return the scope verdict for *host* given its *resolved_ips*."""
         host_l = host.lower().rstrip(".")
 
-        # 1. Host must belong to a verified program apex.
-        if not scope.owns_host(host_l):
+        # 1. Host must belong to a verified program apex, unless the operator has
+        #    waived the engine for this program.
+        if not scope.owns_host(host_l) and not scope.scope_override:
             return ScopeDecision(host_l, False, "host not under any verified apex")
 
-        # 2. Explicit exclusion by host.
+        # 2. Explicit exclusion by host. Checked BEFORE the override can matter:
+        #    the exclusion list is the operator's own instruction, so it outranks
+        #    their own override.
         if host_l in {h.lower().rstrip(".") for h in scope.excluded_hosts}:
             return ScopeDecision(host_l, False, "host on program exclusion list")
 
@@ -295,7 +319,7 @@ class ScopeEngine:
             #    Lab mode is the ONE exception: RFC1918 private is allowed so a
             #    local VM can be scanned. Everything else stays hard-denied.
             lab_private = self._allow_private and cls == IpClass.PRIVATE
-            if cls in HARD_DENY and not lab_private:
+            if cls in HARD_DENY and not lab_private and not scope.scope_override:
                 return ScopeDecision(
                     host_l,
                     False,
@@ -325,7 +349,9 @@ class ScopeEngine:
             in_dedicated_cidr = cls != IpClass.CDN and any(
                 addr.version == n.version and addr in n for n in dedicated_nets
             )
-            is_dedicated = lab_private or shared_ok or in_dedicated_cidr
+            # The override promotes every address to dedicated, CDN edges included,
+            # which is the whole point of it and also the most dangerous part.
+            is_dedicated = scope.scope_override or lab_private or shared_ok or in_dedicated_cidr
             if is_dedicated:
                 classes.append(IpClass.DEDICATED)
             else:
@@ -336,7 +362,9 @@ class ScopeEngine:
             return ScopeDecision(
                 host_l,
                 True,
-                "all resolved IPs confirmed dedicated; full action set granted",
+                "scope override enabled; engine waived, full action set granted"
+                if scope.scope_override
+                else "all resolved IPs confirmed dedicated; full action set granted",
                 ip_class=IpClass.DEDICATED,
                 actions=FULL_ACTIONS,
             )

@@ -12,6 +12,7 @@ export const PROGRAM = {
   "verified": true,
   "enabled": true,
   "scan_shared_infra": false,
+  "scope_override": false,
   "enabled_modules": [
     "tls",
     "param_discovery",
@@ -2920,6 +2921,7 @@ export const PROGRAMS = [
     "verified": true,
     "enabled": true,
     "scan_shared_infra": false,
+  "scope_override": false,
     "enabled_modules": [
       "tls",
       "param_discovery",

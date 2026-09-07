@@ -10,6 +10,27 @@ docker pull ghcr.io/whxitte/frontend:1.2.0
 docker pull ghcr.io/whxitte/pipeline:1.2.0
 ```
 
+## Unreleased
+
+**Added**
+
+- **Scope override** — a per-program setting, off by default, that waives the scope
+  engine for that domain: hosts outside the verified apex, every hard-denied class
+  (internal, loopback, link-local and the cloud metadata address, CGNAT, multicast,
+  reserved) and third-party CDN edges all become fully scannable. The program's own
+  exclusion lists, the politeness cap and the requirement to be verified and authorized
+  are untouched. Both edges are logged at WARNING. See `docs/SECURITY.md` §2d for what
+  it costs, including the two rows that reach beyond your own estate.
+- `SECURITY.md` (vulnerability disclosure, with GitHub private reporting enabled) and
+  `CONTRIBUTING.md`.
+
+**Fixed**
+
+- The project site's logo 404'd on GitHub Pages: it used an absolute `/favicon.png`,
+  but a project site is served from `/exact-surface/`.
+- `make lint` now runs `ruff format --check` as well as `ruff check`, matching CI — the
+  README told contributors to run it before a PR, and it could pass while CI failed.
+
 ## 1.2.0 — 2026-09-07
 
 **Added**

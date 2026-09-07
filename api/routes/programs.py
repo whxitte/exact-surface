@@ -443,18 +443,57 @@ async def get_authorization(
 # -- scan config -------------------------------------------------------------
 @router.post("/{program_id}/scan-config", tags=["programs"])
 async def set_scan_config(
-    scan_shared_infra: bool = Query(...),
+    scan_shared_infra: bool | None = Query(None),
+    scope_override: bool | None = Query(None),
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
-    """Toggle the §9b opt-in: when on, the operator attests they own the cloud
-    infra their domain runs on, so ports/content/active scans run on cloud/public
-    IPs too (third-party CDNs and internal ranges stay locked by the scope engine)."""
-    await ProgramRepo.from_mongo(mongo).set_scan_shared_infra(
-        principal.tenant_id, program["program_id"], scan_shared_infra
-    )
-    return {"program_id": program["program_id"], "scan_shared_infra": scan_shared_infra}
+    """Set this program's scan-scope switches. Both are optional; only what is sent
+    is written, so a client can flip one without knowing the other's value.
+
+    ``scan_shared_infra`` is the §9b opt-in: the operator attests they own the cloud
+    infra their domain runs on, so ports/content/active scans run on cloud/public IPs
+    too, while third-party CDNs and internal ranges stay locked.
+
+    ``scope_override`` waives the scope engine outright for this program — apex
+    ownership, every hard-denied class (internal, loopback, link-local and the cloud
+    metadata address, CGNAT, multicast, reserved) and third-party CDN edges all become
+    fully scannable. It is logged at WARNING on both edges because it is the one
+    setting whose blast radius reaches beyond the operator's own estate, and because
+    "when did this get turned on" is the first question anyone asks afterwards.
+
+    The operator's own exclusion lists and the politeness limiter still apply, and a
+    program still has to be verified and authorized to scan at all: this changes what
+    a scan may reach, not whether it was allowed to run.
+    """
+    repo = ProgramRepo.from_mongo(mongo)
+    pid = program["program_id"]
+
+    if scan_shared_infra is not None:
+        await repo.set_scan_shared_infra(principal.tenant_id, pid, scan_shared_infra)
+
+    if scope_override is not None and bool(scope_override) != bool(
+        program.get("scope_override", False)
+    ):
+        from core.logging import logger
+
+        logger.warning(
+            "scope override {} for program {} ({}) by user {} in tenant {}",
+            "ENABLED" if scope_override else "disabled",
+            pid,
+            program.get("apex_domain"),
+            principal.user_id or principal.method,
+            principal.tenant_id,
+        )
+        await repo.set_scope_override(principal.tenant_id, pid, scope_override)
+
+    fresh = await repo.get(principal.tenant_id, pid) or {}
+    return {
+        "program_id": pid,
+        "scan_shared_infra": bool(fresh.get("scan_shared_infra", False)),
+        "scope_override": bool(fresh.get("scope_override", False)),
+    }
 
 
 @router.post("/{program_id}/modules", tags=["programs"])

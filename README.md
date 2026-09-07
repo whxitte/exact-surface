@@ -29,7 +29,8 @@ The product is built so that this is hard to get wrong by accident:
 - A program cannot be scanned until its apex domain passes **DNS TXT verification**,
   proving you control it.
 - A **central scope engine** refuses internal, metadata, CDN and out-of-scope addresses
-  by construction, not by a checklist someone remembers to apply (ADR-0005).
+  by construction, not by a checklist someone remembers to apply (ADR-0005). One
+  per-program switch, **off by default**, waives it — see *Scope override* below.
 - Aggressive actions (port scanning, content discovery, the full nuclei corpus) require
   IP ranges **confirmed** yours via ASN lookup. Self-attestation never unlocks them —
   declaring a `/24` you do not own gets you HTTP-layer probing and nothing more (§9b).
@@ -38,6 +39,25 @@ The product is built so that this is hard to get wrong by accident:
 
 Those controls are the point of the project, not paperwork around it. If you are about
 to work around one, read [`docs/SECURITY.md`](docs/SECURITY.md) §2 first.
+
+### Scope override
+
+A program setting — **off by default** — that waives the scope engine for that domain:
+scans may then reach hosts outside it, internal and loopback ranges, the cloud metadata
+address, and third-party CDN edges, with the full action set on all of them.
+
+It exists because the engine decides scope from what it can *prove*, and an operator
+sometimes owns infrastructure it cannot prove: hosts behind a CDN, an internal range, a
+cloud block the ASN check will not confirm. Withholding port scanning there is the right
+default and the wrong answer for someone scanning their own estate.
+
+It does not waive: your own host and CIDR exclusion lists, the politeness rate cap, or
+the requirement that a program be verified and authorized to scan at all. It changes what
+a scan may *reach*, never whether it was allowed to run, and every flip is logged.
+
+**It can reach beyond your own estate.** A CDN edge is shared with that provider's other
+customers; the metadata address belongs to whatever host the worker runs on. Turn it on
+only where you are authorised to scan everything the domain resolves to.
 
 ---
 

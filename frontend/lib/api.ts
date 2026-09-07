@@ -75,6 +75,7 @@ export interface Program {
   verified: boolean;
   enabled: boolean;
   scan_shared_infra?: boolean;
+  scope_override?: boolean;
   enabled_modules?: string[];
   verification_method?: string | null;
   created_at?: string;
@@ -437,6 +438,12 @@ export interface Integration {
   masked: string;
 }
 // -- access control (RBAC) ---------------------------------------------------
+export interface ScanConfig {
+  program_id: string;
+  scan_shared_infra: boolean;
+  scope_override: boolean;
+}
+
 export interface PermissionInfo { key: string; label: string; description: string }
 export interface Group {
   group_id: string;
@@ -537,10 +544,13 @@ export const api = {
       method: "POST",
     }),
   setScanSharedInfra: (id: string, value: boolean) =>
-    request<{ program_id: string; scan_shared_infra: boolean }>(
-      `/programs/${id}/scan-config?scan_shared_infra=${value}`,
-      { method: "POST" },
-    ),
+    request<ScanConfig>(`/programs/${id}/scan-config?scan_shared_infra=${value}`, {
+      method: "POST",
+    }),
+  setScopeOverride: (id: string, value: boolean) =>
+    request<ScanConfig>(`/programs/${id}/scan-config?scope_override=${value}`, {
+      method: "POST",
+    }),
   getModules: (id: string) =>
     request<{ program_id: string; modules: ModuleInfo[] }>(`/programs/${id}/modules`),
   setModules: (id: string, enabled: string[], disabled: string[]) =>
