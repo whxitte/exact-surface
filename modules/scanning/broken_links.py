@@ -69,7 +69,7 @@ FetchStatus = Callable[[str], Awaitable[int]]
 
 
 def is_external(url: str, own_domains: tuple[str, ...]) -> bool:
-    """True when *url* points outside the customer's own domains."""
+    """True when *url* points outside the operator's own domains."""
     host = (urlsplit(url).hostname or "").lower()
     if not host or host in _SKIP_HOSTS:
         return False

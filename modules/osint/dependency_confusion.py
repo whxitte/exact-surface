@@ -3,7 +3,7 @@
 When a build references an internal package (``@acme/auth-client``) that does not exist
 on the public registry, anyone can publish that name. Most package managers prefer the
 public registry, or can be tricked into it, so the attacker's code runs inside the
-customer's build — with their secrets and their deploy keys. This is how several very
+operator's build — with their secrets and their deploy keys. This is how several very
 large companies have been compromised, and the ingredients are usually sitting in
 public JavaScript.
 
@@ -83,7 +83,7 @@ MAX_CANDIDATES = 150
 
 @dataclass(frozen=True)
 class PackageRef:
-    """A package name found in the customer's own published JavaScript."""
+    """A package name found in the operator's own published JavaScript."""
 
     name: str
     found_in: str

@@ -57,7 +57,7 @@ class Settings(BaseSettings):
         default=3, ge=1, description="Worker replicas; divides the local ceiling when degraded"
     )
 
-    # Path to a cloudlist provider config (the customer writes and mounts it). Holds
+    # Path to a cloudlist provider config (the operator writes and mounts it). Holds
     # THEIR cloud credentials and is read only by their own deployment — self-hosting is
     # what makes this acceptable to ask for at all. READ-ONLY keys are sufficient.
     cloudlist_config: str | None = Field(default=None)

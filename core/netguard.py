@@ -1,4 +1,4 @@
-"""SSRF guard for in-process fetches to customer targets (§3.10 defensive).
+"""SSRF guard for in-process fetches to operator targets (§3.10 defensive).
 
 ExactSurface fetches content from hosts it does not control — the takeover probe reads a
 host's body, the secret scanner pulls JS/config URLs. Those targets are attacker-

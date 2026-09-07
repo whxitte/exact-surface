@@ -253,7 +253,7 @@ OPTIONAL_MODULES: tuple[str, ...] = (
 FULL_STAGE_NAMES: tuple[str, ...] = (
     "domain_intel",  # passive: email spoofability + domain registration risk
     "ingest",
-    "cloud_assets",  # optional — the customer's own cloud accounts
+    "cloud_assets",  # optional — the operator's own cloud accounts
     "uncover",  # optional — Shodan/Censys passive discovery
     "reverse_dns",  # optional — PTR sweep of ASN-confirmed ranges
     "probe",
@@ -296,7 +296,7 @@ async def run_full_pipeline(
     disabled_modules: tuple[str, ...] = (),
     timeouts: dict[str, int] | None = None,
     # Explicit, NOT left to **injected: a swallowed kwarg here would silently mean
-    # unthrottled requests at customer hosts, which is the failure ADR-0012 fixes.
+    # unthrottled requests at scanned hosts, which is the failure ADR-0012 fixes.
     limiter: PolitenessLimiter | None = None,
     **injected: Any,
 ) -> dict:
@@ -361,7 +361,7 @@ async def run_full_pipeline(
         ),
         (
             # The strongest ownership signal available: the provider itself confirms
-            # these are the customer's resources.
+            # these are the operator's resources.
             "cloud_assets",
             optional(
                 "cloud_assets",

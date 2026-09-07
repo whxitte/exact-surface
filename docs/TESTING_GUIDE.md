@@ -2,7 +2,7 @@
 
 How to test ExactSurface to full coverage: what to test, in what order, and how to know
 it actually works. This is the reference; [`docs/TESTING.md`](TESTING.md) is the
-quick "run it on a Mac + Kali VM" walkthrough.
+quick end-to-end walkthrough.
 
 > **The one lesson that shapes this guide.** During development, several controls
 > passed a green test suite while being **dead code or broken at the seams** — the
@@ -246,7 +246,7 @@ multi-tenant launch.)
   `published` timestamp yet. Don't expect a latency number here.
 - **Redis/Mongo have not run for real in CI** — Layer 5 is where the remaining real
   bugs most likely are. The api, pipeline and demo images DO build (verified), and the
-  release build-stamp is checked end-to-end (`OWNER_RUNBOOK.md` §2.1).
+  release build-stamp is checked end-to-end (`RELEASING.md`).
 - **Org-name ASN lookup is not built** — a CDN-fronted apex will not auto-confirm its
   real origin ASN; use the `scan_shared_infra` opt-in there (ADR-0008).
 - **No load suite yet** (Layer 7).

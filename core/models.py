@@ -153,7 +153,7 @@ class Program(TenantScopedModel):
     excluded_hosts: list[str] = Field(default_factory=list)
     excluded_cidrs: list[str] = Field(default_factory=list)
     enabled: bool = True
-    #: §9b opt-in: customer attests they own the cloud infra their domain runs on,
+    #: §9b opt-in: operator attests they own the cloud infra their domain runs on,
     #: unlocking port/content/active scans on cloud/public IPs (not third-party CDNs).
     scan_shared_infra: bool = False
     #: opt-IN for modules that are off by default (see core.modules.OPT_IN).

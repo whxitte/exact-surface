@@ -24,8 +24,8 @@ out of the box.
 | Detection modules | All 28, individually togglable per program |
 | Read-only degradation | Does not exist |
 
-Modules are turned on and off per program on the **Scan modules** card. See
-[`PRICING_AND_LIMITS.md`](PRICING_AND_LIMITS.md) for the full list.
+Modules are turned on and off per program on the **Scan modules** card. The README
+lists all 28 and what each one does.
 
 ## Third-party tools
 

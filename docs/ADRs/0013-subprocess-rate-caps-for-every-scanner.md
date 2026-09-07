@@ -9,7 +9,7 @@ ADR-0009 established that a token bucket in our process cannot govern a subproce
 naabu sends its own packets, so the politeness ceiling (§3.8b) has to be handed to
 it as a `-rate` flag derived from the per-target cap. That ADR fixed naabu.
 
-It did not fix the other five tools that send their own traffic at customer hosts,
+It did not fix the other five tools that send their own traffic at scanned hosts,
 and nobody had checked them. An audit found **none of them passed any rate flag**:
 
 | Tool | Wrapper | Own default | Passed |
@@ -33,7 +33,7 @@ concurrency without bounding rate does not cap the rate.
 
 ## Decision
 
-**Every subprocess that talks to a customer host derives and passes a rate flag,
+**Every subprocess that talks to a scanned host derives and passes a rate flag,
 through one shared helper.**
 
 `core.ratelimit.derive_subprocess_rate(host_count, cap, *, tool)` replaces the
@@ -81,7 +81,7 @@ wired one (the lesson of ADR-0012).
 **Throughput cost, accepted.** Capping httpx/katana/nuclei from 150 to ≤10 rps
 per target makes probing and scanning slower. That is the correct direction: §3.8b
 exists precisely to trade our speed for a third party's not filing an abuse report.
-Where genuinely more throughput is safe (a customer's own confirmed-dedicated
+Where genuinely more throughput is safe (an operator's own confirmed-dedicated
 infra), the lever is `global_rate_per_target`, which flows through the derivation to
 every tool at once.
 
@@ -95,7 +95,7 @@ in parallel — which is correct, since the ceiling is per target.
 a pathological host count cannot hand a tool an unbounded rate even within the
 per-target math.
 
-**Not covered:** tools that do not contact customer hosts (subfinder, dnsx against
+**Not covered:** tools that do not contact scanned hosts (subfinder, dnsx against
 resolvers, gau/waybackurls against archives, asnmap). Their traffic goes to
 third-party APIs/resolvers, governed by those services' own limits, not §3.8b.
 

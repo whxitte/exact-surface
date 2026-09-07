@@ -1,13 +1,13 @@
-"""cloudlist wrapper — enumerate assets from the customer's own cloud accounts.
+"""cloudlist wrapper — enumerate assets from the operator's own cloud accounts.
 
 Why this exists now and did not before
 --------------------------------------
 cloudlist asks a cloud provider "what do I have?" using the account's own API
-credentials. In a vendor-hosted product that would mean customers sending us read
+credentials. In a vendor-hosted product that would mean operators sending us read
 access to their AWS/GCP/Azure accounts — a trust escalation we were not willing to ask
 for, so the module was left unbuilt and the binary was removed as dead weight.
 
-**Self-hosting changes the calculus completely.** The credentials sit in the customer's
+**Self-hosting changes the calculus completely.** The credentials sit in the operator's
 own deployment, are read by a process on their own infrastructure, and never traverse a
 network we control. The vendor never sees them. That makes this the single highest-yield
 discovery source available: DNS enumeration finds what someone published, while this
@@ -16,7 +16,7 @@ bucket from a migration, the forgotten staging VM.
 
 Scope safety
 ------------
-This returns assets the cloud provider says the customer owns, which is a stronger
+This returns assets the cloud provider says the operator owns, which is a stronger
 ownership claim than anything else in the product — stronger than DNS, stronger than
 certificate transparency. But it is still not authorisation to scan: a shared-tenancy
 IP inside their account may still front infrastructure they do not exclusively control.
@@ -25,7 +25,7 @@ recorded as candidates rather than auto-promoted to `dedicated`.
 
 Credentials
 -----------
-Read from a cloudlist provider config file the customer writes and mounts. We never
+Read from a cloudlist provider config file the operator writes and mounts. We never
 prompt for, store, or transmit them; the path is all this module knows. Read-only
 permissions are all it needs, and the docs say so in bold.
 """
@@ -70,7 +70,7 @@ MAX_ASSETS = 5000
 
 @dataclass(frozen=True)
 class CloudAsset:
-    """One asset a cloud provider reports as belonging to the customer."""
+    """One asset a cloud provider reports as belonging to the operator."""
 
     value: str  # hostname or IP
     provider: str
@@ -142,7 +142,7 @@ async def enumerate_assets(
     provider: str | None = None,
     runner: Runner = run_tool_jsonl,
 ) -> list[CloudAsset]:
-    """Run cloudlist against the customer's own provider config.
+    """Run cloudlist against the operator's own provider config.
 
     Returns ``[]`` — never raises — when the binary is absent or the config is
     unreadable, so a misconfigured optional module degrades instead of failing a scan.

@@ -44,7 +44,7 @@ PROTECTED: frozenset[str] = frozenset(
 )
 
 #: Floor on any retention window. Even the cheapest tier keeps a month, so a
-#: misconfigured or corrupt plan value can never wipe a customer's data.
+#: misconfigured or corrupt plan value can never wipe an operator's data.
 MIN_RETENTION_DAYS = 30
 
 

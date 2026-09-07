@@ -3,7 +3,7 @@ Date: 2026-07-04
 Status: Accepted
 
 ## Context
-When ExactSurface finds a customer's leaked secret (`.env`, an API key in JS, a GitHub
+When ExactSurface finds an operator's leaked secret (`.env`, an API key in JS, a GitHub
 leak), naively storing the plaintext turns ExactSurface's own database into a
 high-value honeypot holding *other companies'* live credentials — a catastrophic
 liability and breach magnet.
@@ -18,7 +18,7 @@ locator only, never the secret. The full value is revealed in the UI only to
 authorized tenant users via an audited, time-boxed action.
 
 ## Consequences
-- A DB compromise does not leak customers' live credentials.
+- A DB compromise does not leak operators' live credentials.
 - Dedup/idempotency still work (via the keyed hash) without the plaintext.
 - `core/hashing.secret_fingerprint` and `core/secrets_policy` (Phase B) implement
   the masking/hashing; `core/config.secret_hash_key` provides the HMAC key,

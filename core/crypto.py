@@ -1,6 +1,6 @@
 """Symmetric encryption for tenant secrets stored at rest (§9c).
 
-Customer-supplied API keys (GitHub token, Google CSE key, …) must be recoverable
+Operator-supplied API keys (GitHub token, Google CSE key, …) must be recoverable
 to actually call the upstream API, so unlike exposed-secret *evidence* (which we
 only ever HMAC-hash) these are encrypted with a reversible cipher.
 

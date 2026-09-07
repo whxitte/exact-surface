@@ -38,7 +38,7 @@ async def run_secret_scan(
 ) -> dict:
     hmac_key = hmac_key or get_settings().secret_hash_key_bytes()
     tid = tenant.tenant_id
-    # Fetches JS/config URLs from customer hosts in-process. Ran unthrottled until
+    # Fetches JS/config URLs from scanned hosts in-process. Ran unthrottled until
     # ADR-0012; this stage can pull many URLs per host, so it is the one most likely
     # to look like abuse from the target's side.
     if limiter is not None:

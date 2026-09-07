@@ -13,7 +13,7 @@ Three classic classes a hunter checks on every host, all of which are decided by
   reserved example domain, so even a request that escapes lands nowhere real.
 * **WAF** — not a finding, context. Knowing a host sits behind Cloudflare explains why
   it returned less than its neighbour, and knowing which hosts are *not* behind one
-  tells the customer where their unprotected surface actually is.
+  tells the operator where their unprotected surface actually is.
 
 Everything here takes response data and returns verdicts, so the rules are tested
 directly against crafted headers with no network involved.

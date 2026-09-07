@@ -2,10 +2,10 @@
 
 Reads the bundles js_mine already stored, pulls out the package names inside them, and
 asks the public npm registry whether each name is claimed. A 404 means anyone can
-publish it, which is how an attacker gets code executed inside the customer's build.
+publish it, which is how an attacker gets code executed inside the operator's build.
 
 We only ever read registry metadata. Publishing or reserving a name — even defensively —
-would be acting on the customer's behalf against a third-party service, which is not
+would be acting on the operator's behalf against a third-party service, which is not
 ours to do; the finding tells them to do it themselves.
 """
 

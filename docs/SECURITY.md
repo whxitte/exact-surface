@@ -1,6 +1,6 @@
 # ExactSurface Security Posture
 
-ExactSurface is an outside-in scanner that holds sensitive data about customers'
+ExactSurface is an outside-in scanner that holds sensitive data about operators'
 attack surfaces, and that *points scanners at the internet on their behalf*. Two
 things therefore matter as much as the findings it ships:
 
@@ -46,7 +46,7 @@ The chain above is enforced against **every user of the product**. It is *not*
 enforced against **the operator of the deployment**, and on self-hosted software it
 cannot be.
 
-Verification state lives in MongoDB. The customer runs that database. Somebody with
+Verification state lives in MongoDB. The operator runs that database. Somebody with
 shell access can write a verified program and an authorization record by hand:
 
 ```js
@@ -94,12 +94,12 @@ So a resolved IP is *classified* before any active work
   denied — a DNS-rebinding guard.
 - `CDN` / `CLOUD_SHARED` / `PUBLIC` → **HTTP-layer probing only.** No port scan,
   no content bruteforce, no aggressive nuclei. That infrastructure belongs to
-  Cloudflare/AWS/etc., not the customer.
+  Cloudflare/AWS/etc., not the operator.
 - `DEDICATED` → **full action set.**
 
 ### 2b. How a CIDR *earns* `DEDICATED` (ADR-0008)
 
-A customer can list CIDRs on their authorization record. Listing is a **request,
+An operator can list CIDRs on their authorization record. Listing is a **request,
 not a grant**:
 
 - The API accepts **plain CIDR strings only** (`AuthorizationCreate.ip_scope:
@@ -117,12 +117,12 @@ not a grant**:
   Defence in depth: a bad or stale CIDR must not unlock a CDN.
 - **Fails safe.** If asnmap is missing, times out, or errors, *nothing* is
   confirmed. Losing ASN data must never grant access.
-- **Re-checked every run**, so a range the customer stops announcing drops back
+- **Re-checked every run**, so a range the operator stops announcing drops back
   to HTTP-only automatically. Authorization is never trusted forever.
 
 > **Known limitation.** Apex-ASN is a *proxy* for org ownership. A CDN-fronted
-> apex announces the CDN's ASN, so such a customer's real origin block will not
-> auto-confirm. That is deliberate (deny beats guess); those customers use the
+> apex announces the CDN's ASN, so such an operator's real origin block will not
+> auto-confirm. That is deliberate (deny beats guess); those operators use the
 > explicit `scan_shared_infra` opt-in instead.
 
 **History:** this was a real vulnerability, not a hypothetical. `ip_scope` was
@@ -134,7 +134,7 @@ scanning of third-party infrastructure. Guard tests:
 
 ### 2c. `scan_shared_infra` — the explicit opt-in
 
-A customer who genuinely owns the cloud their domain runs on can set
+An operator who genuinely owns the cloud their domain runs on can set
 `scan_shared_infra` on the program. This extends the full action set to
 `CLOUD_SHARED` / `PUBLIC` IPs. It **never** unlocks a third-party CDN edge, and
 **never** overrides a hard-deny class.
@@ -164,7 +164,7 @@ different kinds of I/O:
 
 **In-process I/O** (`core/ratelimit.py`) — a token bucket, backed by Redis in
 production so the ceiling holds across the whole worker fleet, not per process.
-This governs the requests ExactSurface itself makes at customer hosts: the takeover
+This governs the requests ExactSurface itself makes at scanned hosts: the takeover
 body-fetch and the secret fetcher. Pipelines pace them with
 `throttled_fetch(fetch, limiter)` wrapped around their injected fetch function, so
 the ceiling applies by construction rather than by each module remembering to ask.
@@ -353,14 +353,14 @@ things follow from that.
 * **Public signup closes after the first account** in prod (`public_signup_open`), so an
   exposed self-hosted deployment cannot have accounts created on it by a stranger.
 * **Server-side validation everywhere.** Frontend validation is a convenience; every
-  constraint is re-enforced in the API, because a customer with Burp is the baseline
+  constraint is re-enforced in the API, because an operator with Burp is the baseline
   assumption, not the exception.
 
 ### 10.2 The Workbench is quarantined, not trusted
 
 `devtools/` is an internal test bench that can call scanning functions **directly**,
 bypassing the scope engine. That capability is legitimate for development and
-unacceptable anywhere near a customer. It is contained by construction, not by policy:
+unacceptable anywhere near an operator. It is contained by construction, not by policy:
 
 | Control | Defeats |
 |---|---|
@@ -396,7 +396,7 @@ that stated in the UI:
 
 Breach-credential exposure is the one capability that would need a paid feed
 (HaveIBeenPwned). **It is not built**, and it is not counted as coverage anywhere. If it
-is added it will be opt-in with the customer's own key.
+is added it will be opt-in with the operator's own key.
 
 Parameter discovery uses **arjun** (MIT, free) as its primary engine, with a built-in
 probe as the always-on fallback — the same pattern as trufflehog and the regex secret

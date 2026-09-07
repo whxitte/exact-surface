@@ -3,11 +3,11 @@
 Permutes likely bucket names from the program's apex label and checks each across
 S3/GCS/Azure. This is **passive recon against a public cloud-storage API** — the
 same class as crt.sh or wayback, and deliberately *not* scope-gated against the
-customer's apex, because `acme-backup.s3.amazonaws.com` is by definition not a
+operator's apex, because `acme-backup.s3.amazonaws.com` is by definition not a
 subdomain of `acme.com`. We contact Amazon/Google/Microsoft's public endpoints,
-never the customer's infrastructure, and only ever with a plain GET.
+never the operator's infrastructure, and only ever with a plain GET.
 
-**Attribution is a guess, and we say so.** A bucket named after the customer's
+**Attribution is a guess, and we say so.** A bucket named after the operator's
 domain label may belong to someone else entirely — the name is the only evidence.
 So:
 

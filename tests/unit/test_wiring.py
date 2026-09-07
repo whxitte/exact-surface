@@ -615,7 +615,7 @@ def test_the_scope_feed_actually_loads_and_is_not_empty():
 def test_the_customer_bundle_is_installable_without_source():
     """What a buyer receives must run with no repo, no build step and no guesswork.
 
-    docker-compose.prod.yml -- what CLIENT_GUIDE used to point customers at -- names
+    docker-compose.prod.yml -- what the operations guide used to point people at -- names
     local build tags (`exactsurface/api:latest`) and carries `build:` sections. A
     customer who ran the documented `docker pull ghcr.io/...` commands got images that
     file does not reference, and compose would have gone looking for something else

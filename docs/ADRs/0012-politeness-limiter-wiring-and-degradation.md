@@ -23,7 +23,7 @@ turned out to be impossible to do meaningfully on a limiter nothing invoked:
 
 Consequences of that, in order of severity:
 
-1. **The in-process HTTP that ExactSurface aims at customer hosts was unthrottled.**
+1. **The in-process HTTP that ExactSurface aims at scanned hosts was unthrottled.**
    `pipelines/takeover.py` (a body fetch per resolving host) and
    `pipelines/secrets.py` (many JS/config URLs per host) go straight out at
    `asyncio.gather` concurrency with no ceiling whatsoever.
@@ -52,7 +52,7 @@ Nothing tested that the control was *reachable*, because the defect is an absenc
 **1. Call it.** The pipelines already inject their `fetch` function (that is how
 they stay offline-testable), so `core.ratelimit.throttled_fetch(fetch, limiter)`
 wraps at the injection point. `takeover` and `secrets` — the only two stages that
-make in-process requests at customer hosts — pass through it. The limiter threads
+make in-process requests at scanned hosts — pass through it. The limiter threads
 `worker → run_program/run_pipeline → stage`. In `run_full_pipeline` the parameter
 is **explicit rather than left to `**injected`**, so a swallowed kwarg cannot
 silently mean "unthrottled" again.
@@ -134,5 +134,5 @@ verification against a live redis 7 before the unattended run.
   remember to honour, whose omission is invisible. Wrapping the injected fetch makes
   the ceiling apply by construction.
 - **Delete the limiter as dead code.** Defensible on the evidence — but it would
-  leave in-process requests at customer hosts permanently unthrottled and §3.8b
+  leave in-process requests at scanned hosts permanently unthrottled and §3.8b
   unimplementable.

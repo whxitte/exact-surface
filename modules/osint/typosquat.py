@@ -1,15 +1,15 @@
 """Lookalike / typosquat domain generation — phishing infrastructure aimed *at* them.
 
-Every other module in this product asks "what does the customer own that they forgot
+Every other module in this product asks "what does the operator own that they forgot
 about?". This one inverts it: what has *somebody else* registered that looks like the
-customer, and is therefore positioned to phish their staff and customers?
+operator, and is therefore positioned to phish their staff and operators?
 
 The generator is a set of the mutations real phishing operators use — character swaps,
 adjacent-key typos, homoglyphs, hyphenation, and lookalike TLDs. Generation is pure and
 bounded; the pipeline then resolves each candidate and only reports the ones that exist.
 An unregistered lookalike is not news. A registered one with a mail server is.
 
-Detection-only, and notably *not* about the customer's own infrastructure: we resolve
+Detection-only, and notably *not* about the operator's own infrastructure: we resolve
 third-party names, which is the same public DNS anyone can query.
 """
 
@@ -127,7 +127,7 @@ MAX_CANDIDATES = 600
 
 @dataclass(frozen=True)
 class Lookalike:
-    """A registered domain that impersonates the customer's."""
+    """A registered domain that impersonates the operator's."""
 
     domain: str
     technique: str  # how it was derived — shown to the user so the result is checkable
@@ -145,7 +145,7 @@ class Lookalike:
         where = ", ".join(self.resolved_ips[:4]) or "no A record"
         mail = (
             "It also has MX records, so it can send and receive email that appears to "
-            "come from a domain your staff and customers will read as yours."
+            "come from a domain your staff and operators will read as yours."
             if self.has_mx
             else "No MX records were found, so it is not currently set up for email."
         )

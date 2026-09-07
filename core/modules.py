@@ -67,10 +67,10 @@ MODULES: tuple[ModuleSpec, ...] = (
         # Shodan/SerpAPI key, so this module was built to never let them touch the
         # database at all (modules/recon/cloudlist.py) — they live only in a file the
         # operator mounts. The Settings page has no field for this on purpose; without
-        # this sentence a customer has no way to discover that from the product itself.
+        # this sentence an operator has no way to discover that from the product itself.
         opt_in_reason=(
             "set up by whoever deployed this instance, not from Settings — see "
-            "CLIENT_GUIDE.md §5.9 (EXACTSURFACE_CLOUDLIST_CONFIG)"
+            "OPERATIONS.md §5.9 (EXACTSURFACE_CLOUDLIST_CONFIG)"
         ),
     ),
     ModuleSpec(
@@ -228,7 +228,7 @@ MODULES: tuple[ModuleSpec, ...] = (
     ModuleSpec(
         "typosquat",
         "Lookalike domains",
-        "Registered domains that impersonate yours to phish your staff and customers. "
+        "Registered domains that impersonate yours to phish your staff and operators. "
         "Third-party DNS only — never contacts the lookalike host.",
         default_enabled=False,
         opt_in_reason="resolves several hundred candidate domains per run",

@@ -95,7 +95,7 @@ class VerifyCheckResponse(BaseModel):
 
 # -- authorization -----------------------------------------------------------
 class AuthorizationCreate(BaseModel):
-    #: CIDRs the customer *requests* be treated as their own dedicated infra.
+    #: CIDRs the operator *requests* be treated as their own dedicated infra.
     #: Plain strings by design: the class/action-set/confirmed_via are decided by
     #: the server against real ASN data (§9b step 3) and can never be asserted by
     #: the client — otherwise "dedicated" would be self-granted.

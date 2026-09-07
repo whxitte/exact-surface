@@ -3,9 +3,9 @@
 Collects the outbound links the site publishes (from crawled endpoints and mined JS),
 then checks whether any destination is dead in a way an attacker can take over: an
 unregistered domain, or a social handle that 404s. Both give an attacker content served
-under the customer's trust.
+under the operator's trust.
 
-Purely passive with respect to the customer: we resolve third-party names and read a
+Purely passive with respect to the operator: we resolve third-party names and read a
 status code from a third-party site. Nothing is registered, claimed, or exploited.
 """
 

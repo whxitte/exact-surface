@@ -1,6 +1,6 @@
 """GitHub leaked-secret monitoring (module 21/OSINT).
 
-Searches public GitHub code for the customer's domain and scans the matched
+Searches public GitHub code for the operator's domain and scans the matched
 fragments for secrets using the shared detector. The GitHub search callable is
 injected so tests run offline; in production it wraps the GitHub code-search API
 (auth required, heavily rate-limited — budget per §3.8/§13).

@@ -1,20 +1,15 @@
-# ExactSurface — Deployment & Operations Guide
+# ExactSurface — deployment & operations
 
 ExactSurface is continuous **external attack-surface monitoring** that runs entirely on
 your own infrastructure. It discovers your internet-facing assets, watches them for
 change, and reports exposures — showing you the exact request behind every finding.
 
-Your data never leaves your servers. There is no vendor cloud holding your attack
-surface.
+Your data never leaves your servers. There is no hosted service holding your attack
+surface, and nothing in the codebase phones home.
 
----
-
-## 1. What you received
-
-| Item | What it's for |
-|---|---|
-| **Image / Codebase access** | The container images or codebase to deploy on your server. |
-| **This guide** | Deployment & operational instructions. |
+This guide covers running it in production. For a first look, see
+[`TESTING.md`](TESTING.md); for the deployment folder itself, see
+[`../deploy/README.md`](../deploy/README.md).
 
 ---
 
@@ -36,8 +31,8 @@ at once.
 
 - **Inbound:** 80 and 443 from wherever your team browses (or your VPN only — safer).
 - **Outbound:** unrestricted HTTPS/DNS. The scanner must reach the internet to see your
-  attack surface the way an attacker does. Also allow your instance to reach the
-  ExactSurface control plane for renewals and detection updates.
+  attack surface the way an attacker does. Nothing else is required — the instance
+  contacts no ExactSurface service, because there is not one.
 - A **DNS A-record** pointing at the server (TLS is issued automatically).
 
 **Also have ready:** an SMTP account if you want email verification/alerts, and a Slack

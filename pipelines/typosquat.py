@@ -1,10 +1,10 @@
-"""Typosquat stage — registered lookalike domains pointed at the customer.
+"""Typosquat stage — registered lookalike domains pointed at the operator.
 
 Generates the mutations phishing operators actually use, resolves them, and reports only
 the ones that exist. An unregistered lookalike is not news; a registered one with mail
 records is a phishing campaign with the plumbing already installed.
 
-Nothing here touches the customer's infrastructure — it is third-party DNS, the same
+Nothing here touches the operator's infrastructure — it is third-party DNS, the same
 lookups anyone can run — and it never contacts the lookalike host itself. Resolution is
 batched into two DNS calls rather than one per candidate, because several hundred
 sequential lookups would be both slow and rude to resolvers.

@@ -1,7 +1,7 @@
 """ASN mapper (module 22) — org/domain → ASN → owned IP ranges.
 
 Feeds the authorization IP-scope confirmation (§9b): a resolved IP that falls in a
-range genuinely owned by the customer's ASN can be promoted to DEDICATED (full
+range genuinely owned by the operator's ASN can be promoted to DEDICATED (full
 scanning). Wraps ``asnmap``; runner injected for offline tests.
 """
 
