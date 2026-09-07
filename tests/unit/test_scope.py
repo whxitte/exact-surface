@@ -209,15 +209,30 @@ def test_override_is_off_by_default():
     assert ProgramScope(verified_apexes=("customer.com",)).scope_override is False
 
 
-@pytest.mark.parametrize(
-    "ip",
-    ["10.0.0.5", "127.0.0.1", "169.254.169.254", "100.64.0.1", "224.0.0.1", "240.0.0.1"],
-)
-def test_override_reaches_every_hard_denied_class(ip):
-    """Including 169.254.169.254 — the cloud metadata address. This is the single
-    most dangerous consequence of the switch and it is tested rather than implied."""
+@pytest.mark.parametrize("ip", ["10.0.0.5", "127.0.0.1", "100.64.0.1", "224.0.0.1", "240.0.0.1"])
+def test_override_reaches_the_overridable_hard_denied_classes(ip):
     d = ENGINE.evaluate("app.customer.com", [ip], OVERRIDE_SCOPE)
     assert d.allowed and d.permits(Action.PORT_SCAN) and d.permits(Action.ACTIVE_SCAN)
+
+
+@pytest.mark.parametrize("ip", ["169.254.169.254", "169.254.0.1"])
+def test_override_never_reaches_link_local_or_the_metadata_address(ip):
+    """The one address the override cannot buy. 169.254.169.254 is not a property of
+    the target — it is the *worker's own* cloud metadata service, so reaching it would
+    make ExactSurface an SSRF vector against the machine running it and report that
+    instance's IAM credentials as a finding on someone else's domain. Every other
+    hard-denied class describes the target and is the operator's call; this one
+    describes us."""
+    d = ENGINE.evaluate("app.customer.com", [ip], OVERRIDE_SCOPE)
+    assert not d.allowed
+    assert "override" in d.reason.lower() and "metadata" in d.reason.lower()
+
+
+def test_a_mixed_result_set_containing_metadata_is_refused_under_override():
+    """DNS-rebinding guard: one poisoned answer must sink the host even with the
+    override on, or the carve-out is trivially defeated by adding a second A record."""
+    d = ENGINE.evaluate("app.customer.com", ["8.8.8.8", "169.254.169.254"], OVERRIDE_SCOPE)
+    assert not d.allowed
 
 
 def test_override_reaches_hosts_outside_the_verified_apex():
