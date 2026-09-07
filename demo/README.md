@@ -1,6 +1,6 @@
 # ExactSurface demo site — public, read-only, no backend
 
-**Not part of the product.** One of the three things the vendor hosts: the marketing
+**Not part of the product.** One of the three things the maintainer hosts: the marketing
 site, this demo, and the control plane. Customers run the real product themselves.
 
 ```bash

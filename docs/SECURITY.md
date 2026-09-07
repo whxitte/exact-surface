@@ -56,8 +56,8 @@ db.authorizations.insertOne({tenant_id:"t1", program_id:"p9", apex_verified:true
 ```
 
 …and the scanner will treat that domain as authorised. **There is no cryptographic
-step that could prevent this without the vendor becoming a gatekeeper of what every
-customer is allowed to scan** — which would mean phoning home with the customer's
+step that could prevent this without the project becoming a gatekeeper of what every
+operator is allowed to scan** — which would mean phoning home with the operator's
 domain list, and would break air-gapped deployment outright. We have chosen not to do
 that, and the trade is stated here rather than hidden.
 

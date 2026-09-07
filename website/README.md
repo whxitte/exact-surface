@@ -2,7 +2,7 @@
 
 Static HTML, no build step, no framework. `index.html` is the entire site.
 
-**Not part of the product.** One of the three things the vendor hosts (marketing site,
+**Not part of the product.** One of the three things the maintainer hosts (marketing site,
 the demo, the control plane); customers run the real product themselves. Never referenced
 by any product Dockerfile — see `tests/unit/test_wiring.py`.
 

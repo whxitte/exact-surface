@@ -98,7 +98,7 @@ async def test_s3_behind_cloudfront_detected_by_body():
         return body
 
     hit = await check_host(
-        "dev-quipolite.quipohealth.com",
+        "dev-assets.example.com",
         ["d123.cloudfront.net"],  # CloudFront CNAME — not itself a known service
         fetch=fetch,
     )
