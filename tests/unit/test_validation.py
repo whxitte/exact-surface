@@ -25,7 +25,7 @@ from core.validation import (
     [
         ("Example.COM", "example.com"),
         ("sub.example.com.", "sub.example.com"),
-        ("  quipohealth.com  ", "quipohealth.com"),
+        ("  padded-domain.com  ", "padded-domain.com"),
         ("a-b.co", "a-b.co"),
     ],
 )
