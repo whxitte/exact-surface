@@ -107,6 +107,15 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile.frontend
+      # MUST be explicit. Dockerfile.frontend ends with the `prebuilt` stage (CI uses
+      # it to reuse a .next built on the runner), and Docker builds the LAST stage when
+      # no target is given — so omitting this silently built `prebuilt` locally, which
+      # copies frontend/.next/standalone from the host. `.dockerignore` strips
+      # `**/node_modules`, which also matches that directory's bundled deps, so the
+      # image shipped server.js with no `next` module and died at startup with
+      # "Cannot find module 'next'". `runtime` builds from source — which is what a
+      # local stack should do anyway, or your edits never reach the image at all.
+      target: runtime
     environment:
       # Inside the compose network the API is reachable by service name.
       - API_PROXY_TARGET=http://api:8000
