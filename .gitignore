@@ -47,3 +47,10 @@ docker/cp-secrets/
 docker/cp.env
 cp-data/
 age-identity*.txt
+
+# Raw scan logs kept locally as a working reference. Never commit these: a real scan
+# log is a full external attack-surface map of whatever was scanned (hostnames, live
+# URLs, technologies), and this repo is public. It was committed once and had to be
+# removed from history.
+logs-for-claue.txt
+*-logs.txt
