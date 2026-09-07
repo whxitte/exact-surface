@@ -26,7 +26,7 @@ def init_sentry(settings: Settings | None = None) -> bool:
         dsn=settings.sentry_dsn.get_secret_value(),
         environment=settings.env,
         traces_sample_rate=0.1,
-        send_default_pii=False,  # never ship customer data to Sentry
+        send_default_pii=False,  # never ship operator data to Sentry
     )
     logger.info("sentry error reporting enabled (env={})", settings.env)
     return True

@@ -64,7 +64,7 @@ at managed instances (Atlas M10+, managed Redis) or in-cluster StatefulSets.
 
 ## Backups
 
-The database is a map of every customer's external attack surface — hosts, open
+The database is a map of every operator's external attack surface — hosts, open
 ports, unfixed findings. A plaintext dump of it is arguably a better target than
 the live system, so backups are encrypted with **`age` to a public recipient key**:
 

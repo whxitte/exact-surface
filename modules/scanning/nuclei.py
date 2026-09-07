@@ -235,7 +235,7 @@ async def list_templates(timeout: float = 120.0) -> list[dict]:
     """The installed template corpus as ``[{id, product, tags}, ...]``.
 
     Feeds nuclei_watch, which diffs this against the program's last-known set so a
-    newly published template that matches the customer's stack triggers a targeted
+    newly published template that matches the operator's stack triggers a targeted
     re-scan instead of a full one.
 
     Implemented by walking the template directory rather than parsing ``nuclei -tl``:

@@ -1,6 +1,6 @@
 # ExactSurface — deployment
 
-**This folder is the entire product as a customer receives it.** Copy it to a server,
+**This folder is the entire product as an operator receives it.** Copy it to a server,
 fill in `.env`, and start it. There is no source code here and nothing is compiled: the
 application ships as three pre-built container images, and everything in this directory
 is configuration.

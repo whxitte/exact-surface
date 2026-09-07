@@ -1,10 +1,10 @@
-"""Reverse-DNS stage — PTR sweep of ranges confirmed dedicated to the customer.
+"""Reverse-DNS stage — PTR sweep of ranges confirmed dedicated to the operator.
 
 The only stage whose input is a CIDR rather than a name, which makes it the one with
 the most room to go wrong. Two things keep it safe:
 
 * it reads ``scope.authorized_dedicated_cidrs``, which is populated only by the §9b
-  ASN/WHOIS confirmation path — never by a customer typing a range into a form;
+  ASN/WHOIS confirmation path — never by an operator typing a range into a form;
 * :func:`modules.recon.reverse_dns.expand` refuses anything wider than a /20, so an
   over-broad entry produces nothing rather than thousands of lookups.
 

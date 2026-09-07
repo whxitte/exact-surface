@@ -1,6 +1,6 @@
 """Encrypted MongoDB backup + restore (§7 Phase G, §9 retention).
 
-What this stores is a map of customers' external attack surface: every host, open
+What this stores is a map of operators' external attack surface: every host, open
 port, and unfixed finding. A plaintext dump of it is arguably a more valuable
 target than the live system, so encryption is not optional decoration here.
 
@@ -136,7 +136,7 @@ def _stamp_of(path: Path) -> datetime | None:
 def resolve_recipient(settings: Settings) -> str:
     """The age public key to encrypt to. Refuses to write plaintext in prod.
 
-    An unencrypted dump of every customer's attack surface is a worse artefact than
+    An unencrypted dump of every operator's attack surface is a worse artefact than
     no backup at all, so prod fails loudly rather than silently producing one.
     """
     recipient = (settings.backup_age_recipient or "").strip()
@@ -145,7 +145,7 @@ def resolve_recipient(settings: Settings) -> str:
     if settings.is_prod:
         raise RuntimeError(
             "EXACTSURFACE_BACKUP_AGE_RECIPIENT is unset — refusing to write an "
-            "unencrypted backup of customer attack-surface data in prod (§7/§9)"
+            "unencrypted backup of operator attack-surface data in prod (§7/§9)"
         )
     return ""
 

@@ -19,7 +19,7 @@ behave identically. :class:`DegradingBucketStore` wraps the Redis one so a Redis
 outage cannot stop scanning *or* silently lift the ceiling (ADR-0012).
 
 **Scope of this limiter.** It governs *in-process* HTTP that ExactSurface makes to a
-customer's targets — today the takeover probe and the secret fetcher. It cannot
+operator's targets — today the takeover probe and the secret fetcher. It cannot
 govern a subprocess: naabu, httpx, katana, feroxbuster and nuclei send their own
 packets and are capped by a derived ``-rate``/``-rl`` flag instead (ADR-0009).
 Adding an in-process request to a target without pacing it through here re-opens

@@ -69,7 +69,7 @@ async def signup_open(mongo: Any = Depends(get_mongo_dep)) -> dict:
 
     Unauthenticated on purpose — the login page calls this to decide whether to show
     "Create one" at all. Without it the link was unconditional: on any instance past
-    its first account, clicking it walked a customer through a full signup form only
+    its first account, clicking it walked an operator through a full signup form only
     to fail at submission with a 403. The signup endpoint's own check
     (self.count() > 0 and not public_signup_open) is unchanged and remains the actual
     enforcement — this only mirrors that decision so the UI can match reality instead
@@ -93,7 +93,7 @@ async def signup(
 
     # Self-hosted instances serve one organisation. The first signup bootstraps the
     # owner; after that public signup is closed, so someone who merely reaches this
-    # instance cannot create their own tenant on the customer's server. Additional
+    # instance cannot create their own tenant on the operator's server. Additional
     # people are added by the owner under Settings → members.
     tenants = TenantRepo.from_mongo(mongo)
     if not get_settings().public_signup_open and await tenants.count() > 0:

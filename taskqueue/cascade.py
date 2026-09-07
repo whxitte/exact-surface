@@ -2,7 +2,7 @@
 
 When a *scheduled* phase discovers something new, the downstream phases should run
 for JUST those new assets immediately — not wait for their own cadence tick. That
-is the fast attack-surface-discovery path the product promises: a customer adds a
+is the fast attack-surface-discovery path the product promises: an operator adds a
 domain and every follow-on phase chases each discovery through the attacker chain.
 
 The scheduler still drives periodic whole-program re-scans (cadence); this is the

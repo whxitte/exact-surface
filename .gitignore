@@ -39,7 +39,7 @@ frontend/out/
 scope_feeds_cache/
 for-claude-referece/
 
-# -- licensing / control plane secrets (NEVER commit) --
+# -- keys and local operator secrets (NEVER commit) --
 *.pem
 *.vlic
 license-keys/

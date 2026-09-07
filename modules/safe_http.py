@@ -1,6 +1,6 @@
 """A hardened aiohttp session for fetching attacker-influenced targets (§3.10).
 
-Every in-process fetch of a customer host — the takeover probe, the secret scanner —
+Every in-process fetch of a scanned host — the takeover probe, the secret scanner —
 goes through :func:`guarded_session`. It closes the SSRF hole described in
 :mod:`core.netguard` with two independent controls:
 

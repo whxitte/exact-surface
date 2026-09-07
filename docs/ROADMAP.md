@@ -1,9 +1,12 @@
-# P0 build specs — the deal-blockers to close before enterprise selling
+# Roadmap — the three biggest gaps
 
-These three gaps are the ones that turn a "yes" into a "not yet" during an enterprise
-evaluation. None is a research problem — each slots into machinery ExactSurface already has
-(JWT auth + RBAC, `IntegrationSecretRepo`, `ApiKeyRepo`, the SSRF-safe `guarded_post`,
-the arq worker). Build order below is by unblock-value.
+Not a wish list: these are the capabilities whose absence most often rules ExactSurface
+out for a team that otherwise wants it. None is a research problem — each slots into
+machinery that already exists (JWT auth + RBAC, `IntegrationSecretRepo`, `ApiKeyRepo`,
+the SSRF-safe `guarded_post`, the arq worker). Ordered by how much each unblocks.
+
+Contributions welcome. Read [`SECURITY.md`](SECURITY.md) first if the change touches a
+control, and open an issue before starting something this size.
 
 Grounding references (already in the codebase):
 - Auth/identity: `api/routes/auth.py`, `api/deps.py` (`Principal`, `get_principal`,
@@ -66,7 +69,7 @@ put staff in a tool. Today ExactSurface is email+password only.
 ## 2. Ticketing integrations  — *effort: M · gate: Business+*
 
 **Why it blocks deals:** "does it push to Jira?" is asked in nearly every eval. Findings
-must land in the customer's workflow, not just a webhook/Slack ping.
+must land in the operator's workflow, not just a webhook/Slack ping.
 
 ### Scope
 - **Jira Cloud** first (largest share), then **GitHub Issues**, **Linear**, **ServiceNow**.
@@ -90,7 +93,7 @@ must land in the customer's workflow, not just a webhook/Slack ping.
 - `modules/ticketing/{jira,github,linear,servicenow}.py` — pure `create(finding, config)
   -> {external_id,url}` functions, injected transport for offline tests (mirror
   `modules/notification/base.py`).
-- **All outbound HTTP through `modules/safe_http.guarded_post`** — a customer-supplied
+- **All outbound HTTP through `modules/safe_http.guarded_post`** — an operator-supplied
   Jira base URL is an SSRF surface exactly like a webhook. Do not use a plain client.
 - Auto-create runs in the notify pipeline / a dedicated arq task (reuse the
   `run_notify`/worker pattern), so ticket creation is async and never blocks a scan.

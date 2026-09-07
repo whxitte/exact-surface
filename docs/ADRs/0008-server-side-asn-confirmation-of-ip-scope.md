@@ -5,8 +5,8 @@ Status: Accepted
 
 ## Context
 
-§9b says a resolved IP must be confirmed as the customer's — "via WHOIS/ASN
-ownership matching the customer's verified org (via `asnmap`), recorded in the
+§9b says a resolved IP must be confirmed as the operator's — "via WHOIS/ASN
+ownership matching the operator's verified org (via `asnmap`), recorded in the
 authorization record" — before it may be port-scanned or aggressively probed.
 
 The implementation didn't do that. `AuthorizationCreate.ip_scope` accepted full
@@ -52,7 +52,7 @@ Split *requesting* from *granting*, and put the grant on the worker.
    dedicated_nets)`. Defence in depth against a bad or stale entry.
 5. **Fail safe.** asnmap missing/timeout/error ⇒ nothing confirmed. Losing ASN
    data must never *grant* access.
-6. **Re-confirm every run**, so a range the customer stops announcing decays back
+6. **Re-confirm every run**, so a range the operator stops announcing decays back
    to HTTP-only automatically.
 
 ## Consequences
@@ -64,10 +64,10 @@ already is, so the API image stays slim per §3.8.
 **Cost.** An `asnmap` call per full run (cacheable later if it hurts).
 
 **Accepted limitation.** Apex-ASN is a *proxy* for org ownership, not a proof of
-it. A CDN-fronted apex announces the CDN's ASN, so that customer's real origin
+it. A CDN-fronted apex announces the CDN's ASN, so that operator's real origin
 block will not auto-confirm and stays HTTP-only. We accept a false-negative
 (under-scanning) over a false-positive (scanning someone else's network). Those
-customers use the explicit `scan_shared_infra` opt-in.
+operators use the explicit `scan_shared_infra` opt-in.
 
 **Test note.** `test_build_program_scope_extracts_dedicated_cidrs` had *encoded
 the vulnerability* — it asserted a client-supplied `confirmed_via="whois:AS14061"`
@@ -80,9 +80,9 @@ self-declared-is-ignored regression guard. A green test was certifying the hole.
   contradicting §3.8, and puts a subprocess in the request path.
 - **Async "pending confirmation" job.** More moving parts than confirming inline
   on the worker, which already runs per scan and must re-check anyway.
-- **Match on org name via `asnmap -org`.** We don't reliably know the customer's
+- **Match on org name via `asnmap -org`.** We don't reliably know the operator's
   legal org name; the apex's ASN is the signal we actually have.
-- **Trust the customer's attestation + ToS.** This is what we had. A signature
+- **Trust the operator's attestation + ToS.** This is what we had. A signature
   doesn't stop the packets, and the abuse report lands on us.
 
 ## Note (2026-08-01): organisation-name lookup

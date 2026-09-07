@@ -81,7 +81,7 @@ async def run_tool(
     except asyncio.CancelledError:
         # A user-requested stop (or an outer cancel) must actually stop the scanning:
         # without this the coroutine unwinds but the child keeps running and keeps
-        # sending traffic to the customer's targets. Kill and do NOT await here — we
+        # sending traffic to the operator's targets. Kill and do NOT await here — we
         # are already unwinding, and awaiting would re-raise immediately.
         proc.kill()
         logger.info("tool {} killed: run cancelled", binary)

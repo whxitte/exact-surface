@@ -46,7 +46,7 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
         "cloudlist",
         "2",
         Action.PASSIVE_RECON,
-        note="customer's OWN cloud credentials, read-only, never leave their deployment",
+        note="operator's OWN cloud credentials, read-only, never leave their deployment",
     ),
     ModuleSpec(
         "alterx",
@@ -158,9 +158,9 @@ MODULE_REGISTRY: tuple[ModuleSpec, ...] = (
         "cloud_buckets",
         "osint",
         # No binary: the permutation half of §6 module 18 is pure HTTP against the
-        # providers' public endpoints. The `cloudlist` half (enumerating a customer's
+        # providers' public endpoints. The `cloudlist` half (enumerating an operator's
         # cloud assets via provider APIs) is NOT implemented — it would require the
-        # customer's cloud credentials, a trust escalation we have not taken.
+        # operator's cloud credentials, a trust escalation we have not taken.
         None,
         "2",
         Action.PASSIVE_RECON,

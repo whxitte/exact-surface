@@ -1,8 +1,8 @@
-"""Cloud asset enumeration stage — what the customer's cloud accounts say they own.
+"""Cloud asset enumeration stage — what the operator's cloud accounts say they own.
 
 The strongest ownership signal in the product: the provider itself confirms these are
-the customer's resources. Runs only when a cloudlist provider config is configured, and
-is opt-in because it needs credentials the customer must deliberately supply.
+the operator's resources. Runs only when a cloudlist provider config is configured, and
+is opt-in because it needs credentials the operator must deliberately supply.
 
 Discovered names still pass through the scope engine before anything is scanned. A
 provider saying "this is yours" answers ownership, not authorisation — a shared-tenancy
@@ -35,7 +35,7 @@ async def run_cloud_assets(
     config_path: str | None = None,
     enumerate_fn=None,
 ) -> dict:
-    """Enumerate the customer's cloud assets and record the in-scope ones."""
+    """Enumerate the operator's cloud assets and record the in-scope ones."""
     enumerate_fn = enumerate_fn or cloudlist.enumerate_assets
 
     if config_path is None:

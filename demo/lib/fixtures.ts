@@ -5874,7 +5874,7 @@ export const PLAYGROUND_NODES = [
     ],
     "pipeline": "cloud_assets",
     "impl": "",
-    "caution": "set up by whoever deployed this instance, not from Settings \u2014 see CLIENT_GUIDE.md \u00a75.9 (EXACTSURFACE_CLOUDLIST_CONFIG)"
+    "caution": "set up by whoever deployed this instance, not from Settings \u2014 see OPERATIONS.md \u00a75.9 (EXACTSURFACE_CLOUDLIST_CONFIG)"
   },
   {
     "key": "pipeline:uncover",

@@ -6,7 +6,7 @@ how to build and use it.
 
 > **The workbench is not part of ExactSurface.** It is never built into a shipped image,
 > it adds no endpoint to the product's API, and it refuses to start outside a dev
-> environment. If you are a customer reading this: this tool is not in your deployment.
+> environment. If you are an operator reading this: this tool is not in your deployment.
 
 ---
 

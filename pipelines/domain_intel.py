@@ -3,7 +3,7 @@
 The two things an attacker learns about a domain before touching a single host: can I
 spoof mail from it, and is the registration itself weak (expiring, unlocked)? Both are
 answered from DNS and a public registry, so this stage is fully passive — no traffic to
-the customer's infrastructure at all.
+the operator's infrastructure at all.
 
 Cheap, fast, and high-signal: it usually produces the first real findings of a scan,
 often before subdomain enumeration has finished.

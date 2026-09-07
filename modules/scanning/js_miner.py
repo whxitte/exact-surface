@@ -211,7 +211,7 @@ _INTEREST: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/(?:upload|file|import|export|backup|dump)\b", re.I), "file-handling"),
     (re.compile(r"/(?:graphql|graphiql)\b", re.I), "graphql"),
     (re.compile(r"/(?:swagger|openapi|api-docs|redoc)\b", re.I), "api-docs"),
-    (re.compile(r"/(?:user|account|profile|customer)s?/", re.I), "user-data"),
+    (re.compile(r"/(?:user|account|profile|operator)s?/", re.I), "user-data"),
     (re.compile(r"/(?:payment|billing|invoice|charge|card)\b", re.I), "payment"),
     (re.compile(r"/\.(?:git|env|svn|ds_store)", re.I), "exposure"),
     (re.compile(r"/(?:key|secret|credential|password|passwd)\b", re.I), "credentials"),
@@ -307,7 +307,7 @@ def mine(js_text: str, source_url: str, *, own_domains: tuple[str, ...] = ()) ->
 
     ``own_domains`` (the program's apexes) marks which discovered hostnames belong to
     the target — those are new attack surface; the rest are third-party dependencies,
-    which are useful context but not the customer's to fix.
+    which are useful context but not the operator's to fix.
     """
     result = MinedFile(url=source_url, size=len(js_text))
     origin = f"{urlsplit(source_url).scheme}://{urlsplit(source_url).netloc}"

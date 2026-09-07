@@ -122,7 +122,7 @@ Subdomain discovery and live-host probing are required and cannot be disabled.
 | New-template watch | Alerts when a newly published nuclei template starts matching your stack. Opt-in. |
 | Search-engine exposure | Dorking. Opt-in (needs a search API key). |
 | **Dependency confusion** | Internal package names in your public JS that nobody has claimed on npm — an attacker who publishes one lands code in your build. |
-| **Lookalike domains** | Registered typosquats aimed at phishing your staff and customers; MX records rank higher. Opt-in (resolves ~600 names per run). |
+| **Lookalike domains** | Registered typosquats aimed at phishing your staff and operators; MX records rank higher. Opt-in (resolves ~600 names per run). |
 | Risk correlation | Groups findings per host into ranked attack chains, and retells them as an **attack path** in attacker order (needs 2+ phases on one host — a single finding is never called a chain). |
 | Alerting | Delivers new findings to your channels. |
 
@@ -197,7 +197,9 @@ real images, not merely asserted.
 | [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) | roles, images, sizing, observability (scraping only the API tells you nothing about scanning) |
 | [`deploy/README.md`](deploy/README.md) | the deployment folder itself: what comes up, configuration, troubleshooting |
 | [`docs/DEVTOOLS.md`](docs/DEVTOOLS.md) | the Workbench — why it is a separate app and how it is contained |
-| [`docs/OWNER_RUNBOOK.md`](docs/OWNER_RUNBOOK.md) | cutting a release |
+| [`docs/OPERATIONS.md`](docs/OPERATIONS.md) | running it in production: requirements, install, backups, upgrades, scaling |
+| [`docs/RELEASING.md`](docs/RELEASING.md) | cutting a release |
+| [`docs/ROADMAP.md`](docs/ROADMAP.md) | the biggest gaps, and where to start if you want to close one |
 | [`CHANGELOG.md`](CHANGELOG.md) | what changed in each version |
 
 New here? `ARCHITECTURE.md` → `SECURITY.md` §2 (why domain control ≠ scanning

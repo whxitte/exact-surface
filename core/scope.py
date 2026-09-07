@@ -20,7 +20,7 @@ Guarantees (proven by tests in ``tests/unit/test_scope.py``):
 * A host on the program's exclusion list is denied.
 * CDN / cloud-shared IPs are permitted **HTTP-layer probing only**; port
   scanning, content discovery, and active scanning are withheld unless every
-  resolved IP is confirmed dedicated to the customer.
+  resolved IP is confirmed dedicated to the operator.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ class ProgramScope:
     excluded_hosts: frozenset[str] = frozenset()
     excluded_cidrs: tuple[str, ...] = ()
     authorized_dedicated_cidrs: tuple[str, ...] = ()
-    #: When the customer explicitly attests they own the cloud infra their domain
+    #: When the operator explicitly attests they own the cloud infra their domain
     #: runs on (§9b), grant the full action set to CLOUD_SHARED/PUBLIC IPs too — so
     #: ports/content/active-scan run on their own AWS/GCP/Azure assets. Third-party
     #: CDN edges (Cloudflare/Akamai/Fastly) and every HARD_DENY class stay locked.
@@ -310,16 +310,16 @@ class ScopeEngine:
                     host_l, False, f"IP {ip} on program CIDR exclusion list", ip_class=cls
                 )
 
-            # 5. Is this IP confirmed dedicated to the customer? (Lab-mode private counts.)
+            # 5. Is this IP confirmed dedicated to the operator? (Lab-mode private counts.)
             #    scan_shared_infra opt-in extends "dedicated" to generic cloud/public
-            #    IPs (NOT third-party CDN edges), for customers who own their cloud.
+            #    IPs (NOT third-party CDN edges), for operators who own their cloud.
             shared_ok = scope.scan_shared_infra and cls in (
                 IpClass.CLOUD_SHARED,
                 IpClass.PUBLIC,
             )
             # A third-party CDN edge is NEVER promotable to dedicated, even if it
             # falls inside an authorized CIDR — that infrastructure belongs to
-            # Cloudflare/Akamai/Fastly, not the customer (§9b). Defence in depth:
+            # Cloudflare/Akamai/Fastly, not the operator (§9b). Defence in depth:
             # authorized_dedicated_cidrs should already be ASN-confirmed, but a bad
             # or stale entry must not unlock aggressive scanning of a CDN.
             in_dedicated_cidr = cls != IpClass.CDN and any(
@@ -397,13 +397,13 @@ def confirm_ip_scope(
 ) -> list[dict]:
     """Decide, **server-side**, what each requested CIDR is actually allowed (§9b step 3).
 
-    A customer proving DNS control over an apex does not authorise scanning every
+    An operator proving DNS control over an apex does not authorise scanning every
     IP that apex's subdomains resolve to. So the client only ever *requests* CIDRs;
     this function assigns the class, action set, and ``confirmed_via`` — the client
     never supplies them.
 
     A CIDR is promoted to ``DEDICATED`` (full actions) only when it sits inside a
-    range genuinely announced by the ASN behind the customer's verified apex
+    range genuinely announced by the ASN behind the operator's verified apex
     (*apex_asn_ranges*, from ``asnmap``). Otherwise it stays HTTP-layer only.
     Non-routable/internal ranges are rejected outright, and a CDN edge is never
     dedicated even if the ASN matches — that range belongs to the CDN.

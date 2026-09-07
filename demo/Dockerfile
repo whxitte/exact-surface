@@ -1,7 +1,7 @@
 # The public read-only demo — https://demo.exactsurface.com
 #
-# NOT part of the product. This is one of the three things the vendor hosts (marketing
-# site, this demo, control plane); customers run the real product themselves.
+# NOT part of the product. It is one of the two things the maintainer hosts (the project
+# site and this demo); everyone else self-hosts the real thing.
 #
 # It is the **real frontend** with exactly one file replaced: `lib/transport.ts`, the
 # module every API call goes through. The demo version serves static fixtures instead

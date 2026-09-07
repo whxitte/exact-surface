@@ -84,18 +84,18 @@ respect. All are re-enforced worker-side.
 2. **Plan quota** — Free 1 / Pro 5 / Business 25 / Enterprise ∞. Over-quota
    programs are never enqueued and `run_program` refuses them. Unknown plan →
    FREE, never unlimited.
-3. **IP-scope confirmation** — a customer-listed CIDR is a *request*. Only
+3. **IP-scope confirmation** — an operator-listed CIDR is a *request*. Only
    `asnmap`-confirmed ranges become `dedicated`. ADR-0008.
 4. **Scope decision** — hard-deny classes (RFC1918/metadata/…) are never
    overridable; CDN/cloud-shared get HTTP-layer only; full actions require
    confirmed-dedicated.
-5. **Politeness** — ≤10 rps/target. In-process requests at customer hosts are paced
+5. **Politeness** — ≤10 rps/target. In-process requests at scanned hosts are paced
    by the token bucket, shared across the fleet via Redis and degrading to a
    divided local share if Redis dies (ADR-0012). Every scanner subprocess
    (naabu/httpx/katana/nuclei/feroxbuster/ffuf) gets a rate flag derived from the
    same cap (ADR-0009 + ADR-0013), since the bucket cannot see a subprocess's
    sockets. Both published to `/metrics` and covered by one alert. Not covered:
-   tools that talk to third-party APIs/resolvers rather than customer hosts
+   tools that talk to third-party APIs/resolvers rather than scanned hosts
    (subfinder, dnsx, gau, asnmap).
 
 ---
@@ -217,7 +217,7 @@ just enough of motor; every tool wrapper takes an injectable runner.
 ## Known gaps (keep honest)
 
 - **The authorisation chain does not bind the deployment owner.** Verification state
-  lives in a database the customer runs, so somebody with shell access can write a
+  lives in a database the operator runs, so somebody with shell access can write a
   verified program by hand. This is inherent to self-hosted software and is documented
   in full at [`SECURITY.md` §2b](SECURITY.md) — including the instruction not to
   market it as something it is not.

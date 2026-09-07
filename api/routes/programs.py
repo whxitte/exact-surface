@@ -405,7 +405,7 @@ async def create_authorization(
     # HTTP-layer-only, and are promoted to DEDICATED solely by the worker after
     # asnmap confirms them against the verified apex's announced ASN ranges — the
     # API host has no asnmap (§3.8 keeps it separate), and self-attestation must
-    # never grant aggressive scanning of infrastructure the customer may not own.
+    # never grant aggressive scanning of infrastructure the operator may not own.
     requested = [
         IpScopeEntry(
             cidr=cidr,
@@ -448,7 +448,7 @@ async def set_scan_config(
     principal: Principal = Depends(get_principal),
     mongo: Any = Depends(get_mongo_dep),
 ) -> dict:
-    """Toggle the §9b opt-in: when on, the customer attests they own the cloud
+    """Toggle the §9b opt-in: when on, the operator attests they own the cloud
     infra their domain runs on, so ports/content/active scans run on cloud/public
     IPs too (third-party CDNs and internal ranges stay locked by the scope engine)."""
     await ProgramRepo.from_mongo(mongo).set_scan_shared_infra(

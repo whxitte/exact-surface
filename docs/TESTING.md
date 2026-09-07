@@ -1,167 +1,164 @@
-# Testing ExactSurface on a MacBook (Apple Silicon) + Kali VM
+# Testing ExactSurface end to end
 
-This guide gets you from zero to a full end-to-end test: sign up, add a target you
-control, watch the continuous pipeline discover → probe → scan → find an exposure,
-get an alert, and download a report.
+From zero to a full run: sign up, add a target you control, watch the pipeline go
+discover → probe → scan → find an exposure, get an alert, and download a report.
 
-Your setup: **MacBook M-series (ARM64)** + **Kali Linux in VMware Fusion**. Both
-are ARM64 — the images build natively (the feroxbuster download is arch-aware).
+Everything here works on Linux, macOS (Intel or Apple silicon) and Windows via WSL2.
+The images build natively on both amd64 and arm64 — the feroxbuster download is
+architecture-aware — so nothing below is arch-specific.
 
 ---
 
 ## Part 1 — Two ways to run the app
 
-> **For true end-to-end testing use Option B** — one command brings up the WHOLE
-> stack (frontend, API, workers that run the real recon tools, the continuous
-> scheduler, Mongo, Redis). Option A is only a fast UI/API smoke test with seeded
-> data and **does not run any real scans** (no workers, no tool image).
+> **For a real end-to-end test use Option B.** One command brings up the whole stack,
+> including the workers that run the recon tools and the scheduler that drives
+> continuous scanning. Option A is a fast UI/API smoke test against seeded data and
+> **runs no scans at all** — no workers, no tool image.
 
-### Option A — Quick smoke test (UI + API only, NO real scans)
-Fastest way to click through the product with seeded demo data. Runs only the
-datastores in Docker; API + frontend run natively on your Mac. No scanning happens.
+### Option A — Smoke test (UI + API only, no scanning)
+
+Fastest way to click through the product. Only the datastores run in Docker; the API
+and frontend run natively.
 
 ```bash
-cd ~/Projects/exactsurface
+git clone https://github.com/whxitte/exact-surface.git && cd exact-surface
 
 # 1. datastores only
 docker compose -f docker/docker-compose.yml up -d mongo redis
 
-# 2. install the runtime deps the live API needs (the test venv doesn't have them)
-python3 -m venv .venv 2>/dev/null; .venv/bin/pip install -e . 
+# 2. runtime dependencies (the test venv does not have them)
+python3 -m venv .venv; .venv/bin/pip install -e .
 
-# 3. env
-cp .env.example .env            # fine as-is for local dev
+# 3. configuration — the defaults are fine for local dev
+cp .env.example .env
 
-# 4. run the API (leave this terminal open)
-make api                        # → http://localhost:8000  (docs at /docs)
+# 4. the API (leave this terminal open)
+make api                        # → http://localhost:8000, docs at /docs
 
 # 5. seed a demo tenant with sample findings (new terminal)
 make seed                       # login: demo@exactsurface.com / demo-password-123
 
-# 6. run the frontend (new terminal)
+# 6. the frontend (new terminal)
 cd frontend && npm install && npm run dev   # → http://localhost:3000
 ```
 
-Open **http://localhost:3000**, log in with **demo@exactsurface.com / demo-password-123**.
-You'll immediately see the seeded program, a critical `.env` finding, a masked
-secret, and can download HackerOne/Executive/HTML/PDF reports and add notification
-channels. No real scanning happens on this path.
+Open http://localhost:3000 and sign in. You get the seeded program, a critical `.env`
+finding, a masked secret, downloadable HackerOne/Executive/HTML/PDF reports, and the
+notification settings. No scanning happens on this path.
 
-### Option B — Full end-to-end (EVERYTHING live) ✅
-One command builds and starts all 7 services: **frontend, api, worker(s),
-scheduler, pipeline, mongo, redis**. Workers run the real recon tools; the
-scheduler drives continuous scanning.
+### Option B — The full stack
+
+One command builds and starts everything: frontend, api, worker(s), scheduler,
+pipeline, mongo, redis.
 
 ```bash
-cd ~/Projects/exactsurface
 cp .env.example .env
-docker compose -f docker/docker-compose.yml up --build   # first build is slow
+docker compose -f docker/docker-compose.yml up --build
 ```
-- Frontend → http://localhost:3000  ·  API → http://localhost:8000 (docs at /docs)
-- The **scheduler** enqueues jobs on cadence; **workers** execute real scans.
-- Seed demo data into the running stack (new terminal):
+
+- Frontend → http://localhost:3000 · API → http://localhost:8000 (docs at `/docs`)
+- The **scheduler** enqueues jobs on cadence; **workers** execute the real scans.
+- Seed demo data into the running stack:
   `docker compose -f docker/docker-compose.yml exec api python -m scripts.seed_dev`
-- Watch the workers scan:
+- Watch it work:
   `docker compose -f docker/docker-compose.yml logs -f worker scheduler`
 
-> The first build compiles the Go recon tools and pre-fetches nuclei templates —
-> expect **5–15 min** and a few GB. Subsequent starts are fast.
->
-> To actually scan a target, add + verify + authorize a program in the UI (see
-> Part 2). For a local lab VM set `EXACTSURFACE_LAB_ALLOW_PRIVATE=true` in `.env`
-> before `up`.
+> The first build compiles the Go recon tools and pre-fetches nuclei templates — expect
+> **5–15 minutes** and a few GB. Later starts are fast.
 
 ---
 
-## Part 2 — Testing REAL scans safely (the important part)
+## Part 2 — Scanning something, safely
 
-ExactSurface only scans what you **verify and authorize**, and its scope engine
-**hard-denies private IPs by default**. To test the real pipeline you need a
-target you legally control. Three options, easiest first.
+This is the part that matters. ExactSurface scans only what you **verify and
+authorize**, and its scope engine **hard-denies private IPs by default**. To exercise
+the real pipeline you need a target you legally control. Three options, easiest first.
 
-### Target option 1 — A vulnerable app in your Kali VM (local lab)
-This is the most complete test and uses your Kali VM as the victim.
+### Option 1 — A local lab VM
 
-1. **In Kali**, run a deliberately-vulnerable app:
+The most complete test, and the only one that needs no public infrastructure. Any
+second machine or VM on your network works — a container on the same host does not,
+because the scope engine will not resolve it.
+
+1. **On the lab machine**, serve something worth finding:
    ```bash
-   # OWASP Juice Shop (quickest)
-   sudo docker run -d -p 3000:3000 bkimminich/juice-shop
-   # …or DVWA, or just expose a fake secret:
+   # OWASP Juice Shop is the quickest
+   docker run -d -p 3000:3000 bkimminich/juice-shop
+   # …or expose a fake secret for the secrets module to catch
    mkdir -p /var/www/html && echo "AWS_SECRET_ACCESS_KEY=AKIAIOSFODNN7EXAMPLE" > /var/www/html/.env
    python3 -m http.server 8080 --directory /var/www/html
    ```
-2. **Find the Kali VM's IP** (from Kali): `ip a` → e.g. `192.168.64.5`.
-3. **Enable lab mode** on the Mac (dev-only; lets ExactSurface scan private IPs):
-   in `.env` set `EXACTSURFACE_LAB_ALLOW_PRIVATE=true` and restart the API/stack.
-4. **Make a hostname** for it. ExactSurface verifies *domains*, so add a line to your
-   Mac's `/etc/hosts`:
+2. **Get its IP** (`ip a` on the lab machine) — say `192.168.64.5`.
+3. **Enable lab mode** on the host running ExactSurface: set
+   `EXACTSURFACE_LAB_ALLOW_PRIVATE=true` in `.env` and restart the stack. This is a
+   development switch and must never be set on an internet-facing instance.
+4. **Give it a hostname.** ExactSurface verifies *domains*, so add to the ExactSurface
+   host's `/etc/hosts`:
    ```
    192.168.64.5   lab.local www.lab.local
    ```
-   (ExactSurface resolves via DNS-over-HTTPS for *verification*, but scanning uses the
-   resolved IP; for a pure-IP lab, use Target option 2's IP note below.)
-5. In the UI: **add program** `lab.local`. Because public DNS can't verify a
-   made-up domain, seed an already-verified+authorized program for it instead:
+5. **Seed it as already verified and authorized.** Public DNS cannot verify a made-up
+   name, so create the program with the authorization record already in place:
    ```bash
-   .venv/bin/python -c "import asyncio; from db.mongo import get_mongo; from scripts.seed_dev import seed; \
-     m=get_mongo(); asyncio.run((lambda: (m.connect(), seed(m, apex='lab.local')))[1]())" 2>/dev/null \
-     || make seed   # simplest: seed then edit the program's apex in the UI is not exposed, so:
+   docker compose -f docker/docker-compose.yml exec api python -m scripts.seed_dev
    ```
-   Simpler: run `python -m scripts.seed_dev` after setting `APEX=lab.local` — or
-   just trigger a scan via the API once the program is authorized (see below).
-6. **Trigger a scan** and watch findings appear (Findings tab / Discord alert).
+   then follow the DNS-verification bypass recipe in [`FAQ.md`](FAQ.md#skipping-dns-verification-on-a-local-instance),
+   substituting `lab.local` for the domain.
+6. **Trigger a scan** from the program page and watch findings arrive.
 
-> Lab mode only relaxes **RFC1918 private** ranges. Loopback, the cloud metadata
-> IP (169.254.169.254), CGNAT, and multicast are **still denied** — a safety
-> property proven by `tests/unit/test_scope.py`.
+> Lab mode relaxes **RFC1918 private ranges only**. Loopback, the cloud metadata
+> address (169.254.169.254), CGNAT and multicast stay denied — a property
+> `tests/unit/test_scope.py` proves rather than assumes.
 
-### Target option 2 — A public host you own
-If you have any domain + a small VPS (DigitalOcean/Hetzner droplet), point the
-domain at it, add it as a program in ExactSurface, complete **DNS-TXT verification**
-(add the `_exactsurface` TXT record it gives you), authorize, and scan. This exercises
-the real verification flow. Keep `EXACTSURFACE_LAB_ALLOW_PRIVATE=false`.
+### Option 2 — A public host you own
 
-### Target option 3 — Sanctioned scan targets (no setup)
-- Port scanning: `scanme.nmap.org` (nmap explicitly permits scanning it).
-- Web: only scan sites you own — do **not** point ExactSurface at third-party sites.
+A domain plus any small VPS. Point the domain at it, add it as a program, complete
+**DNS-TXT verification** with the `_exactsurface` record it gives you, authorize, and
+scan. This is the only option that exercises the real verification flow. Leave
+`EXACTSURFACE_LAB_ALLOW_PRIVATE=false`.
+
+### Option 3 — Sanctioned targets
+
+- Port scanning: `scanme.nmap.org`, which nmap's operators explicitly permit.
+- Web: only hosts you own. Do not point ExactSurface at a third party, however
+  tempting the test case.
 
 ---
 
-## Part 3 — What to verify
+## Part 3 — What to check
 
 | Feature | How to test |
 |---|---|
-| Auth + multi-tenant | Sign up two orgs; confirm one can't see the other's programs |
+| Auth + multi-tenancy | Sign up two organisations; confirm neither can see the other's programs |
 | Domain verification | Add a domain you own → DNS-TXT challenge → verify |
 | Authorization gate | Try "Run scan" before authorizing → blocked (409) |
-| Continuous scan | Authorize → scheduler runs ingest→probe→scan on cadence |
-| Findings + detail | Click a finding → description, reproduction, references |
-| Correlation | An asset with secret + finding shows as a chain in reports |
-| Notifications | Settings → add a Discord webhook → new finding pings it (masked) |
+| Continuous scanning | Authorize → the scheduler runs ingest→probe→scan on cadence |
+| Findings detail | Click a finding → description, reproduction, references |
+| Correlation | A host with a secret *and* a finding appears as a chain in reports |
+| Notifications | Settings → add a webhook → a new finding pings it, masked |
 | Reports | Program page → download HackerOne / Executive / HTML / PDF |
-| Secret masking | Confirm alerts/reports show `AKIA••••LE`, never the full key |
+| Secret masking | Confirm alerts and reports show `AKIA••••LE`, never the full key |
 
 ---
 
-## Part 4 — Health & troubleshooting
+## Part 4 — Health and troubleshooting
 
 ```bash
-# pre-flight: tools + config + scope feeds (no network)
+# pre-flight: tools, config and scope feeds, with no network
 docker compose -f docker/docker-compose.yml run --rm pipeline python -m daemon.main --dry-run
 # liveness / readiness / metrics
 curl localhost:8000/healthz ; curl localhost:8000/readyz ; curl localhost:8000/metrics
-# backend unit tests (fast, no services needed)
+# the test suite (fast, needs no services)
 .venv/bin/python -m pytest -q
 ```
 
-Common issues:
-- **API 500s / `/readyz` 503**: Mongo or Redis not up. `docker compose ps`.
-- **Scan does nothing**: program not verified or not authorized; or target is a
-  private IP and `EXACTSURFACE_LAB_ALLOW_PRIVATE` is false.
-- **Frontend can't reach API**: it proxies `/api/*` → `http://localhost:8000`
-  (set `API_PROXY_TARGET` in `frontend/.env` to change).
-- **Slow first Docker build**: normal — it compiles the Go recon tools.
+| Symptom | Usually |
+|---|---|
+| API 500s, `/readyz` 503 | Mongo or Redis is not up — `docker compose ps` |
+| A scan does nothing | The program is not verified or not authorized; or the target is a private IP and `EXACTSURFACE_LAB_ALLOW_PRIVATE` is false |
+| Frontend cannot reach the API | It proxies `/api/*` to `http://localhost:8000`; set `API_PROXY_TARGET` to change |
+| Very slow first Docker build | Normal — it is compiling the Go recon tools |
 
-Ethics: ExactSurface is **detection only** and scans only verified, authorized targets.
-Keep it that way — scan your own lab, your own domains, or explicitly sanctioned
-hosts.
+**Ethics.** ExactSurface is detection-only and scans only verified, authorized targets.
+Keep it that way: your own lab, your own domains, or explicitly sanctioned hosts.

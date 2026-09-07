@@ -256,7 +256,7 @@ jobs:
             echo "docker compose up -d"
             echo '```'
             echo
-            echo "Full instructions: \`docs/CLIENT_GUIDE.md\`."
+            echo "Full instructions: \`docs/OPERATIONS.md\`."
           } > notes.md
 
       # What the customer actually receives. Assembled from the same files we run
@@ -276,7 +276,7 @@ jobs:
           # docker/, and Docker would have created a *directory* in place of the
           # missing config rather than erroring usefully).
           cp -r deploy "$DIR"
-          cp docs/CLIENT_GUIDE.md "$DIR/INSTALL.md"
+          cp docs/OPERATIONS.md "$DIR/INSTALL.md"
 
           # Pin the bundle to the version it was cut for. A bundle whose .env.example
           # names an older release would quietly install the wrong images.

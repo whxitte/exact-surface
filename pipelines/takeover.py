@@ -41,7 +41,7 @@ async def run_takeover(
     limiter: PolitenessLimiter | None = None,
 ) -> dict:
     tid = tenant.tenant_id
-    # This stage makes in-process HTTP requests straight at customer hosts, and ran
+    # This stage makes in-process HTTP requests straight at scanned hosts, and ran
     # unthrottled until ADR-0012 — the limiter existed but nothing ever called it.
     # Wrapping the injected fetch paces every probe without touching the module.
     if limiter is not None:

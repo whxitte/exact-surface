@@ -4,7 +4,7 @@ Status: Accepted
 
 ## Context
 An EASM platform that scans the wrong thing — an internal IP, a cloud metadata
-endpoint, a CDN it doesn't own, a host outside the customer's verified scope — is
+endpoint, a CDN it doesn't own, a host outside the operator's verified scope — is
 a legal and operational catastrophe. Scattering these checks across modules
 guarantees one will be forgotten.
 
@@ -16,7 +16,7 @@ construction: RFC1918, loopback, link-local (incl. the metadata IP
 if a verified subdomain resolves to one (a DNS-rebinding guard). Hosts outside a
 verified apex, or on the exclusion list, are refused. CDN/cloud-shared IPs get
 HTTP-layer probing only; the full action set requires every resolved IP to be
-confirmed dedicated to the customer.
+confirmed dedicated to the operator.
 
 ## Consequences
 - Safety is testable: `tests/unit/test_scope.py` exhaustively proves the denials,

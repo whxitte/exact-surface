@@ -8,7 +8,7 @@ forgotten and an attacker has not.
 **This module is the sharpest edge in the product**, because the input is a CIDR rather
 than a name, and a CIDR is easy to get wrong in a way that scans somebody else's
 network. So it only ever runs over ranges the §9b authorisation path has confirmed as
-dedicated to this customer (asnmap-verified, never self-attested), and
+dedicated to this operator (asnmap-verified, never self-attested), and
 :func:`expand` refuses anything larger than a /20 outright.
 
 PTR lookups are ordinary DNS queries against public resolvers — nothing is sent to the
@@ -41,7 +41,7 @@ class ReverseHit:
     @property
     def is_new_surface(self) -> bool:
         """In-scope names found this way are the interesting ones: they are assets the
-        customer owns that forward enumeration missed entirely."""
+        operator owns that forward enumeration missed entirely."""
         return self.in_scope
 
 
