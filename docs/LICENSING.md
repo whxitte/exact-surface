@@ -1,21 +1,41 @@
-# ExactSurface licensing — Free Self-Hosted Edition
+# Licensing
 
-ExactSurface self-hosted deployments are **100% free with unlimited capabilities**. There are no license keys required, no subscription checks, no paywalls, and no domain or scan restrictions. All modules and features are unlocked out of the box.
+ExactSurface is released under the **Apache License 2.0** — see [`../LICENSE`](../LICENSE).
 
-## Licensing Model
+You may run, modify and redistribute it, including commercially and inside closed-source
+products, subject to the attribution and patent terms in the licence. There is no
+separate commercial edition, and nothing in the codebase phones home.
 
-Once the client purchases the software/image from the vendor directly, they can deploy and run ExactSurface on their own infrastructure without any recurring subscription enforcement.
+## No runtime restrictions
 
-| Metric / Capability | Self-Hosted Status |
+Earlier builds carried a licence-key check and a control plane that could degrade an
+instance to read-only. **Both were removed in 1.1.0.** There are no keys, no
+subscription checks, no paywalls, and no domain or scan limits. Every module is unlocked
+out of the box.
+
+| Capability | Status |
 |---|---|
-| **Domains & Programs** | Unlimited |
-| **Users & Members** | Unlimited |
-| **API Keys** | Unlimited |
-| **Scans & Cadence** | Unlimited (no interval floor) |
-| **403 Bypass & Reports** | Included |
-| **Detection Modules** | All 28+ modules fully unlocked & togglable |
-| **Read-only degradation** | Disabled |
+| Domains & programs | Unlimited |
+| Users & members | Unlimited |
+| API keys | Unlimited |
+| Scans & cadence | Unlimited — no interval floor |
+| History retention | Full |
+| 403 bypass & reports | Included |
+| Detection modules | All 28, individually togglable per program |
+| Read-only degradation | Does not exist |
 
-## Module Toggles
+Modules are turned on and off per program on the **Scan modules** card. See
+[`PRICING_AND_LIMITS.md`](PRICING_AND_LIMITS.md) for the full list.
 
-All 28+ detection modules (including TLS inspection, cloud storage exposure, service fingerprinting, hidden parameter discovery, lookalike domain tracking, cloud asset inventory, internet-index search, etc.) are available for all deployments and can be turned ON or OFF per program on the **Scan modules** settings card.
+## Third-party tools
+
+The pipeline image downloads the scanning toolchain (subfinder, httpx, nuclei, katana,
+naabu, feroxbuster, nmap and others) at build time. Those are third-party programs under
+their own licences; they are not redistributed as part of this repository, and Apache-2.0
+covers ExactSurface's own code only.
+
+## Scanning is still governed by law, not by this licence
+
+The licence grants you rights to the software. It grants you nothing with respect to
+systems you do not own. See [`SECURITY.md`](SECURITY.md) §2 and the authorised-use notice
+in the README.
