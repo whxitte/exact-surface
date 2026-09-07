@@ -109,5 +109,5 @@ h1{{font-size:24px;margin:0 0 4px}} h2{{font-size:16px;margin:32px 0 12px}}
 <h2>Exposed Secrets <span class="muted">(masked)</span></h2>
 <table><thead><tr><th {th}>Kind</th><th {th}>Value</th><th {th}>Location</th></tr></thead>
 <tbody>{secret_rows}</tbody></table>
-<hr><div class="muted" style="font-size:11px">{escape(ctx.watermark)}</div>
+<hr><div class="muted" style="font-size:11px">{escape(ctx.build_id)}</div>
 </body></html>"""

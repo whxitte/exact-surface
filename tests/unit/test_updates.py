@@ -14,7 +14,7 @@ import tarfile
 
 import pytest
 
-from core.license import generate_keypair, sign_blob
+from core.signing import generate_keypair, sign_blob
 from core.updates import apply_bundle, is_newer, run_update, verify_manifest
 from tests.fakes import FakeMongo
 

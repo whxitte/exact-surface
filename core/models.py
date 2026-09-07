@@ -48,19 +48,11 @@ class StatefulModel(TenantScopedModel):
 # --------------------------------------------------------------------------- #
 # Tenancy / accounts
 # --------------------------------------------------------------------------- #
-class Plan(str, Enum):
-    FREE = "free"
-    PRO = "pro"
-    BUSINESS = "business"
-    ENTERPRISE = "enterprise"
-
-
 class Tenant(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     tenant_id: str
     name: str
-    plan: Plan = Plan.FREE
     #: account-wide per-pipeline cadence defaults (seconds); a program's own
     #: cadence_overrides win over these. See taskqueue.cadence.effective_cadence.
     cadence_overrides: dict[str, int] = Field(default_factory=dict)
