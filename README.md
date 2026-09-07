@@ -222,21 +222,13 @@ image digests and the packaged `deploy/` bundle.
 
 ## Contributing
 
-Issues and pull requests are welcome. Two things to know before you open one:
+Issues and pull requests are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md). Two
+things to know first: **the safety controls are not negotiable** (detection only; a
+change that weakens the scope engine, the politeness cap or the §9b authorization gate
+needs an ADR arguing the case), and **registries must not drift** — a module lives in
+seven places, and `tests/unit/test_wiring.py` fails naming whichever one you missed.
 
-1. **The safety controls are not negotiable.** Detection only; no exploitation, no
-   payload delivery, no authentication bypass against live targets, no scanning without
-   a verified authorisation record. A change that weakens the scope engine, the
-   politeness cap or the §9b authorisation gate needs an ADR arguing the case, not just
-   a diff.
-2. **Registries must not drift.** A module is a spec in `core.modules`, a route in
-   `pipelines.dispatch`, a stage in the orchestrator, an interval in `taskqueue.cadence`,
-   a budget in `taskqueue.timeouts`, and usually a binary in the scanning image. Add it
-   to five of those six and everything looks fine until the one path that needs the
-   sixth runs. `tests/unit/test_wiring.py` asserts those relationships; when it fails, it
-   names the gap.
-
-Run `make test && make lint` before opening a PR.
+Found a security bug? Report it privately: [`SECURITY.md`](SECURITY.md).
 
 ## Licence
 
