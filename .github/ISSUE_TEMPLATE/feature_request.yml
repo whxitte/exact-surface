@@ -1,0 +1,49 @@
+name: Feature or module request
+description: A new detection module, a new Playground node, an integration, or a capability that is missing.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two things are out of scope no matter how they are framed: **exploitation** (payload
+        delivery, credential brute-force, anything past detection) and **scanning without a
+        verified, authorized target**. Everything else is fair game. If you want to build it
+        yourself, say so — `docs/ROADMAP.md` and `CONTRIBUTING.md` explain where to start.
+
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of thing is it?
+      options:
+        - A new detection module
+        - A change to an existing module
+        - A Playground node or canvas feature
+        - A notification channel or integration
+        - Dashboard / UX
+        - Reports
+        - Deployment / operations
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would it find, or what problem does it solve?
+      description: For a module — what exposure does an attacker exploit that this would surface, and what tool or technique does it use? A link to the technique is worth more than a paragraph.
+    validations:
+      required: true
+
+  - type: textarea
+    id: safety
+    attributes:
+      label: How does it stay detection-only and in scope?
+      description: What does it send to the target, at what rate, and what does it need from the scope engine (HTTP layer only? confirmed-dedicated hosts?). If it only talks to third-party APIs, say so.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything else
+      description: Prior art, how other tools do it, whether you would like to build it.

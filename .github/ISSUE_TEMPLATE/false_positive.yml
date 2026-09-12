@@ -1,0 +1,51 @@
+name: False positive
+description: A finding that is wrong — the thing it describes is not there, or is not what it says.
+labels: ["false-positive", "signal-quality"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Signal quality is a safety property here, not a nicety: a tool that cries wolf
+        gets ignored, and then the real one is missed. False-positive reports are among
+        the most useful issues you can file. Please redact anything identifying.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: "1.3.1"
+    validations:
+      required: true
+
+  - type: input
+    id: module
+    attributes:
+      label: Module and check
+      description: Shown on the finding — e.g. `http_misconfig / cors-reflected-origin`, `secrets / aws-access-key`, `takeover / cname-dangling`.
+    validations:
+      required: true
+
+  - type: textarea
+    id: finding
+    attributes:
+      label: The finding as reported
+      description: Title, severity, location, and the reproduction it shows. Redact the host.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why it is wrong
+      description: What is actually at that location, and if you can, the response that shows it — the same `curl` the finding suggests, with its real output.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: pattern
+    attributes:
+      label: How often?
+      options:
+        - Once, on one host
+        - Every scan, same host
+        - Across many hosts — looks systematic
