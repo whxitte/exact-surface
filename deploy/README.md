@@ -75,7 +75,12 @@ ssh -L 3001:127.0.0.1:3001 you@your-server     # then open http://localhost:3001
    will be looking at TLS errors instead of the product.
 3. **Outbound internet access.** The scanner has to reach the internet to see your
    attack surface the way an attacker does.
-4. **Your licence token**, which we sent you.
+
+**Evaluating on a laptop instead?** Set `DOMAIN=localhost`. Caddy issues itself a
+local certificate for that name, so there is no DNS to arrange — your browser will warn
+about the self-signed certificate once, and everything else works. On Apple silicon the
+scanning image runs under emulation (it is built for amd64); fine for a look around,
+slow for real scanning.
 
 ---
 
@@ -146,8 +151,7 @@ formality — it is what keeps your usage lawful and defensible.
 Findings arrive progressively: subdomains, then live hosts, then exposures.
 
 > Only add domains you own or are contractually authorised to test. Scanning third
-> parties without authorisation is illegal in most jurisdictions and breaches your
-> licence.
+> parties without authorisation is illegal in most jurisdictions.
 
 ---
 
@@ -161,8 +165,9 @@ docker compose down                        # stop (your data lives in named volu
 docker compose exec api python -m scripts.backup    # back up the database
 ```
 
-**Upgrading.** Change `EXACTSURFACE_VERSION` in `.env` to the version you were given,
-then:
+**Upgrading.** Change `EXACTSURFACE_VERSION` in `.env` to a version from the
+[releases page](https://github.com/whxitte/exact-surface/releases) — the changelog says
+what each one changes — then:
 
 ```bash
 docker compose pull && docker compose up -d
@@ -213,4 +218,6 @@ only for infrastructure you operate and have capacity for.
 
 ---
 
-Full manual: `INSTALL.md` in this directory. Support: the contact you were given.
+Full manual: `INSTALL.md` in the release bundle (`docs/OPERATIONS.md` in the
+repository). Questions: [GitHub Discussions](https://github.com/whxitte/exact-surface/discussions).
+Bugs: [GitHub Issues](https://github.com/whxitte/exact-surface/issues).

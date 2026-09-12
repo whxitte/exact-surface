@@ -80,6 +80,16 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Frontend typecheck + build
         working-directory: frontend
+        # Next.js bakes the /api/* rewrite destination into routes-manifest.json at
+        # BUILD time. Dockerfile.frontend's `runtime` stage sets this ARG before
+        # building; this step feeds the `prebuilt` stage instead, so it has to set it
+        # too. Without it Next defaults to http://localhost:8000 — which, inside the
+        # frontend container, is the frontend container — and every published image
+        # from 1.0.0 to 1.3.1 shipped proxying /api to itself (ECONNREFUSED). The
+        # Dockerfile now refuses to build such a bundle; this is the fix, that is the
+        # guard.
+        env:
+          API_PROXY_TARGET: http://api:8000
         run: |
           npm ci
           npm run typecheck
