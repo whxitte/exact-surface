@@ -1,9 +1,38 @@
 import type { Metadata } from "next";
 import "./globals.css";
 
+const DESCRIPTION =
+  "Open-source, self-hosted external attack-surface management. Continuously discovers " +
+  "your internet-facing assets and shows the exact request behind every finding. " +
+  "Detection only.";
+
+// Shared by the product and the demo. The Open Graph image is served from /public so a
+// self-hosted instance needs nothing external for a link preview; the demo's absolute
+// URLs come from metadataBase, which Next resolves from the deployment host.
 export const metadata: Metadata = {
-  title: "ExactSurface — Attack Surface Intelligence",
-  description: "Continuous external attack-surface intelligence. Detection only.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://exactsurface-demo.vercel.app"),
+  title: {
+    default: "ExactSurface — Attack Surface Intelligence",
+    template: "%s · ExactSurface",
+  },
+  description: DESCRIPTION,
+  applicationName: "ExactSurface",
+  openGraph: {
+    type: "website",
+    siteName: "ExactSurface",
+    title: "ExactSurface — Open-source external attack-surface management",
+    description: DESCRIPTION,
+    images: [{ url: "/og.png", width: 1280, height: 640, alt: "ExactSurface" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "ExactSurface — Open-source external attack-surface management",
+    description: DESCRIPTION,
+    images: ["/og.png"],
+  },
+  // A dashboard full of someone's findings must never be indexed. The demo is the
+  // exception and sets NEXT_PUBLIC_INDEXABLE=1 at build time.
+  robots: process.env.NEXT_PUBLIC_INDEXABLE === "1" ? "index,follow" : "noindex,nofollow",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
