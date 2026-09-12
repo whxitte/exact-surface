@@ -30,9 +30,14 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     images: ["/og.png"],
   },
-  // A dashboard full of someone's findings must never be indexed. The demo is the
-  // exception and sets NEXT_PUBLIC_INDEXABLE=1 at build time.
-  robots: process.env.NEXT_PUBLIC_INDEXABLE === "1" ? "index,follow" : "noindex,nofollow",
+  // A dashboard full of someone's findings must never be indexed, and neither should
+  // its login page. The demo is the one deployment that should be found: it builds on
+  // Vercel, which sets VERCEL=1 in every build, and nobody deploys a Docker product
+  // with a backend to Vercel. NEXT_PUBLIC_INDEXABLE=1 is the explicit override.
+  robots:
+    process.env.NEXT_PUBLIC_INDEXABLE === "1" || process.env.VERCEL === "1"
+      ? "index,follow"
+      : "noindex,nofollow",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

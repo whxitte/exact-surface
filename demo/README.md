@@ -52,15 +52,16 @@ Docker (above) works anywhere. To deploy without a container, on Vercel:
 3. **Build Command**, override to perform the same swap the Dockerfile does before
    building:
    ```
-   cp ../demo/lib/fixtures.ts ../demo/lib/transport.ts lib/ && NEXT_PUBLIC_INDEXABLE=1 npm run build
+   cp ../demo/lib/fixtures.ts ../demo/lib/transport.ts lib/ && npm run build
    ```
    (Paths are relative to Root Directory, so `../demo/lib/` reaches this folder — the
    full repo is checked out regardless of Root Directory, only the build's working
    directory changes.)
 4. **Install Command**: leave as default (`npm ci`).
-5. `NEXT_PUBLIC_INDEXABLE=1` in the build command matters: the frontend ships `noindex`
-   by default, because a self-hosted dashboard must never be crawlable. The demo is the
-   one deployment that *should* be found, so it opts in.
+5. Nothing else. The frontend ships `noindex` by default — a self-hosted dashboard must
+   never be crawlable — and recognises a Vercel build (`VERCEL=1`, set automatically) as
+   the demo, which is the one deployment that *should* be found. Elsewhere,
+   `NEXT_PUBLIC_INDEXABLE=1` at build time is the explicit opt-in.
 5. No environment variables needed — there is no backend to point at.
 6. Deploy. The Vercel URL is the demo; no custom domain is needed.
 
