@@ -5,10 +5,29 @@ Versions follow [semantic versioning](https://semver.org/). Each release publish
 GitHub Release recording the image digests.
 
 ```bash
-docker pull ghcr.io/whxitte/api:1.3.1
-docker pull ghcr.io/whxitte/frontend:1.3.1
-docker pull ghcr.io/whxitte/pipeline:1.3.1
+docker pull ghcr.io/whxitte/api:1.3.2
+docker pull ghcr.io/whxitte/frontend:1.3.2
+docker pull ghcr.io/whxitte/pipeline:1.3.2
 ```
+
+## 1.3.2 — 2026-09-12
+
+**Fixed**
+
+- **The published frontend image could not reach the API.** Next.js bakes the `/api/*`
+  rewrite destination at build time, and the release runner built without
+  `API_PROXY_TARGET`, so every published image from 1.0.0 to 1.3.1 proxied `/api` to
+  `http://localhost:8000` — itself — and failed with `ECONNREFUSED`. The dev stack
+  never showed it because it builds the other Dockerfile stage. Found by doing a
+  clean install from the published images, which is the only way it could have been
+  found. Both Dockerfile stages now refuse a bundle pointing at localhost, and a wiring
+  test asserts the runner sets the variable.
+- `deploy/docker-compose.yml` pins the three pipeline-image services to
+  `linux/amd64`, so Apple-silicon and Graviton hosts run them under emulation without
+  four platform warnings.
+- `deploy/README.md` still referred to a licence token, a licence to breach and "the
+  version you were given". Corrected, and it now says how to evaluate on a laptop
+  (`DOMAIN=localhost`).
 
 ## 1.3.1 — 2026-09-12
 

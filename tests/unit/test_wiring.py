@@ -757,3 +757,29 @@ def test_the_frontend_standalone_bundle_survives_the_build_context():
     assert dockerfile.count("test -d node_modules/next") == 2, (
         "both the runtime and prebuilt stages should assert the bundle is intact"
     )
+
+
+def test_the_release_runner_bakes_the_in_network_api_address():
+    """The frontend's /api/* rewrite destination is fixed when `next build` runs.
+
+    Dockerfile.frontend's `runtime` stage sets API_PROXY_TARGET before building, but
+    CI publishes the `prebuilt` stage from a `.next` built on the runner — so the
+    runner's build step has to set it too. It did not, and every published frontend
+    image from 1.0.0 to 1.3.1 proxied /api to http://localhost:8000, i.e. to itself.
+    The self-hosted product could not reach its own API, and nothing local ever showed
+    it because the dev stack builds the other stage.
+
+    The Dockerfile now refuses a bundle pointing at localhost; this asserts the cause
+    stays fixed so the guard never has to fire.
+    """
+    workflow = (REPO / ".github" / "workflows" / "release.yml").read_text()
+    build_step = workflow[workflow.index("Frontend typecheck + build") :]
+    build_step = build_step[: build_step.index("npm run build") + len("npm run build")]
+    assert "API_PROXY_TARGET: http://api:8000" in build_step, (
+        "release.yml's frontend build must set API_PROXY_TARGET=http://api:8000, or the "
+        "published image proxies /api to localhost inside its own container"
+    )
+    dockerfile = (REPO / "docker" / "Dockerfile.frontend").read_text()
+    assert dockerfile.count("localhost:8000' .next/routes-manifest.json") == 2, (
+        "both frontend stages should refuse a bundle whose /api rewrite points at localhost"
+    )
