@@ -252,7 +252,7 @@ def test_api_key_issuance_and_use():
     created = client.post("/auth/api-keys", headers=_auth(token), json={"name": "ci"})
     assert created.status_code == 201
     raw = created.json()["api_key"]
-    assert raw.startswith("vnt_")
+    assert raw.startswith("exs_")
     # use the API key instead of the JWT
     me = client.get("/auth/me", headers={"X-API-Key": raw})
     assert me.status_code == 200 and me.json()["auth"] == "apikey"

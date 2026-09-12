@@ -1,0 +1,18 @@
+name: ExactSurface CodeQL config
+
+# What is scanned is what ships. Everything excluded here is either not code that
+# runs anywhere (tests, fixtures) or never leaves a developer's machine (devtools).
+#
+# tests/ in particular: CodeQL's URL-substring rule fires on every assertion of the
+# form `assert "example.com" in url`, which is a test checking a result, not code
+# sanitising an input. Twenty such findings at "high" severity say nothing about the
+# product and bury the ones that might.
+paths-ignore:
+  - tests
+  - devtools
+  - demo/lib/fixtures.ts
+  - frontend/.next
+  - "**/node_modules"
+
+queries:
+  - uses: security-extended

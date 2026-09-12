@@ -64,10 +64,13 @@ def decode_token(token: str) -> dict:
 
 # -- API keys ----------------------------------------------------------------
 def hash_api_key(raw_key: str) -> str:
+    """SHA-256, deliberately — not bcrypt. Keys are 256-bit random tokens, not
+    passwords: there is nothing to brute-force, so a slow hash would only add its
+    cost to every authenticated request. Passwords go through bcrypt above."""
     return hashlib.sha256(raw_key.encode()).hexdigest()
 
 
 def generate_api_key() -> tuple[str, str, str]:
     """Return ``(raw_key, key_hash, prefix)``. The raw key is shown to the user once."""
-    raw = "vnt_" + secrets.token_urlsafe(32)
+    raw = "exs_" + secrets.token_urlsafe(32)
     return raw, hash_api_key(raw), raw[:12]

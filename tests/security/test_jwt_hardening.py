@@ -103,7 +103,7 @@ def test_valid_token_accepted(app_ctx):  # noqa: F811
 
 def test_invalid_api_key_rejected(app_ctx):  # noqa: F811
     client, _ = app_ctx
-    assert client.get("/auth/me", headers={"X-API-Key": "vnt_not_a_real_key"}).status_code == 401
+    assert client.get("/auth/me", headers={"X-API-Key": "exs_not_a_real_key"}).status_code == 401
 
 
 def test_role_is_not_client_controllable(app_ctx):  # noqa: F811
