@@ -59,7 +59,7 @@ services:
   # bundled scope feeds load. It gates everything below it, so a broken setup fails
   # here rather than halfway through your first scan.
   pipeline:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.3.0}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.3.1}
     command: ["python", "-m", "daemon.main", "--dry-run"]
     env_file: .env
     environment: *backend-env
@@ -68,7 +68,7 @@ services:
       redis: { condition: service_healthy }
 
   scheduler:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.3.0}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.3.1}
     command: ["python", "-m", "daemon.main"]
     env_file: .env
     environment: *backend-env
@@ -79,7 +79,7 @@ services:
       redis: { condition: service_healthy }
 
   worker:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.3.0}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.3.1}
     command: ["arq", "taskqueue.worker.WorkerSettings"]
     env_file: .env
     environment:
@@ -97,7 +97,7 @@ services:
       redis: { condition: service_healthy }
 
   api:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/api:${EXACTSURFACE_VERSION:-1.3.0}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/api:${EXACTSURFACE_VERSION:-1.3.1}
     env_file: .env
     environment: *backend-env
     restart: unless-stopped
@@ -107,7 +107,7 @@ services:
       redis: { condition: service_healthy }
 
   frontend:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/frontend:${EXACTSURFACE_VERSION:-1.3.0}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/frontend:${EXACTSURFACE_VERSION:-1.3.1}
     environment:
       - API_PROXY_TARGET=http://api:8000
     restart: unless-stopped

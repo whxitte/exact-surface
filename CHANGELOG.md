@@ -5,10 +5,29 @@ Versions follow [semantic versioning](https://semver.org/). Each release publish
 GitHub Release recording the image digests.
 
 ```bash
-docker pull ghcr.io/whxitte/api:1.3.0
-docker pull ghcr.io/whxitte/frontend:1.3.0
-docker pull ghcr.io/whxitte/pipeline:1.3.0
+docker pull ghcr.io/whxitte/api:1.3.1
+docker pull ghcr.io/whxitte/frontend:1.3.1
+docker pull ghcr.io/whxitte/pipeline:1.3.1
 ```
+
+## 1.3.1 — 2026-09-12
+
+**Security**
+
+- **Next.js 15.5.22 → 15.5.25.** Two unauthenticated RCE advisories against 15.5.22
+  ([GHSA-p293-qw3h-jr36](https://github.com/advisories/GHSA-p293-qw3h-jr36),
+  [GHSA-2xp9-vwfh-vxw4](https://github.com/advisories/GHSA-2xp9-vwfh-vxw4)). Neither
+  path is reachable in ExactSurface's configuration — one affects Windows-hosted servers
+  and we ship Linux containers, the other is the Image Optimization API which
+  `next.config.mjs` disables — but a known unauthenticated RCE on the framework is not
+  something to reason around. Upgrade.
+- Build-toolchain advisories cleared: `sharp` (optional, never installed in the image),
+  `browserslist`, `baseline-browser-mapping`, `js-yaml`. None ship in the runtime image.
+
+**Changed**
+
+- README rebuilt around a banner, screenshots and the conventional section order.
+- Dependabot alerts, secret scanning and push protection are enabled on the repository.
 
 ## 1.3.0 — 2026-09-07
 
