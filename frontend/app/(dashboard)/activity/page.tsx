@@ -286,7 +286,7 @@ export default function ActivityPage() {
     return () => ws?.close();
   }, []);
 
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [expanded, setExpanded] = useState<Map<string, boolean>>(() => new Map());
 
   // "Stalled" = no activity, not just long-running. A healthy full scan can run
   // ~90 min (two nuclei batches over many hosts); the worker heartbeats updated_at
@@ -302,9 +302,9 @@ export default function ActivityPage() {
 
   const isActive = (r: ScanRun) => r.status === "running" || r.status === "queued";
   // Full runs auto-open while active; otherwise honor the user's toggle (default closed).
-  const isExpanded = (r: ScanRun) => expanded[r.scan_id] ?? isActive(r);
+  const isExpanded = (r: ScanRun) => expanded.get(r.scan_id) ?? isActive(r);
   const toggle = (r: ScanRun) =>
-    setExpanded((e) => ({ ...e, [r.scan_id]: !(e[r.scan_id] ?? isActive(r)) }));
+    setExpanded((e) => new Map(e).set(r.scan_id, !(e.get(r.scan_id) ?? isActive(r))));
 
   return (
     <div className="space-y-6">
