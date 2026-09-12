@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import json
 import tarfile
 from collections.abc import Awaitable, Callable
@@ -44,13 +45,21 @@ def apply_bundle(bundle: bytes, expected_sha256: str | None, dest_dir: str | Pat
 
 
 def _safe_extract(tar: tarfile.TarFile, dest: Path) -> None:
-    """Extract, refusing any member that would escape *dest* (path traversal / absolute)."""
+    """Extract, refusing any member that would escape *dest*.
+
+    Two layers. The explicit check names the offending member in the error, which is
+    what an operator needs to see. The stdlib ``data`` filter underneath also refuses
+    what a name check cannot: a symlink or hardlink whose *target* escapes, device
+    nodes, and setuid/setgid bits. The bundle is signature-verified before it gets
+    here, so this only matters if the signing key is compromised — which is precisely
+    when it matters most.
+    """
     dest = dest.resolve()
     for member in tar.getmembers():
         target = (dest / member.name).resolve()
-        if not str(target).startswith(str(dest)):
+        if not str(target).startswith(str(dest) + os.sep) and target != dest:
             raise ValueError(f"refusing unsafe path in bundle: {member.name}")
-    tar.extractall(dest)  # noqa: S202 - members validated above
+    tar.extractall(dest, filter="data")
 
 
 JsonGet = Callable[[str, dict], Awaitable[dict]]
