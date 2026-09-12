@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/whxitte/exact-surface/security/advisories/new
+    about: Found a way past the scope engine, the authorization gate, tenant isolation or secret masking? Report it privately — never in a public issue.
+  - name: Question or idea
+    url: https://github.com/whxitte/exact-surface/discussions
+    about: How-do-I questions, deployment help and design discussions live in Discussions, where more people will see and answer them.
+  - name: Live demo
+    url: https://exactsurface-demo.vercel.app
+    about: Check whether what you are seeing also happens in the demo before filing — it narrows things down fast.

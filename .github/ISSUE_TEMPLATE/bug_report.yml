@@ -1,0 +1,86 @@
+name: Bug report
+description: Something is broken — a crash, a wrong result, a scan that never runs, a UI that lies.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks. A scanner has a lot of moving parts, so the fields below are the ones that
+        let us reproduce it instead of guessing. **If this is a security issue — a way to
+        reach a host the scope engine should refuse, a tenant boundary, a secret in the
+        clear — do not file it here.** Use [private reporting](https://github.com/whxitte/exact-surface/security/advisories/new).
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From the Settings page, the release tag, or `git rev-parse --short HEAD` if built from source.
+      placeholder: "1.3.1"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: How is it deployed?
+      options:
+        - deploy/ bundle (published images)
+        - docker/docker-compose.yml (built from source)
+        - Native (make api / npm run dev)
+        - Other (say what below)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      options:
+        - A scan module (say which one below)
+        - Scheduler / scan never runs or runs forever
+        - Scope / authorization decision
+        - API
+        - Dashboard (frontend)
+        - Playground
+        - Notifications / alerting
+        - Reports
+        - Install / upgrade / deploy
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, what you got. The exact error text beats a description of it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        For anything scan-related, the worker log is where the answer usually is:
+        `docker compose -f docker/docker-compose.yml logs --since 10m worker scheduler`
+        (or `docker compose logs …` from `deploy/`). Paste the relevant part.
+        **Redact hostnames, IPs and anything else you would not post publicly.**
+      render: text
+
+  - type: checkboxes
+    id: target
+    attributes:
+      label: Target
+      description: ExactSurface only scans infrastructure you have verified and authorized. A bug report about scanning something else will be closed.
+      options:
+        - label: The target is infrastructure I own or am authorised to test.
+          required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before filing
+      options:
+        - label: I ran `make dry-run` (or checked `/readyz`) and the datastores and tools are healthy.
+        - label: I searched existing issues.
