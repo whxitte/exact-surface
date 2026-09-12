@@ -37,10 +37,10 @@ control. It is **state-aware** (one alert per genuinely new fact, not one per re
 |---|---|
 | **Continuous, not one-off** | A scheduler re-runs each of 28 modules on its own cadence. Results upsert by content-hash fingerprint, so a re-scan that finds nothing new says nothing — and the moment something changes, you hear about it once. |
 | **Scope by construction** | A central scope engine decides what each scan may touch. Hosts must belong to a DNS-verified domain; internal, metadata and CDN addresses are refused; aggressive scanning needs IP ranges confirmed yours via ASN lookup. Self-attestation unlocks nothing. |
-| **Findings you can verify** | Every finding carries the exact request behind it. Correlation groups findings per host into ranked attack chains and retells them as an **attack path** in the order an attacker would use them. |
+| **Findings you can verify** | Findings carry the reproduction behind them — the attacker's own `curl`, not a paraphrase — and a triage lifecycle (new → triaged → confirmed → resolved) so a team can work them. Correlation groups findings per host into ranked attack chains and retells them as an **attack path** in the order an attacker would use them. |
 | **A visual Playground** | Drag modules onto a canvas, wire one's output into another's input, and run it — through the same dispatch table a scheduled scan uses, so the canvas and the scheduler can't drift apart. |
 | **Your data stays yours** | Runs entirely on your infrastructure. No hosted service, no licence key, no telemetry. Discovered secrets are masked before they are stored, logged, exported or alerted. |
-| **Built to be read** | Every control has an ADR explaining what it guarantees and what it doesn't. `docs/SECURITY.md` states the trade-offs plainly rather than pretending they don't exist. |
+| **Built to be read** | The controls that matter each have an ADR explaining what they guarantee and what they don't. `docs/SECURITY.md` states the trade-offs plainly rather than pretending they don't exist. |
 
 ## What it looks like
 
@@ -52,7 +52,7 @@ control. It is **state-aware** (one alert per genuinely new fact, not one per re
 <p align="center">
   <img src="docs/assets/findings-page.png" alt="Findings ranked by severity, each tagged with the module that produced it and whether it is confirmed" width="100%">
 </p>
-<p align="center"><sub>Findings, ranked. Each names the module that found it and whether it has been confirmed against the live host.</sub></p>
+<p align="center"><sub>Findings, ranked. Each names the module that found it and its triage state.</sub></p>
 
 <p align="center">
   <img src="docs/assets/endpoints-page.png" alt="Discovered endpoints with risk tags" width="100%">
@@ -78,14 +78,20 @@ docker compose -f docker/docker-compose.yml up --build
 | API | http://localhost:8000 — health at `/healthz`, docs at `/docs` |
 | Grafana | http://localhost:3001 (`admin` / `admin` in dev) |
 
-Sign up in the UI — **the first account becomes the instance owner** — add a domain you
-control, and complete DNS verification. The first build compiles the Go recon toolchain
-and takes 5–15 minutes; later starts are fast.
+Sign up in the UI — **the first account becomes the instance owner**, after which public
+signup closes and the owner adds members — then add a domain you control and complete DNS
+verification. The first build compiles the Go recon toolchain and takes 5–15 minutes;
+later starts are fast.
+
+**Requirements.** Docker Engine 24+ with the Compose plugin. For production, 4 vCPU /
+8 GB RAM / 100 GB SSD is the floor and 8 / 16 / 250 is comfortable; RAM matters most,
+because many subdomains get probed at once.
 
 ### Deploy it for real
 
-[`deploy/`](deploy/) is a self-contained folder: compose file, Caddy for automatic TLS,
-an `.env` template, and backups. It pulls the published images rather than building.
+[`deploy/`](deploy/) is a self-contained folder: the compose file, Caddy for automatic
+TLS, Prometheus and Grafana provisioning, and an `.env` template. It pulls the published
+images rather than building.
 
 ```bash
 cd deploy && cp .env.example .env   # set DOMAIN and the datastore secrets
@@ -253,6 +259,13 @@ if that is undone. The project site lives on the `site` branch and carries nothi
 New here? `ARCHITECTURE.md` → `SECURITY.md` §2 (why domain control ≠ scanning
 authorization) → ADR-0005 and ADR-0008. Those explain the constraints that shape
 everything else.
+
+## Support and community
+
+- **Questions and ideas** → [GitHub Discussions](https://github.com/whxitte/exact-surface/discussions)
+- **Bugs** → [GitHub Issues](https://github.com/whxitte/exact-surface/issues)
+- **Security vulnerabilities** → privately, via [`SECURITY.md`](SECURITY.md) — never a public issue
+- **What changed** → [`CHANGELOG.md`](CHANGELOG.md) and the [releases page](https://github.com/whxitte/exact-surface/releases)
 
 ## Contributing
 
