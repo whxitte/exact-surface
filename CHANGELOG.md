@@ -5,10 +5,40 @@ Versions follow [semantic versioning](https://semver.org/). Each release publish
 GitHub Release recording the image digests.
 
 ```bash
-docker pull ghcr.io/whxitte/api:1.4.0
-docker pull ghcr.io/whxitte/frontend:1.4.0
-docker pull ghcr.io/whxitte/pipeline:1.4.0
+docker pull ghcr.io/whxitte/api:1.4.1
+docker pull ghcr.io/whxitte/frontend:1.4.1
+docker pull ghcr.io/whxitte/pipeline:1.4.1
 ```
+
+## 1.4.1 — 2026-09-15
+
+Signal-quality release, entirely from running 1.4.0 against a real domain. Three
+modules were rating false positives at high severity; each now verifies before it
+files, and re-checks retire what an earlier, unverifying run had stored.
+
+**Fixed**
+
+- **Search dorks are verified against the page** before they are rated, and scoped to
+  the program's apex first of all. Google's loose matching (and its habit of ignoring
+  `site:`/`inurl:`) was filing prose pages and third-party results as critical
+  credential exposures. Verified → the category's severity; unverified → dropped;
+  unreachable → kept low and labelled.
+- **Hidden-parameter discovery uses a control parameter.** A host that echoes its
+  request URL, or whose body varies by hundreds of KB between fetches, was making every
+  probed name look accepted — eight "high" privilege parameters on two marketing pages.
+  Reflection and length are now judged against a parameter nothing could handle.
+- Both modules **retire findings a clean re-run cannot reproduce**, moving them to
+  false-positive with the reason on the record — gone-detection alone never would,
+  because it distrusts a run that reports nothing.
+- **Findings come back most severe first.** Every consumer takes the head of the list,
+  and an unsorted head could hide the highs behind a screen of infos.
+- **Playground nodes have a hard timeout.** A node whose module overran its budget could
+  run indefinitely with no way to stop it.
+
+**Note**
+
+- API keys minted before 1.4.0 keep every scope their creator can grant; keys minted
+  since default to read-only.
 
 ## 1.4.0 — 2026-09-14
 

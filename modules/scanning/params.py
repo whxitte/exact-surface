@@ -27,6 +27,14 @@ from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 from core.severity import Severity
 
 #: High-signal parameters worth probing for. Chosen because their mere existence is
+#: A stable page's length may drift between two requests that differ only by an
+#: irrelevant parameter by at most max(STABLE_DRIFT_BYTES, UNSTABLE_FRACTION x size).
+#: The absolute floor covers URL echo (a short URL repeated a few times); the fraction
+#: catches a large page that flaps. Past both, the endpoint is too unstable to probe —
+#: see Baseline.stable. Tuned against a Wix host that returned 142 B then 2.6 MB.
+UNSTABLE_FRACTION = 0.02
+STABLE_DRIFT_BYTES = 4096
+
 #: interesting — not a generic wordlist, which would be fuzzing with extra steps.
 CANDIDATE_PARAMS: tuple[str, ...] = (
     "debug",
@@ -187,9 +195,32 @@ class Baseline:
             return 0
         return abs(self.control_length - self.length)
 
-    def length_moved(self, observed: int) -> bool:
-        """Did adding a parameter change the length by more than this page's own noise?"""
-        return abs(observed - self.length) > self.noise_floor + LENGTH_DELTA
+    @property
+    def stable(self) -> bool:
+        """Can this endpoint support differential probing at all?
+
+        Baseline and control differ only by a parameter nothing handles, so they should
+        be near-identical. When they are not — a page that returns 142 bytes one moment
+        and 2.6 MB the next, which is what a Wix host does under bot-detection — no
+        single probe can be compared to anything, and every candidate looks like a
+        signal. Such an endpoint is skipped, not guessed at.
+        """
+        if self.control_length is None or self.control_status is None:
+            return False
+        if self.control_status != self.status:
+            return False
+        larger = max(self.length, self.control_length, 1)
+        return self.noise_floor <= max(STABLE_DRIFT_BYTES, larger * UNSTABLE_FRACTION)
+
+    def length_grew(self, observed: int) -> bool:
+        """Did the parameter add content past this page's noise?
+
+        Growth only. A parameter that *shrinks* the response — to an error page, a
+        block, a rate-limit stub — is not an accepted-parameter finding; that collapse
+        is the host reacting to load, not the app handling a parameter. A real content
+        change that matters shows up as growth or a status change, both of which count.
+        """
+        return (observed - self.length) > self.noise_floor + LENGTH_DELTA
 
 
 def control_param(rng=None) -> str:
@@ -264,7 +295,7 @@ def analyse_batch(
     """
     if status != baseline.status:
         return True
-    if baseline.length_moved(len(body)):
+    if baseline.length_grew(len(body)):
         return True
     return _reflects(body, value) and not baseline.echoes_url
 
@@ -279,9 +310,9 @@ def classify(
     reflected = _reflects(body, value) and not baseline.echoes_url
     changed_status = status != baseline.status
     delta = len(body) - baseline.length
-    length_moved = baseline.length_moved(len(body))
+    length_grew = baseline.length_grew(len(body))
 
-    if not (reflected or changed_status or length_moved):
+    if not (reflected or changed_status or length_grew):
         return None
 
     severity, what = classify_name(name)
@@ -294,10 +325,10 @@ def classify(
     bits = []
     if changed_status:
         bits.append(f"the status changed from {baseline.status} to {status}")
-    if length_moved:
+    if length_grew:
         floor = baseline.noise_floor
         bits.append(
-            f"the response length changed by {delta:+d} bytes"
+            f"the response grew by {delta:+d} bytes"
             + (f" (past this page's {floor}-byte noise)" if floor else "")
         )
     if reflected:

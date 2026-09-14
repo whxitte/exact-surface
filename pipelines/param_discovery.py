@@ -113,6 +113,7 @@ async def run_param_discovery(
 
     hidden: list[P.HiddenParam] = []
     probes = 0
+    unstable = 0
     by_arjun: dict[str, list[str]] = {}
 
     if not targets:
@@ -164,6 +165,21 @@ async def run_param_discovery(
                 except Exception as exc:  # noqa: BLE001 - no control means no probing:
                     logger.debug("param_discovery: control failed for {}: {}", url, exc)
                     return  # a hit without a control is exactly the false positive
+                if not baseline.stable:
+                    # Two requests differing only by an irrelevant parameter came back
+                    # materially different — a host flapping between an error stub and its
+                    # real body under bot-detection. Differential probing files a finding
+                    # for every candidate here; skip it. Observed parameters are already
+                    # recorded and cost nothing.
+                    nonlocal unstable
+                    unstable += 1
+                    logger.info(
+                        "param_discovery: {} unstable (baseline {}B vs control {}B) — not probed",
+                        url,
+                        baseline.length,
+                        baseline.control_length,
+                    )
+                    return
 
                 # Batch, then split only the batches that moved. A batch that changes
                 # nothing eliminates every name in it for one request.
@@ -257,12 +273,13 @@ async def run_param_discovery(
     )
     logger.info(
         "param_discovery: {} observed, {} hidden found in {} request(s) "
-        "({} new finding(s), {} earlier retired as not reproduced)",
+        "({} new finding(s), {} earlier retired, {} unstable URL(s) skipped)",
         len(observed),
         len(hidden),
         probes,
         new,
         retired,
+        unstable,
     )
     return {
         "observed": len(observed),
@@ -273,6 +290,7 @@ async def run_param_discovery(
         "findings": total,
         "new": new,
         "retired_false_positives": retired,
+        "unstable_skipped": unstable,
     }
 
 

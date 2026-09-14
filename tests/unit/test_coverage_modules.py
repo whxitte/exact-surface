@@ -456,7 +456,7 @@ def test_a_real_hidden_parameter_is_still_found_on_an_echoing_host():
         echo_only + "<pre>" + "stack frame\n" * 400 + "</pre>"
     )  # well past the noise floor
     hit = P.classify("debug", base, 200, debug_panel)
-    assert hit and not hit.reflected and "length changed" in hit.evidence
+    assert hit and not hit.reflected and "grew by" in hit.evidence
     assert P.classify("debug", base, 500, echo_only)  # status change counts regardless
 
 
@@ -834,3 +834,86 @@ def test_unmonitored_assets_are_skipped():
         )
         == []
     )
+
+
+def test_an_endpoint_that_will_not_answer_consistently_is_not_probed():
+    """The real www.example.com case: the host flapped between a 142-byte block page and
+    its 2.6 MB body. Baseline and control landing on opposite sides made the noise
+    floor meaningless and every candidate a 'finding'. Such a baseline is not stable,
+    and an unstable baseline is not probed at all."""
+    from modules.scanning import params as P
+
+    flapping = P.Baseline("https://wix.example/", 200, 2_600_000)
+    flapping.control_status, flapping.control_length, flapping.control_reflects = 200, 142, False
+    assert flapping.stable is False
+
+    steady = P.Baseline("https://wix.example/", 200, 2_600_000)
+    steady.control_status, steady.control_length, steady.control_reflects = 200, 2_600_070, True
+    assert steady.stable is True  # 70 bytes of URL echo is well within tolerance
+
+
+def test_a_parameter_that_collapses_the_page_is_not_a_finding():
+    """Growth is signal; a shrink to an error/block page is the host reacting to load,
+    not the app accepting a parameter. Only a status change or genuine new content counts."""
+    from modules.scanning import params as P
+
+    base = P.Baseline(
+        "https://a.example/", 200, 500_000, control_status=200, control_length=500_050
+    )
+    assert base.stable
+    assert P.classify("admin", base, 200, "x" * 142) is None  # collapsed — not a finding
+    assert P.classify("admin", base, 200, "x" * 520_000) is not None  # grew past noise
+    assert P.classify("admin", base, 503, "x" * 142)  # but a status change always counts
+
+
+@pytest.mark.asyncio
+async def test_pipeline_skips_an_unstable_endpoint_and_counts_it():
+    from core.scope import ProgramScope, ScopeEngine
+    from core.tenant import TenantContext
+    from db.findings import FindingRepo
+    from pipelines.param_discovery import run_param_discovery
+    from tests.fakes import FakeMongo
+
+    mongo = FakeMongo()
+    n = {"i": 0}
+
+    async def flapping_fetch(url):
+        # bare baseline big; control tiny; never consistent
+        n["i"] += 1
+        return (200, "x" * 2_600_000) if n["i"] % 2 else (200, "x" * 142)
+
+    await mongo.collection("endpoints").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "url": "https://wix.customer.com/",
+            "source": "crawl",
+            "status_code": 200,
+        }
+    )
+    await mongo.collection("assets").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "hostname": "wix.customer.com",
+            "resolved_ips": ["45.55.1.9"],
+        }
+    )
+    res = await run_param_discovery(
+        mongo=mongo,
+        engine=ScopeEngine.from_data_file(),
+        scope=ProgramScope(
+            verified_apexes=("customer.com",), authorized_dedicated_cidrs=("45.55.0.0/16",)
+        ),
+        tenant=TenantContext(tenant_id="t1", actor_id="u1"),
+        program_id="p1",
+        fetch=flapping_fetch,
+        arjun=None,
+    )
+    assert res["unstable_skipped"] == 1
+    hidden = [
+        f
+        for f in await FindingRepo(mongo.collection("findings")).list("t1", "p1")
+        if f.get("check_id", "").startswith("hidden-parameter")
+    ]
+    assert hidden == []
