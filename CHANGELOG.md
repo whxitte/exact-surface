@@ -5,12 +5,12 @@ Versions follow [semantic versioning](https://semver.org/). Each release publish
 GitHub Release recording the image digests.
 
 ```bash
-docker pull ghcr.io/whxitte/api:1.3.2
-docker pull ghcr.io/whxitte/frontend:1.3.2
-docker pull ghcr.io/whxitte/pipeline:1.3.2
+docker pull ghcr.io/whxitte/api:1.4.0
+docker pull ghcr.io/whxitte/frontend:1.4.0
+docker pull ghcr.io/whxitte/pipeline:1.4.0
 ```
 
-## Unreleased
+## 1.4.0 — 2026-09-14
 
 **Added**
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "exactsurface-client"
-version = "0.1.0"
+version = "1.4.0"
 description = "ExactSurface from the terminal and from AI agents: the `exactsurface` CLI and the `exactsurface-mcp` MCP server, over one scoped API key."
 readme = "README.md"
 requires-python = ">=3.11"
