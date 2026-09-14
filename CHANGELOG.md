@@ -23,10 +23,16 @@ files, and re-checks retire what an earlier, unverifying run had stored.
   `site:`/`inurl:`) was filing prose pages and third-party results as critical
   credential exposures. Verified → the category's severity; unverified → dropped;
   unreachable → kept low and labelled.
-- **Hidden-parameter discovery uses a control parameter.** A host that echoes its
-  request URL, or whose body varies by hundreds of KB between fetches, was making every
-  probed name look accepted — eight "high" privilege parameters on two marketing pages.
-  Reflection and length are now judged against a parameter nothing could handle.
+- **Hidden-parameter discovery is far stricter.** A host that echoes its request URL,
+  varies its body by hundreds of KB between identical fetches, or flaps under
+  bot-detection was making every probed name look accepted — "high" privilege parameters
+  like `?admin=` on two marketing pages. Now: a control parameter (one nothing could
+  handle) is probed first; reflection is void where the control reflects; a length
+  signal must be *growth* past the page's measured noise; and an endpoint that will not
+  answer two requests consistently is skipped, not guessed at.
+- **arjun is bounded to half the parameter-discovery budget** (max 10 min). On a
+  rate-limiting host it would otherwise spend the whole stage — 36 minutes on one domain
+  — finding nothing, with the built-in probe queued behind it.
 - Both modules **retire findings a clean re-run cannot reproduce**, moving them to
   false-positive with the reason on the record — gone-detection alone never would,
   because it distrusts a run that reports nothing.

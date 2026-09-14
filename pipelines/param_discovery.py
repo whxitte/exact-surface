@@ -31,6 +31,11 @@ from modules.scanning import params as P
 from modules.scanning.arjun import find_params as arjun_find
 
 CONCURRENCY = 4
+#: arjun's share of the param_discovery stage budget, and a hard ceiling on it. The
+#: built-in probe gets the rest, so a slow or rate-limited arjun cannot consume the
+#: whole stage. See run_param_discovery.
+ARJUN_BUDGET_FRACTION = 0.5
+ARJUN_MAX_SECONDS = 600.0
 
 
 async def run_param_discovery(
@@ -123,8 +128,15 @@ async def run_param_discovery(
         # check than we would write. It degrades to {} when not installed, and the
         # built-in probe below then carries the stage rather than it silently finding
         # nothing. Both run: they disagree often enough to be worth the overlap.
+        #
+        # arjun gets a bounded slice of the stage, not all of it. On a rate-limiting
+        # host it will spend whatever it is given and still return nothing — one such
+        # host made a 2100s stage take 36 minutes, with the built-in probe (which we
+        # control and have hardened) queued behind it. Cap arjun so the stage is the
+        # sum of two bounded halves, not arjun's patience.
+        arjun_budget = min(timeout * ARJUN_BUDGET_FRACTION, ARJUN_MAX_SECONDS)
         try:
-            by_arjun = await arjun(targets, timeout)
+            by_arjun = await arjun(targets, arjun_budget)
             found = sum(len(v) for v in by_arjun.values())
             logger.info(
                 "param_discovery: arjun found {} parameter(s) across {} URL(s)",

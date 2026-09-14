@@ -917,3 +917,54 @@ async def test_pipeline_skips_an_unstable_endpoint_and_counts_it():
         if f.get("check_id", "").startswith("hidden-parameter")
     ]
     assert hidden == []
+
+
+@pytest.mark.asyncio
+async def test_arjun_gets_a_bounded_slice_not_the_whole_stage():
+    """A rate-limiting host made arjun eat a 2100s stage whole, with the built-in probe
+    queued behind it. arjun is capped so the stage is two bounded halves."""
+    from core.scope import ProgramScope, ScopeEngine
+    from core.tenant import TenantContext
+    from pipelines.param_discovery import ARJUN_MAX_SECONDS, run_param_discovery
+    from tests.fakes import FakeMongo
+
+    got = {}
+
+    async def arjun(urls, timeout):
+        got["timeout"] = timeout
+        return {}
+
+    async def fetch(url):
+        return 200, "x" * 1000  # stable, boring
+
+    mongo = FakeMongo()
+    await mongo.collection("endpoints").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "url": "https://a.customer.com/",
+            "source": "crawl",
+            "status_code": 200,
+        }
+    )
+    await mongo.collection("assets").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "hostname": "a.customer.com",
+            "resolved_ips": ["45.55.1.9"],
+        }
+    )
+    await run_param_discovery(
+        mongo=mongo,
+        engine=ScopeEngine.from_data_file(),
+        scope=ProgramScope(
+            verified_apexes=("customer.com",), authorized_dedicated_cidrs=("45.55.0.0/16",)
+        ),
+        tenant=TenantContext(tenant_id="t1", actor_id="u1"),
+        program_id="p1",
+        timeout=2100.0,
+        fetch=fetch,
+        arjun=arjun,
+    )
+    assert got["timeout"] == min(2100.0 * 0.5, ARJUN_MAX_SECONDS)  # 600, the cap
