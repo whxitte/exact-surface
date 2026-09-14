@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from core.severity import Severity
 from modules.intelligence import narrative
 from modules.osint import dependency_confusion as dc
@@ -379,6 +381,193 @@ def test_admin_flag_outranks_a_generic_parameter():
     admin = P.classify("is_admin", base, 200, "x" * 1200)
     plain = P.classify("sort", base, 200, "x" * 1200)
     assert admin.severity is Severity.HIGH and plain.severity is Severity.LOW
+
+
+from modules.scanning.params import PROBE_VALUE as P_VALUE  # noqa: E402
+
+# -- the control probe: a host that echoes its URL proves nothing by reflecting --
+
+
+def _wix_like(url: str) -> tuple[int, str]:
+    """A page that prints the request URL into its config JSON three times — which is
+    what lawyers.example.com does. Every parameter reflects; every parameter adds bytes."""
+    echo = f'{{"requestUrl":"{url}","defaultUrl":"{url}","u":"{url}"}}'
+    page = "<html>" + "x" * 1000 + echo
+    return 200, page
+
+
+def test_a_url_echoing_host_does_not_make_every_parameter_look_accepted():
+    """The real case: eight 'high' findings for ?admin= ?isAdmin= ?is_admin= ?role= on
+    two Wix hosts, because the submitted value appeared in the page — as part of the
+    echoed URL. The control parameter reflects identically, so reflection is void and
+    the length growth is what the echo alone accounts for."""
+    from modules.scanning import params as P
+
+    url = "https://lawyers.example/"
+    _, base_body = _wix_like(url)
+    base = P.Baseline(url, 200, len(base_body))
+    _, ctrl_body = _wix_like(P.probe_url(url, [P.control_param()]))
+    base.control_status, base.control_length = 200, len(ctrl_body)
+    base.control_reflects = P._reflects(ctrl_body, P.PROBE_VALUE)
+    assert base.echoes_url
+
+    _, probe_body = _wix_like(P.probe_url(url, ["role"]))
+    assert P.PROBE_VALUE in probe_body  # it does reflect...
+    assert P.classify("role", base, 200, probe_body) is None  # ...and that means nothing
+    batch = ["admin", "isAdmin", "is_admin", "role"]
+    _, batch_body = _wix_like(P.probe_url(url, batch))
+    assert P.analyse_batch(base, batch, 200, batch_body) is False
+
+
+def test_a_real_hidden_parameter_is_still_found_on_an_echoing_host():
+    """The control must not blind the probe: a parameter that changes the status, or
+    adds content beyond the echo, is still a finding."""
+    from modules.scanning import params as P
+
+    url = "https://lawyers.example/"
+    _, base_body = _wix_like(url)
+    base = P.Baseline(url, 200, len(base_body))
+    _, ctrl_body = _wix_like(P.probe_url(url, [P.control_param()]))
+    base.control_status, base.control_length, base.control_reflects = 200, len(ctrl_body), True
+
+    _, echo_only = _wix_like(P.probe_url(url, ["debug"]))
+    debug_panel = echo_only + "<pre>" + "stack frame\n" * 40 + "</pre>"
+    hit = P.classify("debug", base, 200, debug_panel)
+    assert hit and not hit.reflected and "length changed" in hit.evidence
+    assert P.classify("debug", base, 500, echo_only)  # status change counts too
+
+
+def test_reflection_still_counts_where_the_control_does_not_reflect():
+    from modules.scanning import params as P
+
+    base = P.Baseline("https://a.com/r", 200, 1000, control_status=200, control_length=1000)
+    assert base.echoes_url is False
+    hit = P.classify("format", base, 200, "hello exactsurface world")
+    assert hit and hit.reflected
+
+
+@pytest.mark.asyncio
+async def test_pipeline_probes_a_control_first_and_files_nothing_on_an_echoing_host():
+    from core.scope import ProgramScope, ScopeEngine
+    from core.tenant import TenantContext
+    from pipelines.param_discovery import run_param_discovery
+    from tests.fakes import FakeMongo
+
+    mongo = FakeMongo()
+    seen: list[str] = []
+
+    async def fetch(url):
+        seen.append(url)
+        return _wix_like(url)
+
+    await mongo.collection("endpoints").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "url": "https://lawyers.customer.com/",
+            "source": "crawl",
+            "status_code": 200,
+        }
+    )
+    await mongo.collection("assets").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "hostname": "lawyers.customer.com",
+            "resolved_ips": ["45.55.1.9"],
+        }
+    )
+    scope = ProgramScope(
+        verified_apexes=("customer.com",), authorized_dedicated_cidrs=("45.55.0.0/16",)
+    )
+    res = await run_param_discovery(
+        mongo=mongo,
+        engine=ScopeEngine.from_data_file(),
+        scope=scope,
+        tenant=TenantContext(tenant_id="t1", actor_id="u1"),
+        program_id="p1",
+        fetch=fetch,
+        arjun=None,
+    )
+    findings = await mongo.collection("findings").find({"program_id": "p1"}).to_list(None)
+    assert [f for f in findings if f.get("check_id", "").startswith("hidden-parameter")] == []
+    # baseline first, then a control with a name nothing could know — before any candidate
+    assert seen[0] == "https://lawyers.customer.com/"
+    assert seen[1].startswith("https://lawyers.customer.com/?x") and P_VALUE in seen[1]
+    assert res["retired_false_positives"] == 0
+
+
+@pytest.mark.asyncio
+async def test_a_rerun_retires_the_bogus_findings_an_unverified_run_filed():
+    """The eight highs from this morning: filed by a run with no control. The next run
+    re-probes the same URL with one, reproduces none of them, and says so on each
+    record — without touching one a person has confirmed."""
+    from core.lifecycle import FindingState
+    from core.scope import ProgramScope, ScopeEngine
+    from core.tenant import TenantContext
+    from db.findings import FindingRepo
+    from pipelines.param_discovery import run_param_discovery
+    from tests.fakes import FakeMongo
+
+    mongo = FakeMongo()
+    url = "https://lawyers.customer.com/"
+    await mongo.collection("endpoints").insert_one(
+        {"tenant_id": "t1", "program_id": "p1", "url": url, "source": "crawl", "status_code": 200}
+    )
+    await mongo.collection("assets").insert_one(
+        {
+            "tenant_id": "t1",
+            "program_id": "p1",
+            "hostname": "lawyers.customer.com",
+            "resolved_ips": ["45.55.1.9"],
+        }
+    )
+    # What the old code stored: four "accepted" privilege parameters, one of them
+    # since confirmed by a person.
+    for i, name in enumerate(["admin", "isAdmin", "is_admin", "role"]):
+        await mongo.collection("findings").insert_one(
+            {
+                "tenant_id": "t1",
+                "program_id": "p1",
+                "module": "param_discovery",
+                "check_id": "hidden-parameter-reflected",
+                "fingerprint": f"old{i}",
+                "location": url,
+                "name": f"?{name}=",
+                "severity": "high",
+                "state": "confirmed" if name == "role" else "new",
+                "raw": {},
+            }
+        )
+
+    async def fetch(u):
+        return _wix_like(u)
+
+    res = await run_param_discovery(
+        mongo=mongo,
+        engine=ScopeEngine.from_data_file(),
+        scope=ProgramScope(
+            verified_apexes=("customer.com",), authorized_dedicated_cidrs=("45.55.0.0/16",)
+        ),
+        tenant=TenantContext(tenant_id="t1", actor_id="u1"),
+        program_id="p1",
+        fetch=fetch,
+        arjun=None,
+    )
+    assert res["retired_false_positives"] == 3
+    rows = await FindingRepo(mongo.collection("findings")).list("t1", "p1")
+    states = {r["name"]: r["state"] for r in rows}
+    assert states == {
+        "?admin=": "false_positive",
+        "?isAdmin=": "false_positive",
+        "?is_admin=": "false_positive",
+        "?role=": FindingState.CONFIRMED.value,
+    }
+    assert all(
+        "not reproduced" in r["raw"].get("retired_reason", "")
+        for r in rows
+        if r["state"] == "false_positive"
+    )
 
 
 # -- reverse DNS ------------------------------------------------------------

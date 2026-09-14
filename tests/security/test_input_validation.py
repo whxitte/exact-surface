@@ -190,3 +190,37 @@ def test_operator_can_opt_into_multi_tenant_signup(app_ctx, monkeypatch):  # noq
         json={"email": "b@multi.host", "password": "supersecret1", "tenant_name": "B"},
     )
     assert r.status_code == 201
+
+
+def test_findings_come_back_most_severe_first(app_ctx):  # noqa: F811
+    """Every consumer takes the head of this list. An unsorted head once hid all the
+    highs behind a hundred infos, and a CI gate that reads the head would have said
+    'clean'."""
+    from tests.security.conftest import make_program, run
+
+    client, fake = app_ctx
+    tok = signup(client, email="o@x.com", name="X")["access_token"]
+    pid = make_program(client, tok, "acme.com")
+
+    from core.models import Finding
+    from db.findings import FindingRepo
+
+    repo = FindingRepo(fake.collection("findings"))
+    tenant = client.get("/auth/me", headers=auth(tok)).json()["tenant_id"]
+    for i, sev in enumerate(["info", "high", "low", "critical", "medium", "info"]):
+        run(
+            repo.upsert(
+                Finding(
+                    tenant_id=tenant,
+                    program_id=pid,
+                    fingerprint=f"f{i}",
+                    check_id="c",
+                    module="nuclei",
+                    location=f"https://a/{i}",
+                    name=f"n{i}",
+                    severity=sev,
+                )
+            )
+        )
+    rows = client.get(f"/programs/{pid}/findings", headers=auth(tok)).json()
+    assert [r["severity"] for r in rows] == ["critical", "high", "medium", "low", "info", "info"]

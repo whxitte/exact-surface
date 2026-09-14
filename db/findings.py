@@ -46,3 +46,38 @@ class FindingRepo(Repository):
             },
         )
         return True
+
+    async def retire_unreproduced(
+        self,
+        tenant_id: str,
+        program_id: str,
+        module: str,
+        locations: list[str],
+        keep: set[str],
+        reason: str,
+    ) -> int:
+        """A module fully re-checked *locations* and produced the findings in *keep*.
+
+        Anything else it had previously filed at those locations was looked for and
+        not found again — retire it as FALSE_POSITIVE with the reason. Only for
+        locations the module actually covered this run: a probe that failed halfway
+        must not retire what it never re-examined. Lifecycle rules apply; a person's
+        CONFIRMED or ACCEPTED_RISK is never overridden. Returns how many were retired.
+        """
+        if not locations:
+            return 0
+        rows = await self._c.find(
+            {
+                "tenant_id": tenant_id,
+                "program_id": program_id,
+                "module": module,
+                "location": {"$in": list(locations)},
+            }
+        ).to_list(None)
+        retired = 0
+        for r in rows:
+            if r.get("fingerprint") in keep:
+                continue
+            if await self.mark_false_positive(tenant_id, r["fingerprint"], reason):
+                retired += 1
+        return retired

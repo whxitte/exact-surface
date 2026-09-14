@@ -139,6 +139,7 @@ async def run_param_discovery(
         async def probe(url: str) -> None:
             nonlocal probes
             async with sem:
+                complete = True
                 try:
                     status, body = await fetch(url)
                     probes += 1
@@ -146,6 +147,23 @@ async def run_param_discovery(
                     logger.debug("param_discovery: baseline failed for {}: {}", url, exc)
                     return
                 baseline = P.Baseline(url=url, status=status, length=len(body))
+                # The control: one parameter nothing could handle. Its response tells
+                # us what merely *having* a parameter does to this page, so a host that
+                # echoes its URL cannot make every candidate look accepted.
+                try:
+                    c_status, c_body = await fetch(P.probe_url(url, [P.control_param()]))
+                    probes += 1
+                    baseline.control_status = c_status
+                    baseline.control_length = len(c_body)
+                    baseline.control_reflects = P._reflects(c_body, P.PROBE_VALUE)
+                    if baseline.control_reflects:
+                        logger.info(
+                            "param_discovery: {} echoes its URL — reflection is not evidence here",
+                            url,
+                        )
+                except Exception as exc:  # noqa: BLE001 - no control means no probing:
+                    logger.debug("param_discovery: control failed for {}: {}", url, exc)
+                    return  # a hit without a control is exactly the false positive
 
                 # Batch, then split only the batches that moved. A batch that changes
                 # nothing eliminates every name in it for one request.
@@ -159,7 +177,8 @@ async def run_param_discovery(
                         status, body = await fetch(P.probe_url(url, batch))
                         probes += 1
                     except Exception:  # noqa: BLE001, S112 - a failed probe just
-                        continue  # leaves that batch unresolved; the rest still run
+                        complete = False  # leaves that batch unresolved; the rest still
+                        continue  # run — but this URL was not fully re-examined
                     if not P.analyse_batch(baseline, batch, status, body):
                         continue
                     if len(batch) == 1:
@@ -175,7 +194,10 @@ async def run_param_discovery(
                         continue
                     mid = len(batch) // 2
                     queue.extend([batch[:mid], batch[mid:]])
+                if complete:
+                    fully_probed.append(url)
 
+        fully_probed: list[str] = []
         await asyncio.gather(*(probe(u) for u in targets), return_exceptions=True)
 
     # Fold arjun's hits in, skipping anything the built-in probe already reported so a
@@ -219,13 +241,28 @@ async def run_param_discovery(
             )
         )
 
-    total, new = await FindingRepo.from_mongo(mongo).upsert_many(findings)
+    repo = FindingRepo.from_mongo(mongo)
+    total, new = await repo.upsert_many(findings)
+    # Every URL that was fully re-probed and produced nothing for a parameter an
+    # earlier run had filed: that finding was looked for and not reproduced. Say so,
+    # rather than leaving it live — gone-detection rightly distrusts a run that reports
+    # nothing, and on a host that echoes its URL, nothing is the correct result.
+    retired = await repo.retire_unreproduced(
+        tenant.tenant_id,
+        program_id,
+        "param_discovery",
+        fully_probed,
+        {f.fingerprint for f in findings},
+        "re-probed with a control parameter: not reproduced",
+    )
     logger.info(
-        "param_discovery: {} observed, {} hidden found in {} request(s) ({} new finding(s))",
+        "param_discovery: {} observed, {} hidden found in {} request(s) "
+        "({} new finding(s), {} earlier retired as not reproduced)",
         len(observed),
         len(hidden),
         probes,
         new,
+        retired,
     )
     return {
         "observed": len(observed),
@@ -235,6 +272,7 @@ async def run_param_discovery(
         "by_arjun": sum(len(v) for v in by_arjun.values()),
         "findings": total,
         "new": new,
+        "retired_false_positives": retired,
     }
 
 

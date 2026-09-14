@@ -968,7 +968,15 @@ async def list_findings(
         docs = [d for d in docs if d.get("severity") == severity]
     if state:
         docs = [d for d in docs if d.get("state") == state]
+    # Most severe first, then freshest. Every consumer that shows a page of these —
+    # the dashboard, the CLI's -n, the MCP tool's limit — takes the head of the list,
+    # and an unsorted head once hid all fifteen highs behind a hundred infos.
+    docs.sort(key=lambda d: str(d.get("last_seen") or ""), reverse=True)
+    docs.sort(key=lambda d: _SEVERITY_RANK.get(d.get("severity"), 0), reverse=True)
     return [clean_doc(d) for d in docs]
+
+
+_SEVERITY_RANK = {"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1}
 
 
 @router.get("/{program_id}/correlation", tags=["data"])

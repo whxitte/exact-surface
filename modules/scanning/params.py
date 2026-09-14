@@ -149,12 +149,47 @@ class HiddenParam:
 
 @dataclass
 class Baseline:
-    """What a URL looks like with no extra parameters — the comparison point."""
+    """What a URL looks like with no extra parameters — the comparison point.
+
+    ``control_*`` describe the same URL with one parameter *no application could
+    know* (see :func:`control_param`). They exist because many sites echo the request
+    URL into the page — a canonical tag, an ``og:url``, a page-config blob — so any
+    parameter "reflects" and any parameter adds bytes. Wix does it; so do plenty of
+    others. Without a control, every probed name on such a host looks accepted: eight
+    "high" findings for ``?admin=`` and ``?role=`` on a site that simply prints its
+    URL. With one, reflection is void where the control reflects, and length is
+    judged against what the echo alone accounts for.
+    """
 
     url: str
     status: int
     length: int
     body_sample: str = field(default="", repr=False)
+    control_status: int | None = None
+    control_length: int | None = None
+    control_reflects: bool = False
+
+    @property
+    def echoes_url(self) -> bool:
+        return self.control_reflects
+
+    def expected_length(self, n_params: int) -> int:
+        """Bytes a response should have if the only effect of adding *n_params* is the
+        host echoing a longer URL. Linear in the parameter count is a fair model of a
+        page that prints its URL a fixed number of times."""
+        if self.control_length is None:
+            return self.length
+        per_param = max(0, self.control_length - self.length)
+        return self.length + per_param * n_params
+
+
+def control_param(rng=None) -> str:
+    """A parameter name no application has a handler for."""
+    import random
+    import string
+
+    rng = rng or random
+    return "x" + "".join(rng.choice(string.ascii_lowercase) for _ in range(9))
 
 
 def classify_name(name: str) -> tuple[Severity, str]:
@@ -220,18 +255,20 @@ def analyse_batch(
     """
     if status != baseline.status:
         return True
-    if abs(len(body) - baseline.length) >= LENGTH_DELTA:
+    if abs(len(body) - baseline.expected_length(len(params))) >= LENGTH_DELTA:
         return True
-    return _reflects(body, value)
+    return _reflects(body, value) and not baseline.echoes_url
 
 
 def classify(
     name: str, baseline: Baseline, status: int, body: str, *, value: str = PROBE_VALUE
 ) -> HiddenParam | None:
     """Decide what a single confirmed parameter means."""
-    reflected = _reflects(body, value)
+    # On a host that echoes its URL, reflection proves nothing and the control's
+    # length is the honest comparison point — it already contains the echo.
+    reflected = _reflects(body, value) and not baseline.echoes_url
     changed_status = status != baseline.status
-    delta = len(body) - baseline.length
+    delta = len(body) - baseline.expected_length(1)
 
     if not (reflected or changed_status or abs(delta) >= LENGTH_DELTA):
         return None
