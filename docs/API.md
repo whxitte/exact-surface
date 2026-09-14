@@ -15,7 +15,7 @@ Two credential types resolve to the same `Principal` (`api/deps.get_principal`):
 | Method | Header | Notes |
 |---|---|---|
 | JWT | `Authorization: Bearer <token>` | from `/auth/signup` or `/auth/login`; HS256, expiring |
-| API key | `X-API-Key: vnt_...` | shown once at creation, stored as SHA-256 only |
+| API key | `X-API-Key: exs_...` | shown once at creation, stored as SHA-256 only; scoped (see below); cannot perform human-only actions |
 
 **Every route requires auth** except the explicit public set: `/healthz`,
 `/readyz`, `/metrics`, `/auth/signup`, `/auth/login`, `/auth/verify-email`, and
@@ -47,7 +47,11 @@ the docs endpoints. This is enforced structurally by
 | `POST` | `/auth/verify-email` | **public** — the emailed one-time token *is* the credential |
 | `POST` | `/auth/resend-verification` | authed; per-user 60s cool-off → `429` |
 | `GET` | `/auth/me` | principal + `email`, `email_verified` |
-| `POST` | `/auth/api-keys` | **OWNER/ADMIN only**; raw key returned exactly once |
+| `POST` | `/auth/api-keys` | settings.manage, **human-only**; body `{name, scopes[]}`; raw key returned exactly once with the scopes actually granted |
+| `GET` | `/auth/api-keys` | list keys (never the hash); revoked ones included |
+| `DELETE` | `/auth/api-keys/{key_id}` | revoke, effective immediately; **human-only** |
+| `GET` | `/auth/api-keys/scopes` | the scope catalogue and which of them the caller may grant |
+| `GET` | `/audit` | settings.manage; every mutating call, succeeded or refused — `?limit=&before=&program_id=&actor=` |
 
 An admin cannot mint an OWNER-scoped key (no privilege escalation).
 
@@ -154,3 +158,24 @@ Invalid → close `4401`. Both scope every query to the token's `tenant_id`.
 
 Keeping `/healthz` DB-free is deliberate: a Mongo blip must not cause a restart
 loop.
+
+## API-key scopes and human-only actions
+
+A key acts with its creator's live permissions, narrowed by its scopes. Ask for more
+than the creator holds and the response lists what was actually granted.
+
+| Scope | Allows | Needs from the creator |
+|---|---|---|
+| `read` | every read route — implicit on all keys | `view` |
+| `scans:run` | `POST …/scan`, `…/scan-runs/{id}/cancel`, `…/bypass-403` | `programs.manage` |
+| `programs:write` | `POST /programs`, modules, monitoring, schedule, timeouts, alert policy | `programs.manage` |
+| `playground:run` | `POST /playground/run`, save/delete workflows | `programs.manage` |
+| `settings:write` | writes under `/notifications`, `/integrations`, `/schedule` | `settings.manage` |
+
+**No scope permits these** — they return `403 "this action requires an interactive
+session"` for any key: `…/verify/request`, `…/verify/check`, `…/authorization`,
+`…/scan-config`, `DELETE /programs/{id}`, everything under `/members`, and creating
+or revoking API keys. Do them as a person; the audit log records who.
+
+A missing scope is `403 "this API key does not have the 'x' scope"`. A revoked or
+unknown key is `401 "invalid api key"` — the same message for both, deliberately.

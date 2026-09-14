@@ -15,12 +15,14 @@ from api.deps import (
     get_email_sender_dep,
     get_mongo_dep,
     get_principal,
+    require_human,
     require_permission,
 )
 from api.rate_limit import limiter
 from api.schemas import (
     ApiKeyCreate,
     ApiKeyCreated,
+    ApiKeyInfo,
     LoginRequest,
     SignupRequest,
     TokenResponse,
@@ -30,7 +32,7 @@ from core.config import get_settings
 from core.email import EmailSender, build_verification_email
 from core.logging import logger
 from core.models import ApiKey, Group, Role, Tenant, User
-from core.permissions import DEFAULT_VIEWER_PERMISSIONS, SETTINGS_MANAGE
+from core.permissions import DEFAULT_VIEWER_PERMISSIONS, SETTINGS_MANAGE, normalise_scopes
 from db.apikeys import ApiKeyRepo
 from db.groups import GroupRepo
 from db.tenants import TenantRepo
@@ -204,19 +206,28 @@ async def me(
     }
 
 
-@router.post("/api-keys", response_model=ApiKeyCreated, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/api-keys",
+    response_model=ApiKeyCreated,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_human)],
+)
 async def create_api_key(
     body: ApiKeyCreate,
     principal: Principal = Depends(_require_settings_manage),
     mongo: Any = Depends(get_mongo_dep),
 ) -> ApiKeyCreated:
     # The API router is ungated (login/me must stay open), so this route carries its
-    # own SETTINGS_MANAGE guard. A key acts with its creator's *live* permissions
-    # (resolved via created_by on every request), so a non-owner's key is naturally
-    # bounded to what that member can do — and this check stops it being minted with a
-    # higher role than the creator holds.
+    # own SETTINGS_MANAGE guard, and it is human-only: a key that can mint keys is a
+    # key that can never really be revoked. A key acts with its creator's *live*
+    # permissions (resolved via created_by on every request), so a non-owner's key is
+    # naturally bounded to what that member can do — and this check stops it being
+    # minted with a higher role than the creator holds.
     if body.role == Role.OWNER and principal.role != Role.OWNER:
         raise HTTPException(status.HTTP_403_FORBIDDEN, "cannot mint a key above your own role")
+    # Scopes narrow further. Bounded by what the creator holds right now; unknown or
+    # unavailable scopes are dropped and the response says what was actually granted.
+    scopes = sorted(normalise_scopes(body.scopes, principal.permissions))
     raw, key_hash, prefix = generate_api_key()
     key_id = "k_" + uuid.uuid4().hex[:12]
     await ApiKeyRepo.from_mongo(mongo).create(
@@ -228,7 +239,59 @@ async def create_api_key(
             prefix=prefix,
             role=body.role,
             created_by=principal.user_id,
+            scopes=scopes,
         )
     )
     # The raw key is returned exactly once and never stored (§9).
-    return ApiKeyCreated(key_id=key_id, name=body.name, api_key=raw, prefix=prefix)
+    return ApiKeyCreated(key_id=key_id, name=body.name, api_key=raw, prefix=prefix, scopes=scopes)
+
+
+@router.get("/api-keys", response_model=list[ApiKeyInfo])
+async def list_api_keys(
+    principal: Principal = Depends(_require_settings_manage),
+    mongo: Any = Depends(get_mongo_dep),
+) -> list[ApiKeyInfo]:
+    """Every key for the tenant, revoked ones included — a revoked key still appears
+    in the audit log, so it has to still be nameable here. Never the hash."""
+    rows = await ApiKeyRepo.from_mongo(mongo).list(principal.tenant_id)
+    return [
+        ApiKeyInfo(
+            key_id=r["key_id"],
+            name=r.get("name", ""),
+            prefix=r.get("prefix", ""),
+            scopes=list(r.get("scopes") or ["read"]),
+            created_by=r.get("created_by"),
+            last_used_at=r.get("last_used_at"),
+            revoked_at=r.get("revoked_at"),
+        )
+        for r in rows
+    ]
+
+
+@router.delete(
+    "/api-keys/{key_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_human)],
+)
+async def revoke_api_key(
+    key_id: str,
+    principal: Principal = Depends(_require_settings_manage),
+    mongo: Any = Depends(get_mongo_dep),
+) -> None:
+    """Revoke, effective immediately. Human-only for the same reason creation is."""
+    if not await ApiKeyRepo.from_mongo(mongo).revoke(principal.tenant_id, key_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "no such key")
+
+
+@router.get("/api-keys/scopes")
+async def list_scopes(principal: Principal = Depends(_require_settings_manage)) -> dict:
+    """The scope catalogue, and which of them this caller may grant."""
+    from core.permissions import SCOPE_CATALOGUE, allowed_scopes_for
+
+    allowed = allowed_scopes_for(principal.permissions)
+    return {
+        "scopes": [
+            {"scope": s, "label": label, "description": desc, "grantable": s in allowed}
+            for s, label, desc, _ in SCOPE_CATALOGUE
+        ]
+    }

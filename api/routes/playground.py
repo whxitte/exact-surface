@@ -21,10 +21,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
-from api.deps import Principal, get_mongo_dep, get_principal
+from api.deps import Principal, get_mongo_dep, get_principal, require_scope
 from api.rate_limit import limiter
 from core.logging import logger
 from core.models import Role, ScanRun, ScanStatus
+from core.permissions import SCOPE_PLAYGROUND_RUN
 from core.playground import Graph, GraphError, as_json, validate
 from db.audit import ScanRunRepo
 from db.workflows import WorkflowRepo
@@ -93,7 +94,7 @@ async def list_workflows(
     return {"workflows": docs}
 
 
-@router.put("/workflows/{workflow_id}")
+@router.put("/workflows/{workflow_id}", dependencies=[Depends(require_scope(SCOPE_PLAYGROUND_RUN))])
 async def save_workflow(
     workflow_id: str,
     body: dict,
@@ -122,7 +123,11 @@ async def save_workflow(
     return doc
 
 
-@router.delete("/workflows/{workflow_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/workflows/{workflow_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_scope(SCOPE_PLAYGROUND_RUN))],
+)
 async def delete_workflow(
     workflow_id: str,
     principal: Principal = Depends(get_principal),
@@ -141,7 +146,7 @@ async def validate_graph(body: dict) -> dict:
     return {"ok": True, "order": order}
 
 
-@router.post("/run")
+@router.post("/run", dependencies=[Depends(require_scope(SCOPE_PLAYGROUND_RUN))])
 @limiter.limit("6/minute")
 async def run(
     request: Request,

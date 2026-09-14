@@ -15,8 +15,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
-from api.deps import require_router_access
+from api.deps import require_human, require_router_access, writes_require_scope
 from api.rate_limit import limiter
+from api.routes import audit as audit_routes
 from api.routes import auth as auth_routes
 from api.routes import integrations as integration_routes
 from api.routes import members as member_routes
@@ -30,7 +31,7 @@ from api.ws import stream as ws_stream
 from core.config import get_settings
 from core.logging import configure_logging, logger
 from core.metrics import REGISTRY
-from core.permissions import PROGRAMS_MANAGE, SETTINGS_MANAGE, VIEW
+from core.permissions import PROGRAMS_MANAGE, SCOPE_SETTINGS_WRITE, SETTINGS_MANAGE, VIEW
 from daemon.health import run_health_checks
 
 
@@ -77,6 +78,61 @@ async def lifespan(app: FastAPI):
     except Exception as exc:  # noqa: BLE001 - shutdown is best-effort
         logger.debug("mongo close skipped: {}", exc)
     logger.info("api stopped")
+
+
+_AUDITED_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+#: Routes whose bodies would put secrets in the log. Recorded, but with no detail.
+_NO_DETAIL_ACTIONS = frozenset({"login", "signup", "create_api_key", "verify_email"})
+
+
+async def _record_audit(request, status_code: int, principal) -> None:
+    """One AuditEvent for a mutating request. Reads the resolved route for a stable
+    action name and the program id, plus any detail a route left on request.state."""
+    import inspect
+    import uuid
+    from datetime import UTC, datetime
+
+    from api.deps import get_mongo_dep
+    from core.models import AuditEvent
+    from db.audit_log import AuditLogRepo
+
+    # The same Mongo the routes get: through the dependency, so an override (tests,
+    # or any deployment that swaps the handle) reaches the audit log too.
+    provider = request.app.dependency_overrides.get(get_mongo_dep, get_mongo_dep)
+    mongo = provider()
+    if inspect.isawaitable(mongo):
+        mongo = await mongo
+
+    route = request.scope.get("route")
+    action = getattr(route, "name", None) or request.url.path
+    params = request.path_params or {}
+    detail = (
+        {}
+        if action in _NO_DETAIL_ACTIONS
+        else dict(getattr(request.state, "audit_detail", {}) or {})
+    )
+    client = request.client.host if request.client else None
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        client = forwarded.split(",")[0].strip()
+    await AuditLogRepo.from_mongo(mongo).record(
+        AuditEvent(
+            tenant_id=principal.tenant_id,
+            event_id=uuid.uuid4().hex,
+            ts=datetime.now(UTC),
+            actor_type="apikey" if principal.key_id else "user",
+            actor_id=principal.user_id,
+            key_id=principal.key_id,
+            action=action,
+            method=request.method,
+            path=request.url.path,
+            status=status_code,
+            program_id=params.get("program_id"),
+            detail=detail,
+            client_ip=client,
+        )
+    )
 
 
 def create_app() -> FastAPI:
@@ -137,6 +193,24 @@ def create_app() -> FastAPI:
             )
         return response
 
+    # The action audit log. Every mutating call that reached a principal is recorded —
+    # succeeded or refused — with who, what, which program, and the outcome. Refusals
+    # are the more interesting half: a key repeatedly trying to widen its scope is
+    # exactly the thing an operator wants to be able to see afterwards. Awaited, not
+    # fired-and-forgotten: an audit entry that might be lost is not an audit entry.
+    @app.middleware("http")
+    async def _audit(request, call_next):
+        response = await call_next(request)
+        principal = getattr(request.state, "principal", None)
+        if request.method in _AUDITED_METHODS and principal is not None:
+            try:
+                await _record_audit(request, response.status_code, principal)
+            except Exception as exc:  # noqa: BLE001 - never fail a request over its audit row
+                logger.error(
+                    "audit record failed for {} {}: {}", request.method, request.url.path, exc
+                )
+        return response
+
     # Feature routers. Data routers carry a router-level RBAC gate (§ access control):
     # every route needs VIEW and every write needs the router's manage permission, so a
     # user with no permission group is refused everywhere and no new endpoint can ship
@@ -147,12 +221,22 @@ def create_app() -> FastAPI:
         return [Depends(require_router_access(perm))]
 
     app.include_router(auth_routes.router)
-    app.include_router(member_routes.router)  # owner-only; guarded inside
+    # Owner-only, guarded inside — and human-only: an owner's key must not be able to
+    # add members or change groups, or a leaked key becomes a way to mint a person.
+    app.include_router(member_routes.router, dependencies=[Depends(require_human)])
     app.include_router(program_routes.router, dependencies=_gate(PROGRAMS_MANAGE))
     app.include_router(stats_routes.router, dependencies=_gate(VIEW))
-    app.include_router(notification_routes.router, dependencies=_gate(SETTINGS_MANAGE))
-    app.include_router(integration_routes.router, dependencies=_gate(SETTINGS_MANAGE))
-    app.include_router(schedule_routes.router, dependencies=_gate(SETTINGS_MANAGE))
+    _settings_writes = [Depends(writes_require_scope(SCOPE_SETTINGS_WRITE))]
+    app.include_router(
+        notification_routes.router, dependencies=_gate(SETTINGS_MANAGE) + _settings_writes
+    )
+    app.include_router(
+        integration_routes.router, dependencies=_gate(SETTINGS_MANAGE) + _settings_writes
+    )
+    app.include_router(
+        schedule_routes.router, dependencies=_gate(SETTINGS_MANAGE) + _settings_writes
+    )
+    app.include_router(audit_routes.router, dependencies=_gate(SETTINGS_MANAGE))
     app.include_router(report_routes.router, dependencies=_gate(VIEW))
     # The canvas launches real scans, so it needs the same authority as triggering
     # one on a program. The Target node's extra waiver is owner-checked in the runner.

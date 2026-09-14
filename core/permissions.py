@@ -71,3 +71,86 @@ def effective_permissions(*, is_owner: bool, group_permissions) -> frozenset[str
     if is_owner:
         return ASSIGNABLE_PERMISSIONS
     return normalise_permissions(group_permissions)
+
+
+# --------------------------------------------------------------------------- #
+# API-key scopes
+# --------------------------------------------------------------------------- #
+# A key inherits its creator's permissions and then *narrows* them with scopes. Scopes
+# exist because the principal behind a key is increasingly not a person: it is a CI job,
+# an integration, or an AI agent. Those need the least authority that does the job, and
+# "everything my creator can do" is never the least. A key with no scopes beyond
+# ``read`` can look at everything and change nothing, which is the right default for
+# something that might be talked into doing otherwise.
+#
+# Each scope names the coarse permission its creator must hold. A scope the creator
+# could not exercise themselves is dropped at creation, silently, so a key can never
+# be a way up.
+SCOPE_READ = "read"
+SCOPE_SCANS_RUN = "scans:run"
+SCOPE_PROGRAMS_WRITE = "programs:write"
+SCOPE_PLAYGROUND_RUN = "playground:run"
+SCOPE_SETTINGS_WRITE = "settings:write"
+
+#: (scope, label, description, required coarse permission)
+SCOPE_CATALOGUE: tuple[tuple[str, str, str, str], ...] = (
+    (SCOPE_READ, "Read", "Programs, assets, findings, endpoints, scan history, reports.", VIEW),
+    (
+        SCOPE_SCANS_RUN,
+        "Run scans",
+        "Start and cancel scans on already-verified programs.",
+        PROGRAMS_MANAGE,
+    ),
+    (
+        SCOPE_PROGRAMS_WRITE,
+        "Change programs",
+        "Add programs, toggle modules and monitoring, set cadence, timeouts and alert policy.",
+        PROGRAMS_MANAGE,
+    ),
+    (SCOPE_PLAYGROUND_RUN, "Run the Playground", "Run and save canvases.", PROGRAMS_MANAGE),
+    (
+        SCOPE_SETTINGS_WRITE,
+        "Change settings",
+        "Notification channels, integrations, schedule defaults.",
+        SETTINGS_MANAGE,
+    ),
+)
+
+SCOPE_REQUIRES: dict[str, str] = {s: p for s, _, _, p in SCOPE_CATALOGUE}
+ALL_SCOPES: frozenset[str] = frozenset(SCOPE_REQUIRES)
+
+#: What a key gets when nothing is asked for. Read-only, on purpose.
+DEFAULT_KEY_SCOPES: frozenset[str] = frozenset({SCOPE_READ})
+
+#: Actions no API key may perform with any scope. Each one either widens what may be
+#: scanned or changes who may act, and each is the kind of thing an automated caller
+#: — a compromised integration, a prompt-injected agent — must be structurally unable
+#: to do to itself. A person, in a session, does these.
+HUMAN_ONLY_ACTIONS: tuple[str, ...] = (
+    "verify a domain",
+    "create or revoke an authorization record",
+    "change scan-scope switches (scan_shared_infra, scope_override)",
+    "delete a program",
+    "manage members and groups",
+    "create or revoke API keys",
+)
+
+
+def allowed_scopes_for(permissions) -> frozenset[str]:
+    """The scopes a principal with *permissions* may grant to a key."""
+    perms = set(permissions)
+    return frozenset(s for s, p in SCOPE_REQUIRES.items() if p in perms)
+
+
+def normalise_scopes(requested, creator_permissions) -> frozenset[str]:
+    """Requested scopes, bounded by what the creator holds, always including ``read``.
+
+    Unknown scopes and scopes the creator cannot exercise are dropped rather than
+    rejected: a client asking for more than it may have gets a key that does what it
+    is allowed to, and can see exactly which scopes it received.
+    """
+    allowed = allowed_scopes_for(creator_permissions)
+    granted = {s for s in requested if s in allowed}
+    if VIEW in set(creator_permissions):
+        granted.add(SCOPE_READ)
+    return frozenset(granted)

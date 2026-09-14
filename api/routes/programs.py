@@ -6,7 +6,7 @@ import secrets
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from api.deps import (
     Principal,
@@ -14,8 +14,10 @@ from api.deps import (
     get_domain_verifier,
     get_mongo_dep,
     get_principal,
+    require_human,
     require_owner,
     require_program,
+    require_scope,
     require_verified_email,
 )
 from api.schemas import (
@@ -46,6 +48,7 @@ from core.models import (
     ScanStatus,
     VerificationMethod,
 )
+from core.permissions import SCOPE_PROGRAMS_WRITE, SCOPE_SCANS_RUN
 from core.scope import HTTP_LAYER_ACTIONS, PENDING, IpClass
 from core.severity import Severity
 from core.verification import dns_instructions, http_instructions
@@ -85,7 +88,11 @@ async def list_programs(
     return [clean_doc(d) for d in await ProgramRepo.from_mongo(mongo).list(principal.tenant_id)]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def create_program(
     body: ProgramCreate,
     principal: Principal = Depends(require_verified_email),
@@ -107,7 +114,9 @@ async def get_program(program: dict = Depends(require_program)) -> dict:
     return clean_doc(program)
 
 
-@router.delete("/{program_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{program_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_human)]
+)
 async def delete_program(
     program: dict = Depends(require_program),
     _: Principal = Depends(require_owner),
@@ -119,7 +128,11 @@ async def delete_program(
     await delete_program_and_data(mongo, program["tenant_id"], program["program_id"])
 
 
-@router.post("/{program_id}/monitoring", tags=["programs"])
+@router.post(
+    "/{program_id}/monitoring",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def set_monitoring(
     enabled: bool = Query(...),
     program: dict = Depends(require_program),
@@ -133,7 +146,11 @@ async def set_monitoring(
     return {"program_id": program["program_id"], "enabled": enabled}
 
 
-@router.post("/{program_id}/assets/{fingerprint}/monitoring", tags=["programs"])
+@router.post(
+    "/{program_id}/assets/{fingerprint}/monitoring",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def set_asset_monitoring(
     fingerprint: str,
     enabled: bool = Query(...),
@@ -211,7 +228,11 @@ async def get_schedule(
     return await _schedule_view(mongo, program)
 
 
-@router.post("/{program_id}/schedule", tags=["programs"])
+@router.post(
+    "/{program_id}/schedule",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def set_schedule(
     body: dict,
     program: dict = Depends(require_program),
@@ -297,7 +318,11 @@ async def get_timeouts(
     return await _timeouts_view(mongo, program)
 
 
-@router.post("/{program_id}/timeouts", tags=["programs"])
+@router.post(
+    "/{program_id}/timeouts",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def set_timeouts(
     body: dict,
     program: dict = Depends(require_program),
@@ -336,7 +361,11 @@ async def get_alert_policy(
     return await _alert_policy_view(mongo, program)
 
 
-@router.post("/{program_id}/alert-policy", tags=["programs"])
+@router.post(
+    "/{program_id}/alert-policy",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def set_alert_policy(
     body: dict,
     program: dict = Depends(require_program),
@@ -352,7 +381,11 @@ async def set_alert_policy(
 
 
 # -- domain verification -----------------------------------------------------
-@router.post("/{program_id}/verify/request", response_model=VerifyRequestResponse)
+@router.post(
+    "/{program_id}/verify/request",
+    response_model=VerifyRequestResponse,
+    dependencies=[Depends(require_human)],
+)
 async def request_verification(
     method: VerificationMethod = Query(default=VerificationMethod.DNS_TXT),
     program: dict = Depends(require_program),
@@ -371,7 +404,11 @@ async def request_verification(
     return VerifyRequestResponse(method=method, token=token, instructions=instr)
 
 
-@router.post("/{program_id}/verify/check", response_model=VerifyCheckResponse)
+@router.post(
+    "/{program_id}/verify/check",
+    response_model=VerifyCheckResponse,
+    dependencies=[Depends(require_human)],
+)
 async def check_verification(
     program: dict = Depends(require_program),
     mongo: Any = Depends(get_mongo_dep),
@@ -390,7 +427,11 @@ async def check_verification(
 
 
 # -- authorization -----------------------------------------------------------
-@router.post("/{program_id}/authorization", status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/{program_id}/authorization",
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_human)],
+)
 async def create_authorization(
     body: AuthorizationCreate,
     program: dict = Depends(require_program),
@@ -441,8 +482,9 @@ async def get_authorization(
 
 
 # -- scan config -------------------------------------------------------------
-@router.post("/{program_id}/scan-config", tags=["programs"])
+@router.post("/{program_id}/scan-config", tags=["programs"], dependencies=[Depends(require_human)])
 async def set_scan_config(
+    request: Request,
     scan_shared_infra: bool | None = Query(None),
     scope_override: bool | None = Query(None),
     program: dict = Depends(require_program),
@@ -487,6 +529,12 @@ async def set_scan_config(
             principal.tenant_id,
         )
         await repo.set_scope_override(principal.tenant_id, pid, scope_override)
+        # The audit row for this request should say which way it went, not just that
+        # scan-config was touched.
+        request.state.audit_detail = {
+            "scope_override": bool(scope_override),
+            "apex": program.get("apex_domain"),
+        }
 
     fresh = await repo.get(principal.tenant_id, pid) or {}
     return {
@@ -496,7 +544,11 @@ async def set_scan_config(
     }
 
 
-@router.post("/{program_id}/modules", tags=["programs"])
+@router.post(
+    "/{program_id}/modules",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def set_modules(
     enabled: list[str],
     program: dict = Depends(require_program),
@@ -538,7 +590,11 @@ async def get_modules(
     }
 
 
-@router.put("/{program_id}/modules", tags=["programs"])
+@router.put(
+    "/{program_id}/modules",
+    tags=["programs"],
+    dependencies=[Depends(require_scope(SCOPE_PROGRAMS_WRITE))],
+)
 async def update_modules(
     body: dict,
     program: dict = Depends(require_program),
@@ -572,7 +628,11 @@ async def update_modules(
 
 
 # -- scan trigger (auth-gated) ----------------------------------------------
-@router.post("/{program_id}/scan", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{program_id}/scan",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_scope(SCOPE_SCANS_RUN))],
+)
 async def trigger_scan(
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),
@@ -660,7 +720,11 @@ async def trigger_scan(
     }
 
 
-@router.post("/{program_id}/scan-runs/{scan_id}/cancel", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{program_id}/scan-runs/{scan_id}/cancel",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_scope(SCOPE_SCANS_RUN))],
+)
 async def cancel_scan_run(
     scan_id: str,
     program: dict = Depends(require_program),
@@ -700,7 +764,11 @@ async def cancel_scan_run(
 
 
 # -- 403-bypass (on-demand, user-triggered; NOT a pipeline phase) ------------
-@router.post("/{program_id}/bypass-403", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{program_id}/bypass-403",
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(require_scope(SCOPE_SCANS_RUN))],
+)
 async def trigger_bypass_403(
     program: dict = Depends(require_program),
     principal: Principal = Depends(get_principal),

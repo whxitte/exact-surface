@@ -437,6 +437,37 @@ export interface Integration {
   configured: boolean;
   masked: string;
 }
+// -- API keys & audit --------------------------------------------------------
+export interface ApiKeyInfo {
+  key_id: string;
+  name: string;
+  prefix: string;
+  scopes: string[];
+  created_by: string | null;
+  last_used_at: string | null;
+  revoked_at: string | null;
+}
+export interface ScopeInfo {
+  scope: string;
+  label: string;
+  description: string;
+  grantable: boolean;
+}
+export interface AuditEvent {
+  event_id: string;
+  ts: string;
+  actor_type: "user" | "apikey";
+  actor_id: string | null;
+  key_id: string | null;
+  action: string;
+  method: string;
+  path: string;
+  status: number;
+  program_id: string | null;
+  detail: Record<string, unknown>;
+  client_ip: string | null;
+}
+
 // -- access control (RBAC) ---------------------------------------------------
 export interface ScanConfig {
   program_id: string;
@@ -480,11 +511,16 @@ export const api = {
   verifyEmail: (token: string) =>
     request<{ verified: boolean; email: string }>("/auth/verify-email", json({ token })),
   resendVerification: () => request<void>("/auth/resend-verification", { method: "POST" }),
-  createApiKey: (name: string) =>
-    request<{ key_id: string; name: string; api_key: string; prefix: string }>(
+  createApiKey: (name: string, scopes: string[] = []) =>
+    request<{ key_id: string; name: string; api_key: string; prefix: string; scopes: string[] }>(
       "/auth/api-keys",
-      json({ name }),
+      json({ name, scopes }),
     ),
+  listApiKeys: () => request<ApiKeyInfo[]>("/auth/api-keys"),
+  revokeApiKey: (keyId: string) =>
+    request<void>(`/auth/api-keys/${encodeURIComponent(keyId)}`, { method: "DELETE" }),
+  apiKeyScopes: () => request<{ scopes: ScopeInfo[] }>("/auth/api-keys/scopes"),
+  auditEvents: (limit = 50) => request<{ events: AuditEvent[] }>(`/audit?limit=${limit}`),
 
   stats: () => request<Stats>("/stats"),
   activity: () => request<ScanRun[]>("/activity"),

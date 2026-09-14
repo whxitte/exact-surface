@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -114,7 +115,37 @@ class ApiKey(TenantScopedModel):
     prefix: str  # first chars of the raw key, for display/identification
     role: Role = Role.MEMBER
     created_by: str | None = None
+    #: What this key may do, bounded by its creator's permissions at every use. See
+    #: core.permissions.SCOPE_CATALOGUE. Default read-only.
+    scopes: list[str] = Field(default_factory=lambda: ["read"])
     last_used_at: datetime | None = None
+    #: A revoked key is refused at once and kept so the audit trail still resolves it.
+    revoked_at: datetime | None = None
+
+
+class AuditEvent(TenantScopedModel):
+    """One recorded action: who did what to which program, and how it went.
+
+    Every mutating API call produces one, whether it succeeded or was refused — a
+    refused attempt to widen scope is the more interesting record of the two.
+    """
+
+    event_id: str
+    ts: datetime
+    #: "user" for an interactive session, "apikey" for a key. The key_id is kept
+    #: even after the key is revoked, which is why revocation does not delete keys.
+    actor_type: str
+    actor_id: str | None = None
+    key_id: str | None = None
+    #: The route's name, e.g. "run_scan", "set_scan_config" — stable across URL changes.
+    action: str
+    method: str
+    path: str
+    status: int
+    program_id: str | None = None
+    #: Route-supplied specifics worth keeping, e.g. {"scope_override": true}.
+    detail: dict[str, Any] = Field(default_factory=dict)
+    client_ip: str | None = None
 
 
 class ChannelType(str, Enum):

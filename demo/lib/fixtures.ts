@@ -7107,3 +7107,29 @@ export const PLAYGROUND_NODES = [
     "caution": ""
   }
 ] as const;
+
+export const API_KEY_SCOPES = {
+  "scopes": [
+    { "scope": "read", "label": "Read", "description": "Programs, assets, findings, endpoints, scan history, reports.", "grantable": true },
+    { "scope": "scans:run", "label": "Run scans", "description": "Start and cancel scans on already-verified programs.", "grantable": true },
+    { "scope": "programs:write", "label": "Change programs", "description": "Add programs, toggle modules and monitoring, set cadence, timeouts and alert policy.", "grantable": true },
+    { "scope": "playground:run", "label": "Run the Playground", "description": "Run and save canvases.", "grantable": true },
+    { "scope": "settings:write", "label": "Change settings", "description": "Notification channels, integrations, schedule defaults.", "grantable": true }
+  ]
+} as const;
+
+export const API_KEYS = [
+  { "key_id": "k_3f9a1c2b7d4e", "name": "ci-pipeline", "prefix": "exs_Qm4xL9pT", "scopes": ["read", "scans:run"], "created_by": "u_demo", "last_used_at": "2026-09-14T06:41:12Z", "revoked_at": null },
+  { "key_id": "k_8c21e0aa5b17", "name": "soc-agent", "prefix": "exs_Zt7vHn2K", "scopes": ["read"], "created_by": "u_demo", "last_used_at": "2026-09-14T08:03:55Z", "revoked_at": null },
+  { "key_id": "k_0d5e77b2c9f3", "name": "old-laptop", "prefix": "exs_Bw1cRj8M", "scopes": ["read", "programs:write"], "created_by": "u_demo", "last_used_at": "2026-08-30T17:20:01Z", "revoked_at": "2026-09-02T09:15:00Z" }
+] as const;
+
+export const AUDIT_EVENTS = {
+  "events": [
+    { "event_id": "e01", "ts": "2026-09-14T08:03:55Z", "actor_type": "apikey", "actor_id": "u_demo", "key_id": "k_8c21e0aa5b17", "action": "set_scan_config", "method": "POST", "path": "/programs/prog_demo/scan-config", "status": 403, "program_id": "prog_demo", "detail": {}, "client_ip": "10.0.4.21" },
+    { "event_id": "e02", "ts": "2026-09-14T06:41:12Z", "actor_type": "apikey", "actor_id": "u_demo", "key_id": "k_3f9a1c2b7d4e", "action": "trigger_scan", "method": "POST", "path": "/programs/prog_demo/scan", "status": 202, "program_id": "prog_demo", "detail": {}, "client_ip": "10.0.4.7" },
+    { "event_id": "e03", "ts": "2026-09-13T14:10:30Z", "actor_type": "user", "actor_id": "u_demo", "key_id": null, "action": "set_scan_config", "method": "POST", "path": "/programs/prog_demo/scan-config", "status": 200, "program_id": "prog_demo", "detail": { "scope_override": false, "apex": "demo.exactsurface.com" }, "client_ip": "203.0.113.8" },
+    { "event_id": "e04", "ts": "2026-09-02T09:15:00Z", "actor_type": "user", "actor_id": "u_demo", "key_id": null, "action": "revoke_api_key", "method": "DELETE", "path": "/auth/api-keys/k_0d5e77b2c9f3", "status": 204, "program_id": null, "detail": {}, "client_ip": "203.0.113.8" },
+    { "event_id": "e05", "ts": "2026-09-01T11:02:14Z", "actor_type": "user", "actor_id": "u_demo", "key_id": null, "action": "set_modules", "method": "POST", "path": "/programs/prog_demo/modules", "status": 200, "program_id": "prog_demo", "detail": {}, "client_ip": "203.0.113.8" }
+  ]
+} as const;

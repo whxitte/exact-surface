@@ -7,6 +7,8 @@ frontend check) is rejected with a 422 before anything is persisted or acted on.
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from core.models import ChannelType, Role, VerificationMethod
@@ -49,6 +51,9 @@ class TokenResponse(BaseModel):
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     role: Role = Role.MEMBER
+    #: Requested scopes; bounded server-side by the creator's permissions. Omitted or
+    #: empty means read-only. See core.permissions.SCOPE_CATALOGUE.
+    scopes: list[str] = Field(default_factory=list, max_length=16)
 
 
 class ApiKeyCreated(BaseModel):
@@ -56,6 +61,18 @@ class ApiKeyCreated(BaseModel):
     name: str
     api_key: str  # raw key — shown exactly once
     prefix: str
+    #: What the key actually got, which may be less than what was asked for.
+    scopes: list[str]
+
+
+class ApiKeyInfo(BaseModel):
+    key_id: str
+    name: str
+    prefix: str
+    scopes: list[str]
+    created_by: str | None = None
+    last_used_at: datetime | None = None
+    revoked_at: datetime | None = None
 
 
 # -- programs ----------------------------------------------------------------

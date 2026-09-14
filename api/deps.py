@@ -17,6 +17,7 @@ from api.auth import InvalidToken, decode_token, hash_api_key
 from core.config import get_settings
 from core.email import EmailSender, get_email_sender
 from core.models import Role
+from core.permissions import DEFAULT_KEY_SCOPES, normalise_scopes
 from core.verification import DomainVerifier
 from db.apikeys import ApiKeyRepo
 from db.mongo import get_mongo
@@ -45,13 +46,26 @@ class Principal:
     #: Effective RBAC permissions (§ access control). Owner ⇒ every permission; a
     #: non-owner ⇒ the union of their groups', empty if they have none.
     permissions: frozenset[str] = frozenset()
+    #: For an API key: the scopes it was minted with, bounded by the creator's live
+    #: permissions. ``None`` for an interactive session, which is not scope-limited —
+    #: a person is governed by RBAC alone. See core.permissions.SCOPE_CATALOGUE.
+    scopes: frozenset[str] | None = None
+    key_id: str | None = None
 
     @property
     def is_owner(self) -> bool:
         return self.role == Role.OWNER
 
+    @property
+    def is_human(self) -> bool:
+        return self.method == "jwt"
+
     def has(self, perm: str) -> bool:
         return perm in self.permissions
+
+    def may(self, scope: str) -> bool:
+        """Scope check. Always true for a person; for a key, the scope must be held."""
+        return self.scopes is None or scope in self.scopes
 
 
 async def get_mongo_dep() -> Any:
@@ -67,9 +81,20 @@ def clean_doc(doc: dict | None) -> dict | None:
 
 
 async def get_principal(
+    request: Request,
     authorization: str | None = Header(default=None),
     x_api_key: str | None = Header(default=None),
     mongo: Any = Depends(get_mongo_dep),
+) -> Principal:
+    principal = await _resolve_principal(authorization, x_api_key, mongo)
+    # Left on the request for the audit middleware, which runs after the route and
+    # would otherwise have no idea who acted.
+    request.state.principal = principal
+    return principal
+
+
+async def _resolve_principal(
+    authorization: str | None, x_api_key: str | None, mongo: Any
 ) -> Principal:
     if authorization and authorization.startswith("Bearer "):
         try:
@@ -88,19 +113,28 @@ async def get_principal(
         )
 
     if x_api_key:
-        doc = await ApiKeyRepo.from_mongo(mongo).get_by_hash(hash_api_key(x_api_key))
-        if not doc:
+        keys = ApiKeyRepo.from_mongo(mongo)
+        doc = await keys.get_by_hash(hash_api_key(x_api_key))
+        if not doc or doc.get("revoked_at") is not None:
+            # Same message for unknown and revoked: a caller probing keys learns nothing.
             raise HTTPException(status.HTTP_401_UNAUTHORIZED, "invalid api key")
         role = Role(doc.get("role", "member"))
         # An API key acts with its creator's current permissions (owner-created key ⇒
         # full access), resolved live so revoking the creator's access revokes the key.
+        # Its scopes then narrow that: re-bounded here, not just at creation, so a
+        # creator who has since lost a permission takes the key's matching scope with
+        # them.
         perms = await _resolve_permissions(mongo, doc["tenant_id"], doc.get("created_by"), role)
+        scopes = normalise_scopes(doc.get("scopes") or DEFAULT_KEY_SCOPES, perms)
+        await keys.touch(doc["tenant_id"], doc["key_id"])
         return Principal(
             tenant_id=doc["tenant_id"],
             user_id=doc.get("created_by"),
             role=role,
             method="apikey",
             permissions=perms,
+            scopes=scopes,
+            key_id=doc.get("key_id"),
         )
 
     raise HTTPException(
@@ -219,3 +253,57 @@ async def require_program(
     if not program:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "program not found")
     return program
+
+
+# --------------------------------------------------------------------------- #
+# Guards for non-human callers
+# --------------------------------------------------------------------------- #
+def require_scope(scope: str):
+    """A route an API key may only call with *scope*. Interactive sessions pass; they
+    are governed by RBAC, which every route already applies."""
+
+    async def _dep(principal: Principal = Depends(get_principal)) -> Principal:
+        if not principal.may(scope):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"this API key does not have the '{scope}' scope",
+            )
+        return principal
+
+    return _dep
+
+
+def writes_require_scope(scope: str):
+    """Router-level form of :func:`require_scope`: applies to POST/PUT/PATCH/DELETE
+    only, so a router whose reads are covered by ``read`` needs one line, not one per
+    route."""
+
+    async def _dep(request: Request, principal: Principal = Depends(get_principal)) -> Principal:
+        if request.method in _MUTATING and not principal.may(scope):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"this API key does not have the '{scope}' scope",
+            )
+        return principal
+
+    return _dep
+
+
+async def require_human(principal: Principal = Depends(get_principal)) -> Principal:
+    """Refuse API keys outright, whatever their scopes.
+
+    The actions behind this either widen what may be scanned (verification,
+    authorization, the scope switches) or change who may act (members, keys). An
+    automated caller — a leaked integration key, an agent that read something it
+    should not have followed — must be structurally unable to do those to itself.
+    A person, in a session, does them; the audit log records who.
+    """
+    if not principal.is_human:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "this action requires an interactive session; API keys cannot perform it",
+        )
+    return principal
+
+
+_MUTATING = frozenset({"POST", "PUT", "PATCH", "DELETE"})

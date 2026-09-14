@@ -94,6 +94,9 @@ function resolve(path: string): unknown {
     case "/activity":                  return fx.ACTIVITY;
     case "/auth/me":                   return fx.ME;
     case "/auth/signup-open":          return { open: false };
+    case "/auth/api-keys":             return fx.API_KEYS;
+    case "/auth/api-keys/scopes":      return fx.API_KEY_SCOPES;
+    case "/audit":                     return fx.AUDIT_EVENTS;
     // Playground: the demo has no backend to execute a canvas, so it ships the real
     // node catalogue (so the palette looks exactly like the product) and an empty
     // workflow list. Running is a mutation, so it already returns the refusal object.

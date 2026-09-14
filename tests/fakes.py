@@ -19,7 +19,16 @@ class _Cursor:
     def __init__(self, items: list[dict]) -> None:
         self._items = items
 
-    def sort(self, *_a: Any, **_k: Any) -> _Cursor:
+    def sort(self, *args: Any, **_k: Any) -> _Cursor:
+        """Real ordering for the ``sort("field", -1)`` form, which is what the audit
+        log and scan-history readers use; anything else is left as inserted."""
+        if len(args) == 2 and isinstance(args[0], str):
+            field, direction = args
+            self._items = sorted(
+                self._items,
+                key=lambda d: (d.get(field) is None, d.get(field)),
+                reverse=(direction == -1),
+            )
         return self
 
     def limit(self, n: int) -> _Cursor:
@@ -45,6 +54,10 @@ _COMPARATORS = {
 
 def _matches(doc: dict, flt: dict) -> bool:
     for key, cond in flt.items():
+        if key == "$or":
+            if not any(_matches(doc, sub) for sub in cond):
+                return False
+            continue
         value = doc.get(key)
         if isinstance(cond, dict):
             if "$in" in cond and value not in cond["$in"]:

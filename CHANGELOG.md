@@ -10,6 +10,28 @@ docker pull ghcr.io/whxitte/frontend:1.3.2
 docker pull ghcr.io/whxitte/pipeline:1.3.2
 ```
 
+## Unreleased
+
+**Added**
+
+- **API-key scopes.** A key inherits its creator's permissions and narrows them:
+  `read` (implicit, and the default), `scans:run`, `programs:write`, `playground:run`,
+  `settings:write`. Bounded by the creator at creation *and* on every use. The right
+  posture for CI, integrations and AI agents: least authority, and never a way up.
+- **Human-only actions.** Verification, authorization records, the scan-scope
+  switches, program deletion, member/group management and key management are refused
+  for any API key regardless of scopes. A non-human caller cannot widen what may be
+  scanned or change who may act.
+- **Audit log.** Every mutating API call — succeeded or refused — is recorded with
+  actor, action, program, outcome and client address. `GET /audit`, and a card on the
+  Settings page. Passwords and raw keys never enter it.
+- API keys can now be listed and revoked (`GET`/`DELETE /auth/api-keys`), and record
+  when they were last used. Previously a leaked key needed a database session to kill.
+
+**Changed**
+
+- New API keys are prefixed `exs_` (was `vnt_`). Existing keys are unaffected.
+
 ## 1.3.2 — 2026-09-12
 
 **Fixed**
