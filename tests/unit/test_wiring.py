@@ -792,10 +792,10 @@ def test_every_mcp_tool_is_documented_and_nothing_undocumented_is_offered():
     import asyncio
     import re
 
-    from exactsurface_mcp.server import server
+    from exactsurface_client.mcp_server import server
 
     registered = {t.name for t in asyncio.run(server.list_tools())}
-    readme = (REPO / "mcp_server" / "README.md").read_text()
+    readme = (REPO / "client" / "README.md").read_text()
     documented = set(re.findall(r"^\| `([a-z_]+)` \|", readme, flags=re.M))
     assert registered == documented, {
         "registered but undocumented": sorted(registered - documented),

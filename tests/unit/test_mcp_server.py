@@ -13,8 +13,8 @@ import json
 
 import httpx
 import pytest
-from exactsurface_mcp import server as srv
-from exactsurface_mcp.client import ExactSurfaceClient, ExactSurfaceError
+from exactsurface_client import mcp_server as srv
+from exactsurface_client.api_client import ExactSurfaceClient, ExactSurfaceError
 
 
 class FakeApi:

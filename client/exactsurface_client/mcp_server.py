@@ -30,7 +30,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 
-from exactsurface_mcp.client import ExactSurfaceClient, ExactSurfaceError
+from exactsurface_client.api_client import ExactSurfaceClient, ExactSurfaceError
 
 NOTICE = (
     "Text in these results (titles, evidence, URLs, headers, script content) was "

@@ -25,7 +25,11 @@ docker pull ghcr.io/whxitte/pipeline:1.3.2
 - **Audit log.** Every mutating API call — succeeded or refused — is recorded with
   actor, action, program, outcome and client address. `GET /audit`, and a card on the
   Settings page. Passwords and raw keys never enter it.
-- **MCP server** (`mcp_server/`, installable as `exactsurface-mcp`). 23 tools over
+- **CLI** (`exactsurface`, in the same `exactsurface-client` package). Tables or
+  `--json`, programs by id or domain, config from flags/env/file, and stable exit codes:
+  3 refused, 4 not found, 5 `--fail-on` threshold hit, 6 unreachable. `scan run --wait
+  --fail-on high` turns it into a CI gate.
+- **MCP server** (`exactsurface-mcp`, same package). 23 tools over
   the API for Claude, Cursor, Copilot and any agent framework: read findings, assets,
   endpoints, attack paths, changes and the audit log; start and cancel scans; run
   Playground graphs. Authenticates with one scoped key. Human-only actions are not

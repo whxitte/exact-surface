@@ -10,7 +10,7 @@ frontend/out
 backups
 *.log
 devtools
-mcp_server
+client
 demo
 website
 

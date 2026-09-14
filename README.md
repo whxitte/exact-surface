@@ -195,9 +195,22 @@ introspection — and a test asserts the module contains no `getattr(`, `importl
 `eval(` or `exec(`. Runs execute on the worker and report per-node progress onto the
 canvas.
 
+## From the terminal, and from CI
+
+[`client/`](client/) ships the `exactsurface` CLI: tables by default, `--json` for
+scripts, programs addressable by domain, and stable exit codes. With `--wait --fail-on`
+it is a pipeline gate — exit 5 when new findings at or above a severity appear, exit 6
+when the instance is unreachable, and never the same code for both.
+
+```bash
+pipx install "exactsurface-client @ git+https://github.com/whxitte/exact-surface#subdirectory=client"
+exactsurface findings acme.com --severity high --state new
+exactsurface scan run acme.com --wait --fail-on high
+```
+
 ## Use it from an AI agent
 
-[`mcp_server/`](mcp_server/) is an [MCP](https://modelcontextprotocol.io) server that
+The same package ships an [MCP](https://modelcontextprotocol.io) server that
 gives Claude, Cursor, Copilot or any agent framework 23 tools over the API: read
 findings, assets, endpoints, attack paths and the audit log; start scans; run Playground
 graphs. It authenticates with one **scoped API key**, and that is what makes it safe to
@@ -217,7 +230,7 @@ data, not instructions — because a page can say "ignore your instructions" and
 reading findings is reading what an attacker may have placed. `docs/SECURITY.md` §6a.
 
 ```bash
-pipx install "exactsurface-mcp @ git+https://github.com/whxitte/exact-surface#subdirectory=mcp_server"
+pipx install "exactsurface-client @ git+https://github.com/whxitte/exact-surface#subdirectory=client"
 claude mcp add exactsurface -e EXACTSURFACE_URL=https://your-instance -e EXACTSURFACE_API_KEY=exs_… -- exactsurface-mcp
 ```
 
