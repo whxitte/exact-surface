@@ -52,6 +52,24 @@ _COMPARATORS = {
 }
 
 
+def _apply_set(doc: dict, fields: dict) -> None:
+    """``$set`` with Mongo's dotted-path semantics: ``{"raw.reason": x}`` nests, it does
+    not create a top-level key literally named ``raw.reason``."""
+    for key, val in fields.items():
+        if "." not in key:
+            doc[key] = val
+            continue
+        parts = key.split(".")
+        cur = doc
+        for part in parts[:-1]:
+            nxt = cur.get(part)
+            if not isinstance(nxt, dict):
+                nxt = {}
+                cur[part] = nxt
+            cur = nxt
+        cur[parts[-1]] = val
+
+
 def _matches(doc: dict, flt: dict) -> bool:
     for key, cond in flt.items():
         if key == "$or":
@@ -78,10 +96,12 @@ class FakeCollection:
         self._counter = itertools.count()
 
     def _key(self, doc: dict) -> tuple:
+        # Most specific identifier first: a scan run carries a program_id too, and
+        # keying on that collapsed every run of a program into one document.
         ident = (
             doc.get("fingerprint")
-            or doc.get("program_id")
             or doc.get("scan_id")
+            or doc.get("program_id")
             or f"_auto{next(self._counter)}"
         )
         return (doc.get("tenant_id"), ident)
@@ -98,7 +118,7 @@ class FakeCollection:
             key = self._key(doc)
             self.docs[key] = doc
             return _UpdateResult(upserted_id=key)
-        found.update(update.get("$set", {}))  # $setOnInsert ignored on existing
+        _apply_set(found, update.get("$set", {}))  # $setOnInsert ignored on existing
         for field in update.get("$unset", {}):
             found.pop(field, None)
         return _UpdateResult(modified=1)

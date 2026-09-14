@@ -27,8 +27,16 @@ _TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
 class Constraints:
     """What a dork actually asserts about a page. Each tuple is an OR-group: one match
     from each non-empty group is required, which is how a query like
-    ``ext:pem OR ext:key`` reads."""
+    ``ext:pem OR ext:key`` reads.
 
+    ``site`` is the one that is never optional. Engines do drop it — a query for
+    ``site:x "api_key"`` came back with developers.google.com and github.com, pages
+    *about* API keys — and a hit outside the apex is not a finding for that program
+    whatever the page contains. It is the scope engine's own rule, applied to search
+    results.
+    """
+
+    site: str = ""
     ext: tuple[str, ...] = ()
     inurl: tuple[str, ...] = ()
     intitle: tuple[str, ...] = ()
@@ -43,6 +51,13 @@ class Constraints:
         return not (self.ext or self.inurl or self.intitle or self.phrases)
 
 
+def host_within(url: str, apex: str) -> bool:
+    """True if *url*'s host is *apex* or a subdomain of it."""
+    host = (urlparse(url).hostname or "").lower().rstrip(".")
+    apex = apex.lower().rstrip(".")
+    return bool(host) and (host == apex or host.endswith("." + apex))
+
+
 @dataclass(frozen=True)
 class Verification:
     #: True: the page bears out the dork. False: it does not — the engine fuzzed.
@@ -54,8 +69,9 @@ class Verification:
 
 
 def parse_query(query: str) -> Constraints:
-    """Read the operators out of a dork. ``site:`` is scoping, not an assertion, and
-    is dropped; ``OR`` is the separator inside a group and is dropped too."""
+    """Read the operators out of a dork. ``OR`` is the separator inside a group and
+    is dropped."""
+    site = ""
     ext: list[str] = []
     inurl: list[str] = []
     intitle: list[str] = []
@@ -67,6 +83,7 @@ def parse_query(query: str) -> Constraints:
         if op:
             op = op.lower()
             if op == "site":
+                site = val.lower()
                 continue
             if op == "ext" or op == "filetype":
                 ext.append(val.lower().lstrip("."))
@@ -81,7 +98,7 @@ def parse_query(query: str) -> Constraints:
         if bare and bare.upper() != "OR":
             # An unquoted bare word: treat as a body phrase too.
             phrases.append(bare.lower())
-    return Constraints(tuple(ext), tuple(inurl), tuple(intitle), tuple(phrases))
+    return Constraints(site, tuple(ext), tuple(inurl), tuple(intitle), tuple(phrases))
 
 
 def check_url(c: Constraints, url: str) -> bool | None:
@@ -130,14 +147,22 @@ def check_page(c: Constraints, body: str) -> Verification:
     return Verification(True)
 
 
-async def verify_hit(query: str, url: str, fetch: Fetch) -> Verification:
+async def verify_hit(query: str, url: str, fetch: Fetch, *, site: str = "") -> Verification:
     """Decide whether *url* really bears out *query*.
 
-    Structural operators are checked on the URL with no request. Content operators
-    need the page; a fetch that fails or returns nothing is ``None`` — unknown, not
+    *site* is the program's apex; it overrides whatever the query says and is applied
+    first. Structural operators are checked on the URL with no request. Content
+    operators need the page; a fetch that fails or returns nothing is ``None`` — unknown, not
     false — so a rate-limited or blocked page is not mistaken for a clean one.
     """
     c = parse_query(query)
+    # First and unconditional: the hit has to be on the domain the dork was scoped
+    # to. Checked before anything is fetched, so an off-apex URL is never requested.
+    apex = site or c.site
+    if apex and not host_within(url, apex):
+        return Verification(
+            False, evidence=f"host is not under {apex} — the engine ignored site: scoping"
+        )
     if c.is_empty:
         return Verification(None, evidence="dork has no verifiable operator")
     structural = check_url(c, url)

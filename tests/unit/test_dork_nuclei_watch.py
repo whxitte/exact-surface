@@ -170,3 +170,122 @@ def test_relevant_templates_match_by_product_or_tag():
     ]
     matched = relevant_templates(templates, {"wordpress"})
     assert {t["id"] for t in matched} == {"wp-x"}
+
+
+@pytest.mark.asyncio
+async def test_a_hit_outside_the_apex_is_dropped_before_anything_is_fetched():
+    """The real case: `site:x "api_key"` came back with developers.google.com and
+    github.com — documentation about API keys. The pages do contain the phrase, so
+    a content check alone would have *confirmed* them. Off-apex is decided first, from
+    the URL, and nothing off-apex is ever requested."""
+    from modules.dorking.verify import verify_hit
+
+    fetched: list[str] = []
+
+    async def fetch(url):
+        fetched.append(url)
+        return "<html>set your api_key here</html>"
+
+    for url in (
+        "https://developers.google.com/analytics",
+        "https://github.com/turnkeylinux/tracker/issues/1574",
+        "https://customer.com.evil.example/x",  # lookalike: starts with the apex
+    ):
+        v = await verify_hit('site:customer.com "api_key"', url, fetch, site="customer.com")
+        assert v.verified is False and "not under customer.com" in v.evidence, url
+    assert fetched == []  # never requested
+
+    v = await verify_hit(
+        'site:customer.com "api_key"', "https://docs.customer.com/auth", fetch, site="customer.com"
+    )
+    assert v.verified is True and fetched == ["https://docs.customer.com/auth"]
+
+
+@pytest.mark.asyncio
+async def test_a_dropped_hit_retires_the_finding_an_earlier_run_stored():
+    """Gone-detection rightly distrusts a run that reports nothing, and a clean dork
+    run reports nothing — so a false positive stored by an older, unverifying run
+    would never age out. The pipeline re-checked that exact hit; it says so."""
+    from core.lifecycle import FindingState
+
+    mongo = FakeMongo()
+    repo = FindingRepo(mongo.collection("findings"))
+
+    async def old_search(query):  # what the pre-verification code stored
+        return (
+            [{"title": "Terms", "link": "https://customer.com/terms", "snippet": "…"}]
+            if query == CREDENTIAL_QUERY
+            else []
+        )
+
+    async def prose(url):
+        return TOS_PROSE
+
+    # An older run stored it (simulate: a verifying run whose fetch "confirmed" it).
+    async def confirming(url):
+        return "password=oops"
+
+    await run_dork(
+        mongo=mongo,
+        tenant=TENANT,
+        program_id="p1",
+        domain="customer.com",
+        search=old_search,
+        fetch=confirming,
+    )
+    (stored,) = await repo.list("t1", "p1")
+    assert stored["severity"] == "critical" and stored["state"] == "new"
+
+    # A person had confirmed a *different* one; that must survive untouched.
+    await repo.set_flag("t1", stored["fingerprint"], "state", FindingState.CONFIRMED.value)
+    res = await run_dork(
+        mongo=mongo,
+        tenant=TENANT,
+        program_id="p1",
+        domain="customer.com",
+        search=old_search,
+        fetch=prose,
+    )
+    (still,) = await repo.list("t1", "p1")
+    assert res["retired_false_positives"] == 0 and still["state"] == "confirmed"
+
+    # Back to NEW: now the re-check retires it, with the reason on the record.
+    await repo.set_flag("t1", stored["fingerprint"], "state", FindingState.NEW.value)
+    res = await run_dork(
+        mongo=mongo,
+        tenant=TENANT,
+        program_id="p1",
+        domain="customer.com",
+        search=old_search,
+        fetch=prose,
+    )
+    (retired,) = await repo.list("t1", "p1")
+    assert res["retired_false_positives"] == 1
+    assert retired["state"] == "false_positive"
+    assert "does not contain" in retired["raw"]["retired_reason"]
+
+
+@pytest.mark.asyncio
+async def test_scan_runs_list_newest_first():
+    """The reader every 'is anything running?' check depends on."""
+    from datetime import UTC, datetime, timedelta
+
+    from core.models import ScanRun, ScanStatus
+    from db.audit import ScanRunRepo
+
+    mongo = FakeMongo()
+    repo = ScanRunRepo.from_mongo(mongo)
+    base = datetime(2026, 9, 14, tzinfo=UTC)
+    for i in range(5):
+        await repo.save(
+            ScanRun(
+                tenant_id="t1",
+                program_id="p1",
+                scan_id=f"s{i}",
+                pipeline="probe",
+                status=ScanStatus.SUCCESS,
+                started_at=base + timedelta(minutes=i),
+            )
+        )
+    runs = await repo.list("t1", "p1", limit=3)
+    assert [r["scan_id"] for r in runs] == ["s4", "s3", "s2"]

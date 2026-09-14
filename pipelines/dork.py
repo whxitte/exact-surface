@@ -135,12 +135,14 @@ async def run_dork(
         return dork, items
 
     fetch = fetch or _default_fetch
+    findings_repo = FindingRepo.from_mongo(mongo)
     dropped = 0
     unverified = 0
+    retired = 0
 
     async def _verify(dork: dict, item: dict) -> tuple[dict, dict, Verification]:
         async with sem:
-            return dork, item, await verify_hit(dork["query"], item["link"], fetch)
+            return dork, item, await verify_hit(dork["query"], item["link"], fetch, site=domain)
 
     hits: list[tuple[dict, dict]] = []
     for dork, items in await asyncio.gather(*(_one(d) for d in dorks)):
@@ -164,11 +166,21 @@ async def run_dork(
         query, link = dork["query"], item["link"]
         title = item.get("title") or ""
         snippet = item.get("snippet") or ""
+        check_id = f"dork:{dork['category']}"
         if v.verified is False:
             dropped += 1
             logger.info("dork: dropped unverified hit {} for {} — {}", link, query, v.evidence)
+            # If an earlier run stored this hit as a finding, it has now been positively
+            # re-checked. Say so on the record rather than waiting for gone-detection,
+            # which (rightly) distrusts a run that reports nothing — and a clean dork
+            # run reports nothing, so those findings would otherwise never age out.
+            if await findings_repo.mark_false_positive(
+                tenant.tenant_id,
+                finding_fingerprint(program_id, check_id, link),
+                f"re-verified by dork: {v.evidence}",
+            ):
+                retired += 1
             continue
-        check_id = f"dork:{dork['category']}"
         if v.verified is None:
             unverified += 1
             severity = Severity.LOW
@@ -213,14 +225,22 @@ async def run_dork(
                 },
             )
         )
-    total, new = await FindingRepo.from_mongo(mongo).upsert_many(models)
+    total, new = await findings_repo.upsert_many(models)
     logger.info(
-        "dork {}: {} search hits → {} verified, {} unverifiable (kept LOW), {} dropped; {} new",
+        "dork {}: {} search hits → {} verified, {} unverifiable (kept LOW), {} dropped "
+        "({} earlier findings retired as false positives); {} new",
         domain,
         len(hits),
         total - unverified,
         unverified,
         dropped,
+        retired,
         new,
     )
-    return {"hits": total, "new": new, "dropped_unverified": dropped, "unverifiable": unverified}
+    return {
+        "hits": total,
+        "new": new,
+        "dropped_unverified": dropped,
+        "unverifiable": unverified,
+        "retired_false_positives": retired,
+    }

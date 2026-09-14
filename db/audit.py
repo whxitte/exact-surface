@@ -103,7 +103,11 @@ class ScanRunRepo:
         flt: dict[str, Any] = {"tenant_id": tenant_id}
         if program_id is not None:
             flt["program_id"] = program_id
-        return await self._c.find(flt).limit(limit).to_list(limit)
+        # Newest first. Unsorted, this returned insertion order — oldest first — and
+        # every reader that then took the head of the list (the CLI, the MCP tool, an
+        # "is anything running?" check) saw the oldest runs and missed the one in
+        # progress. A scan was killed by a worker rebuild because of exactly that.
+        return await self._c.find(flt).sort("started_at", -1).limit(limit).to_list(limit)
 
     async def latest_full(self, tenant_id: str, program_id: str) -> dict | None:
         """The most recently started full run for a program (any status), for the
