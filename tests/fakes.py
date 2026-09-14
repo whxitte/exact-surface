@@ -99,6 +99,8 @@ class FakeCollection:
             self.docs[key] = doc
             return _UpdateResult(upserted_id=key)
         found.update(update.get("$set", {}))  # $setOnInsert ignored on existing
+        for field in update.get("$unset", {}):
+            found.pop(field, None)
         return _UpdateResult(modified=1)
 
     async def insert_one(self, doc: dict) -> _UpdateResult:

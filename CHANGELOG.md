@@ -41,6 +41,10 @@ docker pull ghcr.io/whxitte/pipeline:1.4.0
 **Changed**
 
 - New API keys are prefixed `exs_` (was `vnt_`). Existing keys are unaffected.
+- **Upgrade note.** Keys minted before 1.4.0 keep every scope their creator can grant —
+  the behaviour they always had — so nothing that works today stops on upgrade. Keys
+  minted from 1.4.0 on default to read-only. To narrow a legacy key, revoke it and mint
+  a new one.
 
 ## 1.3.2 — 2026-09-12
 

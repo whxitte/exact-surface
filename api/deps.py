@@ -17,7 +17,7 @@ from api.auth import InvalidToken, decode_token, hash_api_key
 from core.config import get_settings
 from core.email import EmailSender, get_email_sender
 from core.models import Role
-from core.permissions import DEFAULT_KEY_SCOPES, normalise_scopes
+from core.permissions import DEFAULT_KEY_SCOPES, allowed_scopes_for, normalise_scopes
 from core.verification import DomainVerifier
 from db.apikeys import ApiKeyRepo
 from db.mongo import get_mongo
@@ -125,7 +125,15 @@ async def _resolve_principal(
         # creator who has since lost a permission takes the key's matching scope with
         # them.
         perms = await _resolve_permissions(mongo, doc["tenant_id"], doc.get("created_by"), role)
-        scopes = normalise_scopes(doc.get("scopes") or DEFAULT_KEY_SCOPES, perms)
+        if "scopes" in doc:
+            scopes = normalise_scopes(doc["scopes"] or DEFAULT_KEY_SCOPES, perms)
+        else:
+            # Minted before scopes existed. Such a key had everything its creator had,
+            # and an upgrade must not silently take that away — a CI job that has been
+            # starting scans for months would begin failing with 403 and nobody would
+            # know why. It keeps what it had; keys minted from now on carry an explicit
+            # list and default to read-only. Re-mint to narrow a legacy key.
+            scopes = allowed_scopes_for(perms)
         await keys.touch(doc["tenant_id"], doc["key_id"])
         return Principal(
             tenant_id=doc["tenant_id"],

@@ -250,3 +250,38 @@ def test_the_scope_catalogue_says_what_the_caller_may_grant(app_ctx):  # noqa: F
         "settings:write",
     }
     assert all(s["grantable"] for s in cat)  # owner
+
+
+def test_a_key_minted_before_scopes_existed_keeps_what_it_had(app_ctx):  # noqa: F811
+    """Upgrade safety. A pre-1.4.0 key document has no `scopes` field. It must keep
+    every scope its creator can grant — the behaviour it always had — or every CI job
+    that has been starting scans with one begins failing with 403 on upgrade day."""
+    client, fake = app_ctx
+    tok = signup(client, email="o@x.com", name="X")["access_token"]
+    pid = make_program(client, tok, "acme.com")
+    key = mint(client, tok)  # minted now: explicit ["read"]
+    from tests.security.conftest import run
+
+    # Turn it into a legacy document by removing the field, as an old row would lack it.
+    run(
+        fake.collection("apikeys").update_one({"key_id": key["key_id"]}, {"$unset": {"scopes": ""}})
+    )
+    doc = run(fake.collection("apikeys").find_one({"key_id": key["key_id"]}))
+    assert "scopes" not in doc
+
+    assert client.post(f"/programs/{pid}/scan", headers=key_hdr(key["api_key"])).status_code == 202
+    me = client.get("/auth/me", headers=key_hdr(key["api_key"])).json()
+    assert set(me["scopes"]) == {
+        "read",
+        "scans:run",
+        "programs:write",
+        "playground:run",
+        "settings:write",
+    }
+    # ...but still nothing human-only.
+    assert (
+        client.post(
+            f"/programs/{pid}/scan-config?scope_override=true", headers=key_hdr(key["api_key"])
+        ).status_code
+        == 403
+    )
