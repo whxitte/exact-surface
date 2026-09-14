@@ -328,6 +328,12 @@ async def list_audit_events(limit: int = 50, program_id: str | None = None) -> d
 def main() -> None:
     """`exactsurface-mcp` — speaks MCP over stdio for Claude Desktop, Claude Code,
     Cursor and any other client that launches servers as subprocesses."""
+    # httpx logs every request at INFO. Over stdio that lands in the agent host's
+    # server log — one line per tool call, forever. Warnings and above only.
+    import logging
+
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     transport = os.environ.get("EXACTSURFACE_MCP_TRANSPORT", "stdio")
     try:
         client()  # fail fast, with a readable message, if the env is not set
