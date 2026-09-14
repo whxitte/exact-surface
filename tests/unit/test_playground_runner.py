@@ -237,3 +237,34 @@ async def test_large_outputs_are_summarised_in_the_report():
     assert preview["count"] > 20
     assert len(preview["sample"]) == 20
     assert len(out["outputs"]["a"]["hosts"]) == preview["count"]
+
+
+async def test_a_node_that_never_returns_is_cut_off_at_its_budget(monkeypatch):
+    """The hard ceiling. A scheduled stage is killed at its budget; a Playground node
+    was not — one ran forty minutes past it with the canvas showing 'running' and no
+    way to stop it. The node's own timeout is advice to the module; this is the law."""
+    import asyncio
+
+    async def hangs(**_kw):
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(pg, "run_pipeline", hangs)
+    monkeypatch.setattr(pg, "NODE_MARGIN_SECONDS", 0.0)
+    _patch_program_repo(monkeypatch)
+
+    g = _graph(
+        {
+            "slow": {"type": "pipeline:probe", "params": {"timeout": 0.2}},
+            "after": {"type": "output:view"},
+            "independent": {
+                "type": "util:typosquat_candidates",
+                "params": {"domain": "example.com", "limit": 5},
+            },
+        },
+        [("slow", "hosts", "after", "value")],
+    )
+    out = await _run(g)
+    assert out["nodes"]["slow"]["status"] == "failed"
+    assert "timed out" in out["nodes"]["slow"]["error"]
+    assert out["nodes"]["after"]["status"] == "skipped"
+    assert out["nodes"]["independent"]["status"] == "success"

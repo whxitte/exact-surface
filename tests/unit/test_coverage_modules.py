@@ -411,12 +411,33 @@ def test_a_url_echoing_host_does_not_make_every_parameter_look_accepted():
     base.control_reflects = P._reflects(ctrl_body, P.PROBE_VALUE)
     assert base.echoes_url
 
-    _, probe_body = _wix_like(P.probe_url(url, ["role"]))
-    assert P.PROBE_VALUE in probe_body  # it does reflect...
-    assert P.classify("role", base, 200, probe_body) is None  # ...and that means nothing
-    batch = ["admin", "isAdmin", "is_admin", "role"]
-    _, batch_body = _wix_like(P.probe_url(url, batch))
-    assert P.analyse_batch(base, batch, 200, batch_body) is False
+    # Each privilege parameter, probed alone, produces no finding: it reflects (the URL
+    # echo), but reflection is void here, and its length change is within the page's own
+    # noise. That is the gate that files a finding, and it stays shut.
+    for name in ("admin", "isAdmin", "is_admin", "role"):
+        _, probe_body = _wix_like(P.probe_url(url, [name]))
+        assert P.PROBE_VALUE in probe_body  # it does reflect...
+        assert P.classify(name, base, 200, probe_body) is None  # ...and that means nothing
+
+
+def test_a_page_whose_length_swings_at_random_flags_nothing_on_length_alone():
+    """The second Wix false positive: a body that varies by ~400 KB between identical
+    fetches, unrelated to any parameter. The control measures that swing; a parameter's
+    length change has to clear it, so the flat 64-byte threshold no longer fires on a
+    page that simply renders differently each time."""
+    from modules.scanning import params as P
+
+    # baseline 500 KB; the control (an irrelevant param) comes back 100 KB smaller —
+    # pure page noise. noise_floor = 100 KB.
+    base = P.Baseline("https://noisy.example/", 200, 500_000)
+    base.control_status, base.control_length, base.control_reflects = 200, 400_000, False
+    assert base.noise_floor == 100_000
+
+    # a probed param whose body lands anywhere inside that swing is not a finding
+    assert P.classify("debug", base, 200, "x" * 420_000) is None
+    assert P.analyse_batch(base, ["a", "b"], 200, "x" * 590_000) is False
+    # but a change that clears the swing still counts
+    assert P.classify("debug", base, 200, "x" * 700_000) is not None
 
 
 def test_a_real_hidden_parameter_is_still_found_on_an_echoing_host():
@@ -431,10 +452,12 @@ def test_a_real_hidden_parameter_is_still_found_on_an_echoing_host():
     base.control_status, base.control_length, base.control_reflects = 200, len(ctrl_body), True
 
     _, echo_only = _wix_like(P.probe_url(url, ["debug"]))
-    debug_panel = echo_only + "<pre>" + "stack frame\n" * 40 + "</pre>"
+    debug_panel = (
+        echo_only + "<pre>" + "stack frame\n" * 400 + "</pre>"
+    )  # well past the noise floor
     hit = P.classify("debug", base, 200, debug_panel)
     assert hit and not hit.reflected and "length changed" in hit.evidence
-    assert P.classify("debug", base, 500, echo_only)  # status change counts too
+    assert P.classify("debug", base, 500, echo_only)  # status change counts regardless
 
 
 def test_reflection_still_counts_where_the_control_does_not_reflect():

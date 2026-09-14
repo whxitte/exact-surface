@@ -173,14 +173,23 @@ class Baseline:
     def echoes_url(self) -> bool:
         return self.control_reflects
 
-    def expected_length(self, n_params: int) -> int:
-        """Bytes a response should have if the only effect of adding *n_params* is the
-        host echoing a longer URL. Linear in the parameter count is a fair model of a
-        page that prints its URL a fixed number of times."""
+    @property
+    def noise_floor(self) -> int:
+        """How much this page's length moves for a parameter that means nothing.
+
+        The control is one irrelevant parameter, so the gap between its response and
+        the bare baseline is pure noise: URL echo, yes, but also a page that simply
+        renders differently request to request. A Wix page here varied by ~400 KB
+        between identical fetches. Any real length signal has to clear this, not the
+        flat 64-byte ``LENGTH_DELTA`` that assumed a stable page.
+        """
         if self.control_length is None:
-            return self.length
-        per_param = max(0, self.control_length - self.length)
-        return self.length + per_param * n_params
+            return 0
+        return abs(self.control_length - self.length)
+
+    def length_moved(self, observed: int) -> bool:
+        """Did adding a parameter change the length by more than this page's own noise?"""
+        return abs(observed - self.length) > self.noise_floor + LENGTH_DELTA
 
 
 def control_param(rng=None) -> str:
@@ -255,7 +264,7 @@ def analyse_batch(
     """
     if status != baseline.status:
         return True
-    if abs(len(body) - baseline.expected_length(len(params))) >= LENGTH_DELTA:
+    if baseline.length_moved(len(body)):
         return True
     return _reflects(body, value) and not baseline.echoes_url
 
@@ -264,13 +273,15 @@ def classify(
     name: str, baseline: Baseline, status: int, body: str, *, value: str = PROBE_VALUE
 ) -> HiddenParam | None:
     """Decide what a single confirmed parameter means."""
-    # On a host that echoes its URL, reflection proves nothing and the control's
-    # length is the honest comparison point — it already contains the echo.
+    # On a host that echoes its URL, reflection proves nothing. A length change only
+    # counts if it clears the page's own request-to-request noise, which the control
+    # measured — otherwise a page that renders differently each fetch flags every name.
     reflected = _reflects(body, value) and not baseline.echoes_url
     changed_status = status != baseline.status
-    delta = len(body) - baseline.expected_length(1)
+    delta = len(body) - baseline.length
+    length_moved = baseline.length_moved(len(body))
 
-    if not (reflected or changed_status or abs(delta) >= LENGTH_DELTA):
+    if not (reflected or changed_status or length_moved):
         return None
 
     severity, what = classify_name(name)
@@ -283,8 +294,12 @@ def classify(
     bits = []
     if changed_status:
         bits.append(f"the status changed from {baseline.status} to {status}")
-    if abs(delta) >= LENGTH_DELTA:
-        bits.append(f"the response length changed by {delta:+d} bytes")
+    if length_moved:
+        floor = baseline.noise_floor
+        bits.append(
+            f"the response length changed by {delta:+d} bytes"
+            + (f" (past this page's {floor}-byte noise)" if floor else "")
+        )
     if reflected:
         bits.append("the submitted value appeared in the response body")
 

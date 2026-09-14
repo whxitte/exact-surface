@@ -28,6 +28,7 @@ capability for an ordinary member, which is why members cannot use the node at a
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable
 from typing import Any
@@ -43,6 +44,8 @@ from pipelines.dispatch import ROUTES, Ctx, run_pipeline
 #: A single node's wall-clock ceiling when the user did not set one. Pipelines have
 #: their own budgets; this only bounds a utility node that somehow blocks.
 DEFAULT_NODE_TIMEOUT = 900.0
+#: Grace beyond the node's budget before the hard ceiling cancels it.
+NODE_MARGIN_SECONDS = 60.0
 
 #: Cap the hostnames a Target node may inject. A canvas is interactive — someone
 #: pasting a 50k-line list is a mistake, and the politeness limiter would be pacing
@@ -164,22 +167,41 @@ async def run_workflow(
         inputs = {port: outputs[src].get(src_port) for port, (src, src_port) in upstream.items()}
         started = time.monotonic()
         emit(node_id, "running", label=spec.label)
+        # A hard ceiling, like a scheduled stage gets. The node's own timeout is a
+        # *tool budget* that a well-behaved module honours; this is what happens when
+        # it does not. Without it a node ran for forty minutes past its budget and the
+        # canvas showed "running" with no way to stop it. The margin lets a module's
+        # own graceful timeout fire first and keep partial results.
+        budget = (float(params.get("timeout") or 0) or DEFAULT_NODE_TIMEOUT) + NODE_MARGIN_SECONDS
         try:
-            produced = await _run_node(
-                node_id=node_id,
-                spec=spec,
-                params=params,
-                inputs=inputs,
-                mongo=mongo,
-                engine=engine,
-                tenant=tenant,
-                program_id=program_id,
-                graph=graph,
-                wired=wired,
-                outputs=outputs,
-                hmac_key=hmac_key,
-                limiter=limiter,
+            produced = await asyncio.wait_for(
+                _run_node(
+                    node_id=node_id,
+                    spec=spec,
+                    params=params,
+                    inputs=inputs,
+                    mongo=mongo,
+                    engine=engine,
+                    tenant=tenant,
+                    program_id=program_id,
+                    graph=graph,
+                    wired=wired,
+                    outputs=outputs,
+                    hmac_key=hmac_key,
+                    limiter=limiter,
+                ),
+                timeout=budget,
             )
+        except TimeoutError:
+            skipped.add(node_id)
+            emit(
+                node_id,
+                "failed",
+                error=f"timed out after {int(budget)}s",
+                ms=int((time.monotonic() - started) * 1000),
+            )
+            logger.warning("playground: {} timed out after {:.0f}s", spec.label, budget)
+            continue
         except (AuthorizationRequired, PlaygroundDenied) as exc:
             # A refusal is a message for the user, not a stack trace.
             skipped.add(node_id)
