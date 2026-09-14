@@ -199,6 +199,10 @@ async def me(
         "auth": principal.method,
         "email": email,
         "email_verified": email_verified,
+        # For a key: what it may do, so a non-human caller can discover its own
+        # limits instead of finding them by being refused. None for a session.
+        "scopes": sorted(principal.scopes) if principal.scopes is not None else None,
+        "key_id": principal.key_id,
         # Effective RBAC state so the UI can hide what the caller can't do (§ access
         # control). Authoritative enforcement is server-side; this is only for display.
         "is_owner": principal.is_owner,

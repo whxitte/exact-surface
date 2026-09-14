@@ -195,6 +195,32 @@ introspection — and a test asserts the module contains no `getattr(`, `importl
 `eval(` or `exec(`. Runs execute on the worker and report per-node progress onto the
 canvas.
 
+## Use it from an AI agent
+
+[`mcp_server/`](mcp_server/) is an [MCP](https://modelcontextprotocol.io) server that
+gives Claude, Cursor, Copilot or any agent framework 23 tools over the API: read
+findings, assets, endpoints, attack paths and the audit log; start scans; run Playground
+graphs. It authenticates with one **scoped API key**, and that is what makes it safe to
+hand over:
+
+- a key is read-only unless minted with `scans:run` or `playground:run`, and can never
+  exceed the person who created it;
+- **no key can** verify a domain, create an authorization, change a scan-scope switch,
+  delete a program, or manage users and keys — those need a person, and aren't offered
+  as tools at all;
+- the scope engine decides what a scan may touch server-side, so an agent that is
+  confused or compromised still cannot reach anything out of scope;
+- every write and every refusal is audited under the key's id.
+
+Scan results are text the *target* wrote. Results carrying it come back labelled as
+data, not instructions — because a page can say "ignore your instructions" and an agent
+reading findings is reading what an attacker may have placed. `docs/SECURITY.md` §6a.
+
+```bash
+pipx install "exactsurface-mcp @ git+https://github.com/whxitte/exact-surface#subdirectory=mcp_server"
+claude mcp add exactsurface -e EXACTSURFACE_URL=https://your-instance -e EXACTSURFACE_API_KEY=exs_… -- exactsurface-mcp
+```
+
 ## How it works
 
 ```

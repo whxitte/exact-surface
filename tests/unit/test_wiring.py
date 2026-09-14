@@ -783,3 +783,21 @@ def test_the_release_runner_bakes_the_in_network_api_address():
     assert dockerfile.count("localhost:8000' .next/routes-manifest.json") == 2, (
         "both frontend stages should refuse a bundle whose /api rewrite points at localhost"
     )
+
+
+def test_every_mcp_tool_is_documented_and_nothing_undocumented_is_offered():
+    """mcp_server/README.md's tool table and the server's registered tools must be the
+    same set. An agent's operator reads the table to decide what to allow; a tool
+    that exists but is not listed there is a capability nobody signed off on."""
+    import asyncio
+    import re
+
+    from exactsurface_mcp.server import server
+
+    registered = {t.name for t in asyncio.run(server.list_tools())}
+    readme = (REPO / "mcp_server" / "README.md").read_text()
+    documented = set(re.findall(r"^\| `([a-z_]+)` \|", readme, flags=re.M))
+    assert registered == documented, {
+        "registered but undocumented": sorted(registered - documented),
+        "documented but missing": sorted(documented - registered),
+    }

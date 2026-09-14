@@ -25,6 +25,12 @@ docker pull ghcr.io/whxitte/pipeline:1.3.2
 - **Audit log.** Every mutating API call — succeeded or refused — is recorded with
   actor, action, program, outcome and client address. `GET /audit`, and a card on the
   Settings page. Passwords and raw keys never enter it.
+- **MCP server** (`mcp_server/`, installable as `exactsurface-mcp`). 23 tools over
+  the API for Claude, Cursor, Copilot and any agent framework: read findings, assets,
+  endpoints, attack paths, changes and the audit log; start and cancel scans; run
+  Playground graphs. Authenticates with one scoped key. Human-only actions are not
+  offered as tools at all. Results carrying target-authored text are labelled as data.
+  `/auth/me` now reports a key's scopes so an agent can learn its own limits.
 - API keys can now be listed and revoked (`GET`/`DELETE /auth/api-keys`), and record
   when they were last used. Previously a leaked key needed a database session to kill.
 
