@@ -23,6 +23,43 @@ from urllib.parse import urlsplit
 
 from core.severity import Severity
 
+#: Public suffixes that take two labels, so the registrable domain is the last three
+#: (foo.co.uk, not co.uk). Not exhaustive — the common ones — and erring toward treating
+#: something as its own apex is the safe direction here: it means *fewer* hijack claims,
+#: never a false one.
+_TWO_LABEL_SUFFIXES: frozenset[str] = frozenset(
+    """co.uk org.uk gov.uk ac.uk com.au net.au org.au co.nz com.br com.mx co.in co.jp
+    co.za com.sg com.hk co.kr com.tr com.ua co.il com.cn""".split()
+)
+
+#: A label is a real DNS label: letters/digits/hyphen, not starting or ending in a
+#: hyphen, non-empty. Rejects the JS fragments the miner sometimes yields
+#: (e.g. "northamerica-northeast1-", which has an empty final label).
+import re as _re  # noqa: E402
+
+_LABEL = _re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", _re.I)
+
+
+def registrable_domain(host: str) -> str | None:
+    """The domain someone could actually register — eTLD+1 — or None if *host* is not a
+    valid registrable name.
+
+    A dangling *subdomain* (js.stripe.com) is a takeover, handled elsewhere; it is not a
+    broken-link hijack, because you cannot register js.stripe.com — only stripe.com, and
+    that is owned. So this collapses every host to its registrable apex, and the
+    unregistered-domain check runs on *that*. It also rejects non-domains outright.
+    """
+    host = (host or "").strip().rstrip(".").lower()
+    if not host or ".." in host:
+        return None
+    labels = host.split(".")
+    if len(labels) < 2 or any(not _LABEL.match(x) for x in labels):
+        return None
+    if len(labels) >= 3 and ".".join(labels[-2:]) in _TWO_LABEL_SUFFIXES:
+        return ".".join(labels[-3:])
+    return ".".join(labels[-2:])
+
+
 #: Platforms where a 404 on a profile URL means the handle is claimable by anyone.
 #: Each entry: (host suffix, path depth that identifies a profile, human name).
 SOCIAL_PLATFORMS: tuple[tuple[str, str], ...] = (
@@ -58,6 +95,9 @@ class BrokenLink:
     platform: str | None  # for handles: which service
     evidence: str
     severity: Severity
+    #: For an unregistered-domain finding: the registrable apex that is actually free
+    #: (stripe.com, not js.stripe.com). None for a claimable-handle finding.
+    apex: str | None = None
 
     @property
     def target_host(self) -> str:
@@ -118,21 +158,31 @@ async def check_link(
     if not host:
         return None
 
-    try:
-        addresses = await resolve(host)
-    except Exception:  # noqa: BLE001 - a resolver error is not evidence of anything
-        return None
+    # Only the registrable apex is takeable. js.stripe.com not resolving does not make
+    # anything registerable — stripe.com is owned. Check the apex, and skip non-domains.
+    apex = registrable_domain(host)
+    if apex:
+        try:
+            addresses = await resolve(apex)
+        except Exception:  # noqa: BLE001 - a resolver error is not evidence of anything
+            return None
 
-    if not addresses:
-        return BrokenLink(
-            url=url,
-            found_on=found_on,
-            kind="unregistered-domain",
-            platform=None,
-            evidence=f"{host} does not resolve — the domain appears unregistered and can "
-            "be registered by anyone, who would then control this link's destination.",
-            severity=Severity.HIGH,
-        )
+        # Empty means the resolver POSITIVELY confirmed the apex does not exist
+        # (NXDOMAIN). A failed or timed-out lookup raises above and yields nothing —
+        # absence of an answer is never treated as absence of the domain, which is what
+        # once flagged js.stripe.com and api-iam.intercom.io as hijackable.
+        if not addresses:
+            return BrokenLink(
+                url=url,
+                found_on=found_on,
+                kind="unregistered-domain",
+                platform=None,
+                evidence=f"{apex} returns NXDOMAIN — the registrable domain does not "
+                "exist and can be registered by anyone, who would then control every link "
+                f"to it (seen here as {host}).",
+                severity=Severity.HIGH,
+                apex=apex,
+            )
 
     platform = social_platform(url)
     if platform and fetch_status is not None:

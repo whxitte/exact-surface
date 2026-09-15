@@ -100,14 +100,14 @@ async def run_broken_links(
                 location=link.found_on,
                 locator=link.url,
                 name=(
-                    f"Broken link hijack: {link.target_host} is unregistered"
+                    f"Broken link hijack: {link.apex} is registerable"
                     if link.kind == "unregistered-domain"
                     else f"Broken link hijack: unclaimed {link.platform} handle"
                 ),
                 description=link.evidence,
                 severity=link.severity,
                 reproduction=(
-                    f"dig +short {link.target_host}   # no answer = registerable"
+                    f"host {link.apex} || echo NXDOMAIN — registerable"
                     if link.kind == "unregistered-domain"
                     else f"curl -sI {link.url}   # 404 = handle is free to claim"
                 ),
@@ -121,14 +121,35 @@ async def run_broken_links(
             )
         )
 
-    total, new = await FindingRepo.from_mongo(mongo).upsert_many(findings)
+    repo = FindingRepo.from_mongo(mongo)
+    total, new = await repo.upsert_many(findings)
+    # Pages we re-examined this run: any broken_links finding on one of them that we did
+    # not reproduce has been positively re-checked and is retired. This is what ages out
+    # the js.stripe.com / api-iam.intercom.io false positives an older, resolver-trusting
+    # run had filed, rather than leaving them live until someone notices.
+    covered = [found_on for _url, found_on in ordered]
+    retired = await repo.retire_unreproduced(
+        tenant.tenant_id,
+        program_id,
+        "broken_links",
+        covered,
+        {f.fingerprint for f in findings},
+        "re-checked: destination resolves, or is not a registerable domain",
+    )
     logger.info(
-        "broken_links: {} outbound link(s) checked → {} hijackable ({} new)",
+        "broken_links: {} outbound link(s) checked → {} hijackable ({} new, {} retired)",
         len(ordered),
         hijackable,
         new,
+        retired,
     )
-    return {"checked": len(ordered), "hijackable": hijackable, "findings": total, "new": new}
+    return {
+        "checked": len(ordered),
+        "hijackable": hijackable,
+        "findings": total,
+        "new": new,
+        "retired_false_positives": retired,
+    }
 
 
 def _throttled(fetch_status, limiter: PolitenessLimiter):
@@ -140,9 +161,33 @@ def _throttled(fetch_status, limiter: PolitenessLimiter):
 
 
 async def _default_resolve(host: str) -> list[str]:  # pragma: no cover - real DNS
-    from modules.recon.dnsx import resolve_hosts
+    """Addresses for *host*, or [] ONLY when the name provably does not exist.
 
-    return (await resolve_hosts([host], 15.0)).get(host, [])
+    The distinction is the whole finding: [] here becomes a HIGH "registrable domain is
+    free" claim, so it must mean NXDOMAIN and nothing else. getaddrinfo raises
+    ``gaierror`` with ``EAI_NONAME`` for a name that does not resolve; any other error —
+    a timeout, a temporary failure, the resolver being rate-limited — is re-raised so the
+    caller treats it as "could not check", never as "does not exist". A single retry
+    guards against a one-off blip becoming a false hijack finding.
+    """
+    import asyncio
+    import socket
+
+    async def _once() -> list[str]:
+        loop = asyncio.get_running_loop()
+        infos = await loop.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        return sorted({str(info[4][0]) for info in infos})
+
+    for attempt in range(2):
+        try:
+            return await asyncio.wait_for(_once(), 10.0)
+        except socket.gaierror as exc:
+            if exc.errno in (socket.EAI_NONAME, getattr(socket, "EAI_NODATA", socket.EAI_NONAME)):
+                return []  # confirmed: the name does not exist
+            if attempt == 0:
+                continue  # transient resolver error — try once more
+            raise  # still failing: not evidence of anything, let the caller skip it
+    return []
 
 
 async def _default_status(url: str) -> int:  # pragma: no cover - real network

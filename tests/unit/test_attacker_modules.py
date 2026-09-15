@@ -223,7 +223,62 @@ async def test_unresolvable_outbound_domain_is_hijackable():
     )
     assert link is not None
     assert link.kind == "unregistered-domain"
+    assert link.apex == "dead-partner.com"
     assert link.severity == Severity.HIGH
+
+
+@pytest.mark.asyncio
+async def test_a_live_apex_is_never_hijackable_even_if_a_subdomain_is_dead():
+    """The js.stripe.com case: only the registrable apex is takeable, and it is checked,
+    not the sub-host. A dead subdomain of a live domain is a takeover, not this."""
+    seen = []
+
+    async def resolve(host):
+        seen.append(host)
+        return ["151.101.1.1"]  # stripe.com resolves
+
+    got = await bl.check_link(
+        "https://js.stripe.com/v3", "https://acme.com/checkout", resolve=resolve
+    )
+    assert got is None
+    assert seen == ["stripe.com"]  # resolved the apex, not js.stripe.com
+
+
+@pytest.mark.asyncio
+async def test_a_resolver_failure_is_never_a_hijack_finding():
+    """A timeout or rate-limit raises; that must not be read as 'the domain is free'.
+    This is what flagged Stripe and Intercom as registerable."""
+
+    async def resolve(_host):
+        raise TimeoutError("resolver rate-limited")
+
+    got = await bl.check_link("https://vendor.example/x", "https://acme.com/", resolve=resolve)
+    assert got is None
+
+
+@pytest.mark.asyncio
+async def test_a_truncated_js_fragment_is_not_a_domain():
+    """`northamerica-northeast1-` — a GCP region prefix split out of a JS string — is not
+    a registrable name and is never checked or filed."""
+    called = False
+
+    async def resolve(_host):
+        nonlocal called
+        called = True
+        return []
+
+    got = await bl.check_link(
+        "https://northamerica-northeast1-", "https://acme.com/app.js", resolve=resolve
+    )
+    assert got is None and called is False
+
+
+def test_registrable_domain_collapses_subdomains_and_rejects_non_domains():
+    assert bl.registrable_domain("js.stripe.com") == "stripe.com"
+    assert bl.registrable_domain("a.b.c.example.co.uk") == "example.co.uk"
+    assert bl.registrable_domain("northamerica-northeast1-") is None
+    assert bl.registrable_domain("localhost") is None
+    assert bl.registrable_domain("has_underscore.com") is None
 
 
 @pytest.mark.asyncio
