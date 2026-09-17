@@ -247,3 +247,27 @@ async def test_content_discovery_fallback_to_ffuf(monkeypatch):
     eps = await EndpointRepo(mongo.collection("endpoints")).list("t1", "p1")
     admin = next(e for e in eps if e["url"].endswith("/admin"))
     assert admin["source"] == "ffuf"
+
+
+# -- status filtering: 429/WAF floods are not discovered content ----------------
+def test_keep_real_hits_drops_throttling_and_waf_floods():
+    """The real divii.ca run stored 3465 HTTP-429 and 1105 HTTP-403 as 'endpoints'.
+    A 429 is throttling, not content; a flood of 403 is a WAF refusing everything."""
+    from pipelines.content_discovery import _MAX_PROTECTED_PER_HOST, _keep_real_hits
+
+    mixed = [
+        {"status": 200, "url": "a"},
+        {"status": 301, "url": "b"},
+        {"status": 429, "url": "c"},
+        {"status": 404, "url": "d"},
+        {"status": 403, "url": "e"},
+    ]
+    kept, throttled, waf = _keep_real_hits(mixed)
+    assert {h["url"] for h in kept} == {"a", "b", "e"}  # 200, 301, a lone 403
+    assert throttled == 1 and waf == 0
+
+    flood = [{"status": 403, "url": str(i)} for i in range(_MAX_PROTECTED_PER_HOST + 5)]
+    flood.append({"status": 200, "url": "real"})
+    kept, _throttled, waf = _keep_real_hits(flood)
+    assert [h["url"] for h in kept] == ["real"]  # every 403 dropped, the 200 stays
+    assert waf == _MAX_PROTECTED_PER_HOST + 5

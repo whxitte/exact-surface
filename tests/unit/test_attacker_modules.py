@@ -422,3 +422,60 @@ async def test_domain_intel_persists_posture_for_the_ui():
     assert stored["registration"]["registrar"] == "Acme Registrar"
     assert stored["registration"]["transfer_locked"] is True
     assert stored["registration"]["dnssec"] is False
+
+
+@pytest.mark.asyncio
+async def test_domain_intel_does_not_report_no_spf_when_dns_is_unanswered():
+    """divii.ca has two SPF records and a DMARC policy, but one flaky dnsx run returned
+    nothing for everything and filed 'No SPF/No DMARC/No DKIM'. All-empty means the
+    lookup failed, not that a live mail domain publishes nothing — so: no findings."""
+    from core.tenant import TenantContext
+    from pipelines.domain_intel import run_domain_intel
+    from tests.fakes import FakeMongo
+
+    async def dead_resolver(_name):
+        return []  # every lookup empty (the failure mode)
+
+    async def no_rdap(_url):
+        return {}
+
+    res = await run_domain_intel(
+        mongo=FakeMongo(),
+        tenant=TenantContext(tenant_id="t1", actor_id="u1"),
+        program_id="p1",
+        apex="divii.example",
+        resolve_txt=dead_resolver,
+        rdap_fetch=no_rdap,
+    )
+
+    # No email-posture findings were filed from an all-empty (failed) lookup.
+    assert res.get("email_findings", 0) == 0 or res.get("findings", 0) == 0
+
+
+@pytest.mark.asyncio
+async def test_domain_intel_reports_no_dmarc_when_spf_present_but_dmarc_absent():
+    """The genuine case: SPF resolves (DNS works), DMARC genuinely absent → report it.
+    This is what the all-empty guard must NOT suppress."""
+    from core.tenant import TenantContext
+    from pipelines.domain_intel import run_domain_intel
+    from tests.fakes import FakeMongo
+
+    async def resolver(name):
+        return ["v=spf1 include:_spf.example.com ~all"] if not name.startswith("_dmarc") else []
+
+    async def no_rdap(_url):
+        return {}
+
+    mongo = FakeMongo()
+    await run_domain_intel(
+        mongo=mongo,
+        tenant=TenantContext(tenant_id="t1", actor_id="u1"),
+        program_id="p1",
+        apex="hasspf.example",
+        resolve_txt=resolver,
+        rdap_fetch=no_rdap,
+    )
+    from db.findings import FindingRepo
+
+    names = [f["name"] for f in await FindingRepo(mongo.collection("findings")).list("t1", "p1")]
+    assert any("DMARC" in n for n in names)  # genuine absence is still reported

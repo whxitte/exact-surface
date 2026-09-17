@@ -33,6 +33,32 @@ CONCURRENCY = 10
 PER_HOST_TIMEOUT = 120.0
 
 
+# Statuses worth recording as discovered content. A 429 is the server throttling us —
+# not a path that exists; 400/404/5xx are non-discoveries. 401/403 mean "exists but
+# protected", which is interesting in ones and twos but, in the hundreds, is a WAF or
+# CDN answering everything the same way — surface inflation, not discovery — so those
+# are capped per host.
+_CONTENT_STATUSES = frozenset({200, 201, 202, 203, 204, 206, 301, 302, 307, 308, 401, 403, 405})
+_PROTECTED_STATUSES = frozenset({401, 403})
+_MAX_PROTECTED_PER_HOST = 40
+
+
+def _keep_real_hits(hits: list[dict]) -> tuple[list[dict], int, int]:
+    """Filter one host's raw hits to genuine discoveries.
+
+    Returns (kept, throttled, waf_dropped). *throttled* counts 429s (a politeness
+    signal); *waf_dropped* counts 401/403s dropped because the host returned more than
+    the cap, which means the WAF is refusing everything rather than guarding real paths.
+    """
+    throttled = sum(1 for h in hits if h.get("status") == 429)
+    candidates = [h for h in hits if h.get("status") in _CONTENT_STATUSES]
+    protected = [h for h in candidates if h.get("status") in _PROTECTED_STATUSES]
+    if len(protected) > _MAX_PROTECTED_PER_HOST:
+        kept = [h for h in candidates if h.get("status") not in _PROTECTED_STATUSES]
+        return kept, throttled, len(protected)
+    return candidates, throttled, 0
+
+
 async def run_content_discovery(
     *,
     mongo: Any,
@@ -158,6 +184,28 @@ async def run_content_discovery(
 
     per_host_hits = await asyncio.gather(*(_scan_host(h) for h in scannable))
 
+    # Keep only genuine discoveries; drop throttling (429) and WAF floods (bulk 401/403).
+    throttled_total = 0
+    waf_dropped_total = 0
+    filtered_hits: list[list[dict]] = []
+    for hits in per_host_hits:
+        kept, throttled, waf_dropped = _keep_real_hits(hits)
+        filtered_hits.append(kept)
+        throttled_total += throttled
+        waf_dropped_total += waf_dropped
+    if throttled_total:
+        logger.warning(
+            "content-discovery: {} response(s) were HTTP 429 — the target throttled the "
+            "scan; discovery on those hosts is incomplete. Not recorded as endpoints.",
+            throttled_total,
+        )
+    if waf_dropped_total:
+        logger.info(
+            "content-discovery: dropped {} bulk 401/403 response(s) — a WAF/CDN refusing "
+            "everything, not real protected paths.",
+            waf_dropped_total,
+        )
+
     found_models = [
         Endpoint(
             tenant_id=tid,
@@ -169,7 +217,7 @@ async def run_content_discovery(
             source=hit.get("_tool", "feroxbuster"),  # ffuf or feroxbuster — whichever found it
             risk_tags=classify_endpoint(hit["url"]),  # content discovery finds the /admin, .bak, …
         )
-        for hits in per_host_hits
+        for hits in filtered_hits
         for hit in hits
     ]
 

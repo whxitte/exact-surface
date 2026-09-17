@@ -53,6 +53,19 @@ async def run_domain_intel(
                 dkim[selector] = await resolve_txt(f"{selector}._domainkey.{apex}")
             except Exception:  # noqa: BLE001 - a selector miss is not an error
                 dkim[selector] = []
+        # Absence findings ("No SPF", "No DMARC") are only safe when the lookups actually
+        # worked. A flaky dnsx run that returns nothing for everything is not evidence
+        # that a live mail domain publishes no SPF, DMARC and DKIM at once — that
+        # combination is vanishingly rare, and reporting it filed three false criticals
+        # against divii.ca (which has two SPF records and a DMARC policy). If every email
+        # lookup is empty, treat DNS as unanswered and skip, rather than assert absence.
+        if not spf_txt and not dmarc_txt and not any(dkim.values()):
+            logger.warning(
+                "domain_intel: SPF, DMARC and DKIM all returned empty for {} — treating as "
+                "a failed lookup, not absence; skipping email findings this run.",
+                apex,
+            )
+            raise _DnsUnanswered
         summary, email_findings = email_security.analyse(
             spf_txt=spf_txt, dmarc_txt=dmarc_txt, dkim_selectors=dkim
         )
@@ -75,6 +88,8 @@ async def run_domain_intel(
             )
         if summary.get("spoofable"):
             logger.info("domain_intel: {} can be spoofed (no enforcing DMARC)", apex)
+    except _DnsUnanswered:
+        pass  # already logged; no findings rather than false "no record" findings
     except Exception as exc:  # noqa: BLE001 - DNS trouble must not sink the stage
         logger.warning("domain_intel: email assessment failed for {}: {}", apex, exc)
 
@@ -142,8 +157,25 @@ async def run_domain_intel(
     }
 
 
+class _DnsUnanswered(Exception):
+    """DNS returned nothing for any email record — a failed lookup, not proof of absence."""
+
+
 async def _default_resolve_txt(hostname: str) -> list[str]:  # pragma: no cover - real DNS
-    """TXT lookup via dnsx (already in the image), falling back to an empty answer."""
+    """TXT lookup via dnsx (already in the image). Retries on an empty/failed result:
+    dnsx is flaky under load, and an empty answer for a record that exists is exactly
+    what produced false 'no SPF/DMARC' findings."""
+    import asyncio
+
     from modules.recon.dnsx import resolve_txt_records
 
-    return await resolve_txt_records(hostname)
+    for attempt in range(3):
+        try:
+            out = await resolve_txt_records(hostname)
+        except Exception:  # noqa: BLE001
+            out = []
+        if out:
+            return out
+        if attempt < 2:
+            await asyncio.sleep(1.0)
+    return []
