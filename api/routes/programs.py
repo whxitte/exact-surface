@@ -966,7 +966,9 @@ async def list_findings(
         principal.tenant_id, program["program_id"], is_new=is_new, limit=1000
     )
     # A finding is "gone" (resolved) only when a full-coverage re-run of its producing
-    # module (nuclei→scan, tlsx→tls, dork, takeover) stopped reporting it.
+    # module stopped reporting it. Every finding-writing module maps to its phase in
+    # core.liveness.FINDING_MODULE_PHASE (a wiring test guards against a module missing
+    # from it — an unmapped module's findings could never age out).
     refs = await _phase_refs(mongo, principal.tenant_id, program["program_id"])
     annotate_gone(docs, refs, finding_phase)
     if severity:
