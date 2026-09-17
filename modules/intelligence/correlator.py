@@ -16,6 +16,11 @@ from core.severity import Severity
 
 _SENSITIVE_PORTS = {21, 22, 23, 445, 1433, 3306, 3389, 5432, 5900, 6379, 9200, 27017}
 
+# Findings in these lifecycle states are not live signals: a re-check moved the FP to
+# FALSE_POSITIVE, or the issue was fixed (RESOLVED). Counting them would resurrect a
+# retired dork hit as a "critical host" — the exact noise correlation exists to cut.
+_SUPPRESSED_STATES = {"false_positive", "resolved"}
+
 # Per-signal risk weights (contributions cap at 100).
 _SEVERITY_WEIGHT = {
     Severity.CRITICAL: 40,
@@ -64,6 +69,14 @@ def correlate(
     fp_to_host = {a.get("fingerprint"): a["hostname"] for a in assets if a.get("hostname")}
     ephemeral = {a["hostname"] for a in assets if a.get("is_ephemeral")}
 
+    # Scope. A finding location or secret locator can name an EXTERNAL host — a dork
+    # result URL (github.com, support.google.com), a hijackable outbound link, a
+    # registered typosquat domain. Each is a real signal in its own module's view, but
+    # none is a host THIS program owns, so none may rank as its correlated attack
+    # surface (least of all "critical", above the apex). Only hosts we discovered as
+    # assets are in scope; everything else is scored but never emitted.
+    in_scope = {a["hostname"].lower() for a in assets if a.get("hostname")}
+
     score: dict[str, int] = {}
     signals: dict[str, list[str]] = {}
     top_sev: dict[str, Severity] = {}
@@ -80,6 +93,8 @@ def correlate(
             high_signal_count[host] = high_signal_count.get(host, 0) + 1
 
     for f in findings:
+        if f.get("state") in _SUPPRESSED_STATES:
+            continue
         sev = _sev(f.get("severity"))
         add(
             _host_of(f.get("location", "")),
@@ -90,12 +105,17 @@ def correlate(
         )
 
     for s in secrets:
+        # Respect the severity the secrets policy assigned. A public-by-design Firebase
+        # web key is INFO, a live private credential is HIGH/CRITICAL — forcing every
+        # secret to HIGH (as this once did) inflated a harmless key into a "high-risk
+        # host" and manufactured chains out of nothing.
+        sev = _sev(s.get("severity"))
         add(
             _host_of(s.get("source_locator", "")),
-            35,
+            _SEVERITY_WEIGHT[sev],
             f"secret:{s.get('kind', '?')}",
-            Severity.HIGH,
-            high=True,
+            sev,
+            high=sev.rank >= Severity.HIGH.rank,
         )
 
     for leak in leaks:
@@ -128,6 +148,7 @@ def correlate(
             signals=signals[host],
         )
         for host in score
+        if host in in_scope
     ]
     issues.sort(key=lambda i: (i.is_chain, i.risk_score), reverse=True)
     return issues
