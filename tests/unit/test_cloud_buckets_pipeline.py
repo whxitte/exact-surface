@@ -79,7 +79,10 @@ async def test_no_buckets_found_is_clean():
     res = await run_cloud_buckets(
         mongo=mongo, tenant=TENANT, program_id="p1", apex="acme.com", checker=_checker({})
     )
-    assert res == {"checked": 0, "public": 0, "private": 0, "new": 0}
+    assert res["exist"] == 0 and res["public"] == 0 and res["private"] == 0 and res["new"] == 0
+    # We still PROBED the permuted names — a summary must never read as "checked
+    # nothing" just because none of the guesses turned out to be real buckets.
+    assert res["probed"] > 0
 
 
 async def test_unreachable_provider_is_not_a_bucket():
@@ -92,7 +95,7 @@ async def test_unreachable_provider_is_not_a_bucket():
     res = await run_cloud_buckets(
         mongo=mongo, tenant=TENANT, program_id="p1", apex="acme.com", checker=none_checker
     )
-    assert res["checked"] == 0
+    assert res["exist"] == 0 and res["probed"] > 0
 
 
 async def test_rerun_is_idempotent():

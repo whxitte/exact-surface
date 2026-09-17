@@ -140,8 +140,13 @@ async def run_cloud_buckets(
         new,
         len(private),
     )
+    # `probed` is how many guessed names we actually asked the providers about;
+    # `exist` is how many turned out to be real buckets. Keeping them separate stops
+    # the scan summary from reading "checked: 0" after we probed 45 URLs — the exact
+    # cold-read confusion the log line above is worded to avoid.
     return {
-        "checked": len(found),
+        "probed": len(candidates),
+        "exist": len(found),
         "public": len(public),
         "private": len(private),
         "new": new,
