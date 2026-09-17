@@ -40,11 +40,26 @@ ENDPOINT_SOURCE_PHASE: dict[str, str] = {
 }
 
 #: finding ``module`` → producing phase (stage name in a full run).
+# Which scan phase re-observes a finding's module, so gone-detection can retire a
+# finding the phase no longer reports. EVERY module that writes to the findings
+# collection must be here, or its findings never age out — a fixed issue, or a
+# transient false positive, stays live forever. (Modules with their own explicit
+# retirement — param_discovery, broken_links — are still listed: belt and braces.)
 FINDING_MODULE_PHASE: dict[str, str] = {
     "nuclei": "scan",
     "tlsx": "tls",
     "dork": "dork",
     "takeover": "takeover",
+    "domain_intel": "domain_intel",
+    "js_mine": "js_mine",
+    "http_misconfig": "http_misconfig",
+    "api_surface": "api_surface",
+    "param_discovery": "param_discovery",
+    "broken_links": "broken_links",
+    "supply_chain": "supply_chain",
+    "typosquat": "typosquat",
+    "cloud_assets": "cloud_assets",
+    "cloud_buckets": "cloud_buckets",
 }
 
 

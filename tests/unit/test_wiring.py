@@ -801,3 +801,27 @@ def test_every_mcp_tool_is_documented_and_nothing_undocumented_is_offered():
         "registered but undocumented": sorted(registered - documented),
         "documented but missing": sorted(documented - registered),
     }
+
+
+def test_every_finding_writing_module_can_age_out():
+    """A module that writes to the findings collection but is absent from
+    FINDING_MODULE_PHASE never has its findings marked gone — a fixed issue or a
+    transient false positive stays live forever. This happened: domain_intel, js_mine,
+    http_misconfig, api_surface, supply_chain and typosquat were all missing, which is
+    why a false 'No SPF' finding survived a scan that proved the domain has SPF.
+
+    Parse the pipelines for the module names they stamp on findings and assert each is
+    mapped to a phase.
+    """
+    import re
+
+    from core.liveness import FINDING_MODULE_PHASE
+
+    writers: set[str] = set()
+    for path in (REPO / "pipelines").glob("*.py"):
+        text = path.read_text()
+        # a module string that appears next to a Finding(...) construction
+        if "FindingRepo" in text or "Finding(" in text:
+            writers |= set(re.findall(r'module="([a-z_]+)"', text))
+    missing = sorted(writers - set(FINDING_MODULE_PHASE))
+    assert not missing, f"these modules write findings but cannot age out: {missing}"
