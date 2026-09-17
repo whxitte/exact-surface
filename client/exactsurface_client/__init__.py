@@ -6,4 +6,4 @@ tenant isolation — applies unchanged; this package adds nothing and can remove
 nothing. `exactsurface` is for people and CI; `exactsurface-mcp` is for agents.
 """
 
-__version__ = "1.4.1"
+__version__ = "1.4.2"

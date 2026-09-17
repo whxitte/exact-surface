@@ -5,10 +5,21 @@ Versions follow [semantic versioning](https://semver.org/). Each release publish
 GitHub Release recording the image digests.
 
 ```bash
-docker pull ghcr.io/whxitte/api:1.4.1
-docker pull ghcr.io/whxitte/frontend:1.4.1
-docker pull ghcr.io/whxitte/pipeline:1.4.1
+docker pull ghcr.io/whxitte/api:1.4.2
+docker pull ghcr.io/whxitte/frontend:1.4.2
+docker pull ghcr.io/whxitte/pipeline:1.4.2
 ```
+
+## 1.4.2 — 2026-09-17
+
+**Fixed**
+
+- **Broken-link hijacking no longer flags live third-party domains.** A real scan
+  reported `js.stripe.com`, `api-iam.intercom.io` and `js.intercomcdn.com` as
+  registerable takeovers — all resolve fine. The check now runs on the registrable apex
+  (a dead subdomain of a live domain is a takeover, not this), fires only on a confirmed
+  NXDOMAIN rather than any failed lookup, rejects non-domain JS fragments, and retires
+  findings a re-run cannot reproduce.
 
 ## 1.4.1 — 2026-09-15
 
