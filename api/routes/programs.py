@@ -891,7 +891,12 @@ router.add_api_route(
     methods=["GET"],
     tags=["data"],
 )
-router.add_api_route("/{program_id}/secrets", _reader(SecretRepo), methods=["GET"], tags=["data"])
+router.add_api_route(
+    "/{program_id}/secrets",
+    _reader(SecretRepo, phase_of=const_phase("secrets")),
+    methods=["GET"],
+    tags=["data"],
+)
 router.add_api_route(
     "/{program_id}/ports",
     _reader(PortRepo, phase_of=const_phase("port_scan")),

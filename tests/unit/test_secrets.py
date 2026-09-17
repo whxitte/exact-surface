@@ -240,3 +240,57 @@ async def test_pipeline_skips_out_of_reach_hosts():
         fetch=fetch,
     )
     assert fetched == [] and res["new"] == 0
+
+
+# -- semantic classification: public-by-design tokens are not leaks ------------
+def _jwt(payload: dict) -> str:
+    import base64
+    import json as _j
+
+    def seg(o):
+        return base64.urlsafe_b64encode(_j.dumps(o).encode()).decode().rstrip("=")
+
+    return f"{seg({'alg': 'HS256'})}.{seg(payload)}.{'a' * 12}"
+
+
+def test_firebase_web_api_key_is_info_not_a_high_leak():
+    """The real divii.ca case: AIza… in /__/firebase/init.json. Public by design."""
+    text = '{"apiKey":"AIzaSyBuMHnvJUG4xZ6Ze6iPCc5pNjHBhTruatk","authDomain":"x.firebaseapp.com"}'
+    (hit,) = [
+        h
+        for h in find_secrets(text, "https://x/__/firebase/init.json")
+        if h["kind"] == "google_api_key"
+    ]
+    assert hit["severity"].value == "info"
+    assert "public by design" in hit["note"].lower()
+
+
+def test_a_google_key_without_firebase_context_stays_high():
+    text = "const mapsKey = 'AIzaSyBuMHnvJUG4xZ6Ze6iPCc5pNjHBhTruatk';"
+    (hit,) = [h for h in find_secrets(text, "https://x/app.js") if h["kind"] == "google_api_key"]
+    assert hit["severity"].value == "high"
+
+
+def test_expired_and_anonymous_jwts_are_dropped():
+    """The 52 Wix session tokens: short-lived, anonymous, handed to every browser."""
+    import time
+
+    expired = _jwt({"exp": 1_000_000_000, "iat": 1, "data": "x"})
+    anon = _jwt({"exp": int(time.time()) + 9999, "iat": 1, "jti": "z", "sub": "visitor"})
+    assert [h for h in find_secrets(expired, "u") if h["kind"] == "jwt"] == []
+    assert [h for h in find_secrets(anon, "u") if h["kind"] == "jwt"] == []
+
+
+def test_a_privileged_live_jwt_is_kept_at_medium():
+    import time
+
+    priv = _jwt({"exp": int(time.time()) + 9999, "email": "admin@x.com", "role": "admin"})
+    (hit,) = [h for h in find_secrets(priv, "u") if h["kind"] == "jwt"]
+    assert hit["severity"].value == "medium" and "decode it" in hit["note"].lower()
+
+
+def test_real_credentials_still_fire_at_full_severity():
+    """The precision fixes must not weaken detection of an actual leak."""
+    text = f'aws_secret_access_key = "{"A" * 40}"\n-----BEGIN RSA PRIVATE KEY-----\n'
+    sev = {h["kind"]: h["severity"].value for h in find_secrets(text, "u")}
+    assert sev.get("aws_secret_key") == "critical" and sev.get("private_key") == "critical"

@@ -351,6 +351,8 @@ class ExposedSecret(StatefulModel):
     value_hash: str
     source_locator: str  # URL/file:line where it was found
     severity: Severity = Severity.HIGH
+    #: Context set by core.secrets_policy — e.g. why a Firebase web key is not a leak.
+    note: str = ""
     state: FindingState = FindingState.NEW
     encrypted_snippet: str | None = None
 

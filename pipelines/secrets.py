@@ -80,6 +80,7 @@ async def run_secret_scan(
             value_hash=keyed_hash(h["value"], hmac_key),
             source_locator=h["source_locator"],
             severity=h["severity"],
+            note=h.get("note", ""),
         )
 
     # Persist each secret the INSTANT it's found — a stage timeout on a huge haul then

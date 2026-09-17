@@ -14,8 +14,11 @@ than catching every exotic token, because a noisy secret scanner is untrustworth
 
 from __future__ import annotations
 
+import base64
+import json
 import math
 import re
+import time
 
 from core.severity import Severity
 
@@ -83,6 +86,100 @@ def _is_false_positive(kind: str, value: str) -> bool:
     return False
 
 
+# --------------------------------------------------------------------------- #
+# Semantic classification — a regex match is a candidate, not a verdict.
+# --------------------------------------------------------------------------- #
+# Claims that make a JWT interesting: it names or entitles a principal. A token with
+# only these is an identity/access token worth a look.
+_JWT_PRIVILEGED_CLAIMS = frozenset(
+    {
+        "email",
+        "role",
+        "roles",
+        "scope",
+        "scopes",
+        "name",
+        "preferred_username",
+        "groups",
+        "upn",
+        "unique_name",
+        "given_name",
+        "family_name",
+        "cognito:groups",
+        "permissions",
+    }
+)
+
+#: Markers that put a Google API key in a Firebase-web-config context, where the key is
+#: public by design (it identifies the project; access is gated by Security Rules).
+_FIREBASE_MARKERS = (
+    "authdomain",
+    "firebaseapp.com",
+    "firebaseio.com",
+    "firebaseconfig",
+    "firebase",
+)
+
+
+def _b64url(seg: str) -> bytes:
+    return base64.urlsafe_b64decode(seg + "=" * (-len(seg) % 4))
+
+
+def _decode_jwt(token: str) -> tuple[dict, dict] | None:
+    try:
+        header_b64, payload_b64, _ = token.split(".")
+        header = json.loads(_b64url(header_b64))
+        payload = json.loads(_b64url(payload_b64))
+    except Exception:  # noqa: BLE001 - malformed is handled by the caller
+        return None
+    return (header, payload) if isinstance(payload, dict) else None
+
+
+def classify_jwt(value: str, *, now: float | None = None) -> tuple[Severity, str] | None:
+    """A JWT found in a response is a *candidate*. Return (severity, note) or None to drop.
+
+    A JWT is rarely the secret — the signing key is. Most JWTs a scan sees are the
+    short-lived session/visitor tokens an app hands every browser (Wix, Firebase, etc.),
+    which are public by design and pure noise. So:
+
+    * expired (``exp`` in the past) → drop; an expired token is not a live credential.
+    * carries identity/privilege claims (email, role, scope, …) and is not expired →
+      MEDIUM, because it may grant access and is worth verifying.
+    * anything else (a bare session token: only iat/exp/jti/sub/data) → drop.
+    """
+    now = now or time.time()
+    decoded = _decode_jwt(value)
+    if decoded is None:
+        return None  # not actually a JWT despite the shape
+    _header, payload = decoded
+    exp = payload.get("exp")
+    if isinstance(exp, (int, float)) and exp < now:
+        return None
+    if {k.lower() for k in payload} & _JWT_PRIVILEGED_CLAIMS:
+        return (
+            Severity.MEDIUM,
+            "A JWT carrying identity or privilege claims is exposed here. Decode it to "
+            "confirm what it grants and whether it is still valid — a live, privileged "
+            "token is a real credential; a public/anonymous one is not.",
+        )
+    return None
+
+
+def classify_google_key(value: str, text: str, source_locator: str) -> tuple[Severity, str]:
+    """Firebase web API keys (AIza… in a Firebase config) are public by design, not a
+    leak. Any other Google API key may be an unrestricted, billable key and stays HIGH."""
+    haystack = (source_locator + " " + text).lower()
+    if any(m in haystack for m in _FIREBASE_MARKERS):
+        return (
+            Severity.INFO,
+            "Firebase Web API key — public by design: it identifies the project, and "
+            "access is controlled by Firebase Security Rules, not by keeping this secret. "
+            "Not a leak. Worth confirming your Security Rules are restrictive and the key "
+            "has API/referrer restrictions set in the Google Cloud console.",
+        )
+    return (Severity.HIGH, "")
+
+
 # (kind, pattern, severity). Patterns with a capture group report that group;
 # otherwise the whole match. Ordered high-signal first.
 _PATTERNS: tuple[tuple[str, re.Pattern[str], Severity], ...] = (
@@ -122,7 +219,13 @@ _PATTERNS: tuple[tuple[str, re.Pattern[str], Severity], ...] = (
 
 
 def find_secrets(text: str, source_locator: str) -> list[dict]:
-    """Return detected secrets as ``{kind, value, severity, source_locator}`` dicts.
+    """Return detected secrets as ``{kind, value, severity, source_locator, note}`` dicts.
+
+    A regex match is a candidate; a per-kind classifier then decides the verdict — it may
+    drop the hit (an expired or anonymous JWT, an expected public key) or set a severity
+    and note from context. This is what keeps the scanner from reporting the public
+    tokens every modern site hands its own browser (Firebase web keys, Wix/Auth0 session
+    JWTs) as leaks, which is the difference between a signal and noise.
 
     De-duplicates within a single source so one key repeated in a file is one hit.
     """
@@ -137,12 +240,23 @@ def find_secrets(text: str, source_locator: str) -> list[dict]:
             seen.add(key)
             if _is_false_positive(kind, value):
                 continue  # placeholder / URL / no-entropy — not a live secret (§15 FP rate)
+
+            note = ""
+            if kind == "jwt":
+                verdict = classify_jwt(value)
+                if verdict is None:
+                    continue  # expired or a bare session/anonymous token — not a leak
+                severity, note = verdict
+            elif kind == "google_api_key":
+                severity, note = classify_google_key(value, text, source_locator)
+
             hits.append(
                 {
                     "kind": kind,
                     "value": value,
                     "severity": severity,
                     "source_locator": source_locator,
+                    "note": note,
                 }
             )
     return hits
