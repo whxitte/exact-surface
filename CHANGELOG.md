@@ -5,10 +5,41 @@ Versions follow [semantic versioning](https://semver.org/). Each release publish
 GitHub Release recording the image digests.
 
 ```bash
-docker pull ghcr.io/whxitte/api:1.4.2
-docker pull ghcr.io/whxitte/frontend:1.4.2
-docker pull ghcr.io/whxitte/pipeline:1.4.2
+docker pull ghcr.io/whxitte/api:1.4.3
+docker pull ghcr.io/whxitte/frontend:1.4.3
+docker pull ghcr.io/whxitte/pipeline:1.4.3
 ```
+
+## 1.4.3 — 2026-09-18
+
+A correctness release from auditing every module against a real scan. Findings a later
+scan stops reproducing now retire across the whole pipeline, and the cross-module
+correlation that leads the dashboard counts only signals that are still live, in scope,
+and at their real severity.
+
+**Fixed**
+
+- **Findings from every module now age out, not just four.** Gone-detection was wired
+  for nuclei, TLS, dork and takeover only, so a fixed issue — or a transient false
+  positive — from any other module (email spoofability, JS mining, HTTP misconfig, API
+  surface, CVEs, typosquats, cloud buckets) stayed live forever. A false "No SPF" finding
+  filed by one flaky DNS run survived a later scan that saw the domain's real SPF records,
+  because nothing could retire it. Every finding-writing module is now mapped to its scan
+  phase, with a test that fails if a new one is added without wiring.
+
+- **Correlation counts only live, in-scope, real-severity signals.** The "what an
+  attacker sees" view had three faults: it read aged-out records (a retired secret
+  rebuilt a chain that no longer existed), it treated any host named in a finding — a
+  search-result URL, a hijackable outbound link, a registered typosquat — as one of your
+  assets and ranked them (some as "critical") above your own apex, and it forced every
+  secret to HIGH, inflating a public-by-design Firebase web key into a high-risk host. It
+  now drops resolved data, emits only hosts you own, and respects each secret's assigned
+  severity.
+
+- **Cloud-bucket scans report their probes honestly.** The run summary showed
+  `checked: 0` after probing ~45 permuted names, because it counted only buckets
+  confirmed to exist. It now reports probes attempted and buckets found separately, so a
+  normal "none of the guesses were real" outcome no longer reads as "nothing was checked".
 
 ## 1.4.2 — 2026-09-17
 

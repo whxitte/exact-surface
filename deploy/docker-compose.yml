@@ -64,7 +64,7 @@ services:
   # Apple-silicon or Graviton host run it under emulation without four "platform does
   # not match" warnings, and is a no-op on amd64.
   pipeline:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.4.2}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.4.3}
     platform: linux/amd64
     command: ["python", "-m", "daemon.main", "--dry-run"]
     env_file: .env
@@ -74,7 +74,7 @@ services:
       redis: { condition: service_healthy }
 
   scheduler:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.4.2}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.4.3}
     platform: linux/amd64
     command: ["python", "-m", "daemon.main"]
     env_file: .env
@@ -86,7 +86,7 @@ services:
       redis: { condition: service_healthy }
 
   worker:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.4.2}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/pipeline:${EXACTSURFACE_VERSION:-1.4.3}
     platform: linux/amd64
     command: ["arq", "taskqueue.worker.WorkerSettings"]
     env_file: .env
@@ -105,7 +105,7 @@ services:
       redis: { condition: service_healthy }
 
   api:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/api:${EXACTSURFACE_VERSION:-1.4.2}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/api:${EXACTSURFACE_VERSION:-1.4.3}
     env_file: .env
     environment: *backend-env
     restart: unless-stopped
@@ -115,7 +115,7 @@ services:
       redis: { condition: service_healthy }
 
   frontend:
-    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/frontend:${EXACTSURFACE_VERSION:-1.4.2}
+    image: ${EXACTSURFACE_REGISTRY:-ghcr.io/whxitte}/frontend:${EXACTSURFACE_VERSION:-1.4.3}
     environment:
       - API_PROXY_TARGET=http://api:8000
     restart: unless-stopped
